@@ -45,5 +45,15 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   override) — verifying the layering order and the "missing overlay ≠ error" rule together,
   end to end, not just each piece in isolation.
 
+- Real `IisWebConfig` fixture set (system.web/compilation, customErrors, system.webServer
+  rewrite rules, and a `<location path="Admin">`-wrapped authorization section), with tests
+  confirming `Locator="Match(...)"` and `Transform="Insert"` work correctly through nested and
+  location-wrapped elements, not just flat `appSettings` — and that a client-less environment
+  layer leaves the location-wrapped section untouched.
+- Real `GenericXml` fixture set: an arbitrary, made-up schema (`Endpoints`/`FeatureFlags`) with
+  a `.xml` extension rather than `.config`, proving `XmlLayerMerger` and `LayerResolution` have
+  no hidden App.config/Web.config-specific assumptions — including that the overlay file name's
+  extension is genuinely derived from the base file, not hardcoded to `.config`.
+
 `ConfigTransform.Json` and `--dry-run`/`--diff` are not yet implemented — see
 `docs/ROADMAP.md`.

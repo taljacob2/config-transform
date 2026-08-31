@@ -17,34 +17,32 @@ made. An out-of-date roadmap is worse than none, because it's actively misleadin
 ## Current state
 
 Scaffold, Core resolution primitives, and a working end-to-end `ConfigTransform.Xml` real-run
-path are all implemented and tested: solution/project structure, CI workflow skeletons, the
-`Manifest` data model, `FileResolver`, `LayerResolution`, CLI argument parsing
-(`CliOptionsParser`), manifest loading and entry selection, and `XmlLayerMerger` (base → env →
-client via `Microsoft.Web.Xdt`), verified against the real `DotNetFramework` fixture set. See
-`docs/CHANGELOG.md`'s `[Unreleased]` section for the precise, current list of what exists.
+path — all implemented and tested against all three XML fixture sets `CONFIGTRANSFORM_TOOL_DESIGN.md`
+§3.1 calls for: `DotNetFramework` (flat appSettings), `IisWebConfig` (nested/`<location>`-wrapped
+structures, proving `Locator` matching beyond flat cases), and `GenericXml` (an arbitrary schema
+with a non-".config" extension, proving no hidden App.config-specific assumptions anywhere in
+`XmlLayerMerger` or `LayerResolution`). See `docs/CHANGELOG.md`'s `[Unreleased]` section for the
+precise, current list of what exists.
 
 ## Next up
 
-**Slice: expand XML fixture coverage.** Add `IisWebConfig` and `GenericXml` fixtures + tests,
-per `CONFIGTRANSFORM_TOOL_DESIGN.md` §3.1 — `IisWebConfig` specifically needs nested/
-`<location>`-wrapped structures (not just flat `appSettings`) to genuinely exercise
-`Locator="Match(...)"` beyond what `DotNetFramework` already covers; `GenericXml` needs an
-arbitrary, made-up schema to prove `XmlLayerMerger` has no hidden App.config-specific
-assumptions (it doesn't, by construction, but this is the fixture set that actually
-demonstrates it).
+**Slice: `--dry-run` and `--diff`.** Per `CONFIG_MANAGEMENT.md` §6 — print the fully merged
+result to stdout (`--dry-run`) or a unified diff of base vs. merged via `git diff --no-index`
+(`--diff`), for both `ConfigTransform.Xml` (implemented) and — once it exists —
+`ConfigTransform.Json`. Tests must assert neither flag ever writes to the base file's own
+location or anywhere outside an explicitly passed `--output`, under any input.
 
-Definition of done: both fixture sets exist with real content, both have passing
-`XmlLayerMergerTests`-style tests, and `docs/CHANGELOG.md` gets a new entry.
+Definition of done: both flags work end-to-end against the existing XML fixture sets, with
+tests, `docs/USAGE.md` updated to remove the "not yet implemented" caveat for these two flags,
+and `docs/CHANGELOG.md` gets a new entry.
 
 ## After that, in order
 
-1. **`--dry-run` and `--diff`** — per `CONFIG_MANAGEMENT.md` §6, with tests asserting no file
-   outside an explicit `--output` is ever written.
-2. **JSON tool** — mirror the XML slice for `ConfigTransform.Json`
+1. **JSON tool** — mirror the XML slice for `ConfigTransform.Json`
    (`Microsoft.Extensions.Configuration`-based merge), `DotNetCore` and `GenericJson`
    fixtures, including the documented JSON-array-merge behavior test
    (`CONFIGTRANSFORM_TOOL_DESIGN.md` §3.2).
-3. **Real packaging verification** — confirm `dotnet pack`/`PackAsTool` actually produces
+2. **Real packaging verification** — confirm `dotnet pack`/`PackAsTool` actually produces
    installable tools; cut a real first tagged pre-release (e.g. `0.1.0-alpha`, no `v` prefix)
    to validate `publish.yml` end-to-end against the GitHub Packages feed.
 

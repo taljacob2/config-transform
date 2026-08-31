@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AppSettings xmlns:xdt="http://schemas.microsoft.com/XML-Document-Transform">
+  <Endpoints>
+    <Endpoint xdt:Transform="SetAttributes" xdt:Locator="Match(id)" id="primary" timeoutSeconds="60" />
+  </Endpoints>
+</AppSettings>

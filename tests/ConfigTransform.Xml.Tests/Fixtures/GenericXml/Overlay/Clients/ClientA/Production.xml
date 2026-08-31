@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AppSettings xmlns:xdt="http://schemas.microsoft.com/XML-Document-Transform">
+  <Endpoints>
+    <Endpoint xdt:Transform="SetAttributes" xdt:Locator="Match(id)" id="primary" url="https://clienta.example.com/api" />
+  </Endpoints>
+  <FeatureFlags>
+    <Flag xdt:Transform="SetAttributes" xdt:Locator="Match(name)" name="EnableBeta" enabled="true" />
+  </FeatureFlags>
+</AppSettings>

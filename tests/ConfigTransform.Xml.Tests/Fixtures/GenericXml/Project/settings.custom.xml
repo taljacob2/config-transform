@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AppSettings>
+  <Endpoints>
+    <Endpoint id="primary" url="https://dev.example.com/api" timeoutSeconds="30" />
+  </Endpoints>
+  <FeatureFlags>
+    <Flag name="EnableBeta" enabled="false" />
+  </FeatureFlags>
+</AppSettings>
