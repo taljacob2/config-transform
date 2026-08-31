@@ -6,6 +6,8 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.1.0-alpha2] - 2026-08-31
+
 ### Added
 
 - `docs/GETTING_STARTED.md`: a task-oriented guide for using the tool without reading the full
@@ -37,7 +39,7 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   (`Merged_result_survives_a_real_disk_round_trip_through_a_strict_parser`) writes the merged
   result to a real temp file and reloads it with `XDocument.Load(path)` — unlike
   `XDocument.Parse(string)`, `.Load` honors the declared encoding, so it would have caught this
-  before it ever shipped.
+  before it ever shipped. `0.1.0-alpha` is affected; upgrade rather than working around it.
 
 ## [0.1.0-alpha] - 2026-08-31
 

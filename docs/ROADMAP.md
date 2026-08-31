@@ -31,10 +31,22 @@ both JSON fixture sets (`DotNetCore`, `GenericJson`) `CONFIGTRANSFORM_TOOL_DESIG
 for. See `docs/CHANGELOG.md`'s `[0.1.0-alpha]` section for the precise, full list of what
 exists.
 
+**The solution-repo pilot (`config-transform-pilot`) is now underway and already earned its
+keep**: a real `build-transformed.yml` `workflow_dispatch` run against it caught a genuine bug
+this repo's own test suite never could — `XmlLayerMerger.Merge` declared `encoding="utf-16"` in
+the merged XML while the file actually lands on disk as UTF-8 (`CliRunner`'s `File.WriteAllText`
+default), because this project's own tests only ever re-parse the merged *string* in memory
+(`XDocument.Parse`, which ignores the declared encoding) rather than round-tripping through a
+real file and a standards-compliant parser the way a real consumer does. Fixed, with a
+regression test that does the real round-trip — see `docs/CHANGELOG.md`'s `[0.1.0-alpha2]`
+section. **`0.1.0-alpha` is affected; anything consuming it should upgrade to `0.1.0-alpha2`
+once that tag is pushed and `publish.yml` completes**, rather than working around the bug
+downstream.
+
 One operational note worth carrying forward: this session's GitHub credentials can push
 branches but not tags (a real `403`, confirmed via verbose tracing, not a bug) — cutting the
-`0.1.0-alpha` tag required the repo owner to push it manually. Expect the same for any future
-release tag.
+`0.1.0-alpha` tag required the repo owner to push it manually, and `0.1.0-alpha2` needs the
+same. Expect the same for any future release tag.
 
 ## Next up
 
@@ -43,12 +55,14 @@ needs a solution repo that doesn't exist yet, or a decision only the repo owner 
 a "next slice" in the same sense as the ones so far; pick from below (or something new) when
 ready, rather than assuming the next item in this list is the default next step.
 
-- **First real solution-repo pilot** — no solution repo exists yet. This is the natural next
-  major step: attach or create the actual .NET solution repo, do the real inventory of its
-  config files against `CONFIG_MANAGEMENT.md`'s assumptions (validate `.configtransform/`
-  naming doesn't collide, confirm the `Environments`/`Clients` layering actually matches real
-  content, etc. — see `CONFIG_MANAGEMENT.md` §11), and wire this tool into it via the
-  `.config/dotnet-tools.json` local-tool-manifest flow (`CONFIG_MANAGEMENT.md` §10.3).
+- **Solution-repo pilot, in progress** — `config-transform-pilot` (synthetic, three projects at
+  varying nesting depth, one per config format) is live and already found and fixed one real
+  bug (see "Current state" above). Continue exercising it — more client/environment
+  combinations via `build-transformed.yml`, and the eventual findings writeup in that repo — to
+  see what else the design's assumptions miss against something closer to a real solution than
+  this repo's own fixtures. A pilot against the *actual* employer-owned multi-client repo this
+  design targets still needs a separate session in that organization's own Claude Code
+  environment — this repo's own conversations can't touch that repo directly.
 - **Deployment transport mechanism** (self-hosted runner vs. WinRM vs. Octopus Deploy) — not
   this repo's concern directly, but blocks the consuming architecture's
   `build-transformed.yml`. `CONFIG_MANAGEMENT.md` §8.3.
