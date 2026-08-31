@@ -70,6 +70,11 @@ flowchart LR
    dotnet tool install --local ConfigTransform.Xml --version <latest>
    dotnet tool install --local ConfigTransform.Json --version <latest>   # if you have JSON projects too
    ```
+   These packages are published to a **private-by-default** GitHub Packages feed — the install
+   above fails with a 401/403 until `nuget.config` and a `read:packages` credential are set up.
+   See [`SECRETS_AND_LOCAL_SETUP.md`](SECRETS_AND_LOCAL_SETUP.md) §1 for the one-time setup
+   (CI secret + `nuget.config` + local env vars, with Windows/macOS/Linux instructions) — do
+   that first if this repo hasn't already.
 5. Preview before committing anything:
    ```bash
    dotnet tool run configtransform-xml -- \

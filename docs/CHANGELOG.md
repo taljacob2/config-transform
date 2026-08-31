@@ -6,6 +6,17 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+### Added
+
+- `docs/SECRETS_AND_LOCAL_SETUP.md`: what a *consuming* repo needs configured — GitHub Packages
+  feed auth (including the cross-repo `GITHUB_TOKEN` wrinkle) and, for repos that use it,
+  git-crypt — in CI and locally, with explicit Windows/macOS/Linux commands throughout. This
+  was previously only worked out ad hoc while setting up `config-transform-pilot`; now written
+  down generically. `GETTING_STARTED.md` step 4 and `CONFIG_MANAGEMENT.md` §7.1/§10.4 now point
+  to it; the latter's two dangling "§12" forward-references (to a section that was never
+  written, from when this doc predated the tool actually existing) are fixed to point at the
+  real docs instead.
+
 ## [0.2.0-alpha] - 2026-08-31
 
 ### Changed

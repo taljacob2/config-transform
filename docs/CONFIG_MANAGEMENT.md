@@ -314,7 +314,9 @@ git commit -m "Add git-crypt attributes for .configtransform/"
 
 Key distribution: `git-crypt export-key ./git-crypt-key`, shared out-of-band (never via git)
 with authorized developers and pasted (base64) into a CI secret. Developers run
-`git-crypt unlock ./git-crypt-key` after cloning.
+`git-crypt unlock ./git-crypt-key` after cloning. See `SECRETS_AND_LOCAL_SETUP.md` §2 (in
+`config-transform`) for the concrete, platform-by-platform commands (Windows included) this
+summary skips over.
 
 > **Disclaimer for whoever runs this the first time:** losing this key, with no backup, means
 > everything under `.configtransform/**` becomes **permanently unrecoverable** — this is not a
@@ -496,8 +498,8 @@ completely different consumption mechanism: a **tool manifest**, not `PackageRef
 
 Published to a **GitHub Packages NuGet feed** on the tool's own repository/org. The tool
 repo's own CI builds and publishes it (`dotnet pack` + `dotnet nuget push`) on a tagged
-release — the exact publish workflow is implementation detail to be built alongside the tool
-itself (§12).
+release — see `RELEASING.md` and `.github/workflows/publish.yml` (in `config-transform` itself)
+for the actual, now-implemented workflow.
 
 ### 10.3 How consuming repos install it
 
@@ -544,8 +546,10 @@ change to that repo's own manifest in its own PR, with no effect on any other co
 Since a GitHub Packages NuGet feed is private by default, each consuming repo needs a
 `nuget.config` (committed to the repo) pointing at the feed, and both developers and CI need
 a token with `read:packages` scope configured for auth — developers via their own PAT, CI via
-a secret. Exact mechanics (which token type, how it's supplied to `dotnet nuget add source`
-or the CI step) are implementation detail for §12.
+a secret. See `SECRETS_AND_LOCAL_SETUP.md` §1 (in `config-transform`) for the exact mechanics —
+including the one real wrinkle a repo *other than* `config-transform`'s own will hit: its
+workflow's default `GITHUB_TOKEN` cannot read packages published from a different repository,
+even one owned by the same account, so a PAT is required in practice, not just in theory.
 
 ### 10.5 Config root folder name and discovery
 

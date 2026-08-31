@@ -11,6 +11,7 @@ agents alike. This index is the map for everything beyond that.
 | [`CONFIGTRANSFORM_TOOL_DESIGN.md`](CONFIGTRANSFORM_TOOL_DESIGN.md) | This repo's own structure and full test plan. |
 | [`MANIFEST_SCHEMA.md`](MANIFEST_SCHEMA.md) | The `manifest.json` input contract this tool consumes. |
 | [`USAGE.md`](USAGE.md) | CLI reference. |
+| [`SECRETS_AND_LOCAL_SETUP.md`](SECRETS_AND_LOCAL_SETUP.md) | What a *consuming* repo needs configured — GitHub Packages feed auth and (if it uses git-crypt) the encryption key — in CI and locally, on every platform. |
 | [`CHANGELOG.md`](CHANGELOG.md) | Version history, at a glance — what's *done*, complementing `ROADMAP.md`'s what's *next*. Each version's section also doubles as that release's GitHub Release notes — see `RELEASING.md`. |
 | [`RELEASING.md`](RELEASING.md) | How to cut a release: moving `CHANGELOG.md`'s `[Unreleased]` section into a versioned one, tagging, and what `publish.yml` does automatically. |
 | [`DOCUMENTATION_POLICY.md`](DOCUMENTATION_POLICY.md) | Why and how documentation is maintained here — read before adding a new doc. |
