@@ -6,6 +6,10 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.1.0-alpha] - 2026-08-31
+
 ### Added
 
 - Repository scaffold: solution structure, `ConfigTransform.Core`/`.Xml`/`.Json` project
@@ -44,7 +48,6 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   covering all three layers present, no overlays present, and environment-only (no client
   override) — verifying the layering order and the "missing overlay ≠ error" rule together,
   end to end, not just each piece in isolation.
-
 - Real `IisWebConfig` fixture set (system.web/compilation, customErrors, system.webServer
   rewrite rules, and a `<location path="Admin">`-wrapped authorization section), with tests
   confirming `Locator="Match(...)"` and `Transform="Insert"` work correctly through nested and
@@ -54,7 +57,6 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   a `.xml` extension rather than `.config`, proving `XmlLayerMerger` and `LayerResolution` have
   no hidden App.config/Web.config-specific assumptions — including that the overlay file name's
   extension is genuinely derived from the base file, not hardcoded to `.config`.
-
 - `GitDiff` in `ConfigTransform.Core`: renders a unified diff between two strings via
   `git diff --no-index` and throwaway temp files, cleaned up immediately after. Format-agnostic
   and reusable — not XML-specific — for when `ConfigTransform.Json` needs the same capability.
@@ -67,7 +69,6 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   differences) and prints `(no changes)` rather than an empty diff when neither layer overrides
   anything. Tests confirm both flags never write to disk anywhere — not just "not to the base
   file" — across a snapshot of the entire test workspace before and after.
-
 - `CliRunner` in `ConfigTransform.Core`: the shared CLI orchestration extracted out of
   `XmlCliRunner` (now a one-line delegation) once `ConfigTransform.Json` made the near-total
   duplication worth eliminating — takes the format-specific merge function as a
@@ -87,5 +88,16 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   appsettings.json, proving no hidden assumptions) — both per
   `docs/CONFIGTRANSFORM_TOOL_DESIGN.md` §3.2, with tests mirroring the XML suite's coverage
   (all layers, environment-only, real-run/dry-run/diff disk-write guarantees).
+- `scripts/smoke-test-published-tool.sh`: installs the just-published `ConfigTransform.Xml`
+  and `ConfigTransform.Json` packages from GitHub Packages (not the local build) via
+  `dotnet tool install --local` and actually invokes each one — proving the published package
+  works, not just that `dotnet build`/`dotnet test` passed. Run by `publish.yml` immediately
+  after `dotnet nuget push`.
+- `scripts/extract-changelog-section.sh` and a GitHub Release-creation step in `publish.yml`:
+  each release's notes are extracted directly from this file's matching version section
+  (Keep a Changelog format) rather than written a second time. See `docs/RELEASING.md` for the
+  full release process this and the smoke test are part of.
 
-`ConfigTransform.Xml` and `ConfigTransform.Json` are now both fully implemented and at parity.
+`ConfigTransform.Xml` and `ConfigTransform.Json` are both fully implemented and at parity. This
+is the first real release, cut specifically to validate the packaging/publish/install pipeline
+end to end — see `docs/ROADMAP.md`.

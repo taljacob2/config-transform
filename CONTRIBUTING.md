@@ -28,3 +28,7 @@ project's `Fixtures/` folder (`DotNetFramework`, `IisWebConfig`, `GenericXml` fo
 `DotNetCore`, `GenericJson` for JSON) and exercised via the shared, data-driven test pattern —
 not a one-off copy-pasted test method. See `docs/CONFIGTRANSFORM_TOOL_DESIGN.md` §3 for the
 full test matrix this is built around.
+
+## Releasing
+
+See [`docs/RELEASING.md`](docs/RELEASING.md).

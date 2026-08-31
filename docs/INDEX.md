@@ -9,6 +9,7 @@ agents alike. This index is the map for everything beyond that.
 | [`CONFIG_MANAGEMENT.md`](CONFIG_MANAGEMENT.md) | The overall architecture this tool is one piece of: multi-client/multi-environment config resolution, git-crypt encryption, CI/CD, deployment. Read this for *why this tool exists and what problem it solves*. |
 | [`CONFIGTRANSFORM_TOOL_DESIGN.md`](CONFIGTRANSFORM_TOOL_DESIGN.md) | This repo's own structure and full test plan. |
 | [`MANIFEST_SCHEMA.md`](MANIFEST_SCHEMA.md) | The `manifest.json` input contract this tool consumes. |
-| [`USAGE.md`](USAGE.md) | CLI reference (stub until the CLI is implemented). |
-| [`CHANGELOG.md`](CHANGELOG.md) | Version history, at a glance — what's *done*, complementing `ROADMAP.md`'s what's *next*. |
+| [`USAGE.md`](USAGE.md) | CLI reference. |
+| [`CHANGELOG.md`](CHANGELOG.md) | Version history, at a glance — what's *done*, complementing `ROADMAP.md`'s what's *next*. Each version's section also doubles as that release's GitHub Release notes — see `RELEASING.md`. |
+| [`RELEASING.md`](RELEASING.md) | How to cut a release: moving `CHANGELOG.md`'s `[Unreleased]` section into a versioned one, tagging, and what `publish.yml` does automatically. |
 | [`DOCUMENTATION_POLICY.md`](DOCUMENTATION_POLICY.md) | Why and how documentation is maintained here — read before adding a new doc. |
