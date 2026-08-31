@@ -18,5 +18,9 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   human and AI readers" policy this repo follows).
 - `docs/CONFIG_MANAGEMENT.md` mirrored into this repo alongside `docs/CONFIGTRANSFORM_TOOL_DESIGN.md`
   (moved here from the repo root), so the full architectural context is available in one place.
+- `docs/ROADMAP.md` as the durable, cross-session source of truth for what's planned and
+  what's next, plus explicit numbered rules at the top of `CLAUDE.md` requiring it be read
+  before starting work and kept updated as work progresses — see `docs/DOCUMENTATION_POLICY.md`
+  rule 7.
 
 No merge logic, CLI argument parsing, or case-insensitive file resolution yet — scaffold only.

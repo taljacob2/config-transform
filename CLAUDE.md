@@ -4,6 +4,24 @@ Orientation for any AI agent (or human moving fast) working in this repo. Kept s
 high-signal on purpose — for depth, follow the links into `docs/`, starting with
 [`docs/INDEX.md`](docs/INDEX.md).
 
+## Rules — read first, every session
+
+1. **Read [`docs/ROADMAP.md`](docs/ROADMAP.md) before deciding what to do.** It's the single
+   source of truth for what's planned and what's next — your conversation context does not
+   persist across sessions, but this file does. Don't reconstruct a plan from guesswork or
+   from a conversation you can't see; read it here.
+2. **Update `docs/ROADMAP.md` in the same change as any work that completes a slice, shifts
+   priority, or adds a new one** — before ending a session in which progress was made. An
+   out-of-date roadmap actively misleads the next session; treat keeping it current as part of
+   the work, not cleanup.
+3. **Document as you go, in the same change as the code** — new design decisions, non-obvious
+   constraints, rejected alternatives worth remembering go into `docs/`, not a follow-up.
+   `docs/DOCUMENTATION_POLICY.md` has the full rationale and rules; this file and the roadmap
+   both follow it.
+4. **Add a `docs/CHANGELOG.md` entry for merged changes.**
+5. **If it isn't written down in this repo, treat it as lost.** No session should assume
+   another session's unwritten context will still be available.
+
 ## What this is
 
 `config-transform` resolves per-client, per-environment configuration overrides for .NET
@@ -52,18 +70,17 @@ here is accidental rather than deliberate.
   `docs/CONFIG_MANAGEMENT.md` carries the "why" behind almost every non-obvious decision in
   this codebase.
 
-## Conventions
+## Technical conventions
 
 - Every merge-behavior change needs fixture-backed tests across every applicable scenario
   category, not just one (`docs/CONFIGTRANSFORM_TOOL_DESIGN.md` §3).
 - Full SemVer, tags with **no `v` prefix** (`1.2.0`, not `v1.2.0`) —
   `docs/CONFIG_MANAGEMENT.md` §10.8.
-- Documentation is updated in the *same* change as the code, not filed as follow-up —
-  [`docs/DOCUMENTATION_POLICY.md`](docs/DOCUMENTATION_POLICY.md), which this file follows too.
 
-## Status
+## Status and what's next
 
-Scaffold stage: solution/project structure, CI workflow skeletons, and the `Manifest` data
-model are implemented and tested. Merge logic (`FileResolver`, the actual XDT/
-`ConfigurationBuilder`-based transform, CLI argument parsing, `--dry-run`/`--diff`) is not yet
-implemented — see `docs/CHANGELOG.md`'s `[Unreleased]` section for the current, precise state.
+See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the current plan (this is the doc rule #1 above
+points at) and [`docs/CHANGELOG.md`](docs/CHANGELOG.md) for exactly what's implemented so far.
+Short version as of the last update here: scaffold stage — solution/project structure, CI
+workflow skeletons, and the `Manifest` data model are implemented and tested; merge logic,
+CLI argument parsing, and `--dry-run`/`--diff` are not yet implemented.

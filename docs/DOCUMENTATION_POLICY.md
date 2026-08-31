@@ -40,3 +40,10 @@ means documentation is not an afterthought bolted on before a release — it's p
    should stay short enough to actually be read in full.
 6. **`docs/CHANGELOG.md` records what changed, at a glance, every merged change.** It's the
    fast path to "what's new since I last looked," separate from the deeper docs.
+7. **`docs/ROADMAP.md` is the single source of truth for what's planned and what's next.** An
+   AI agent's conversation context does not persist across sessions — anything not written down
+   in this repo is lost the moment a session ends. `CHANGELOG.md` records history; `ROADMAP.md`
+   records the forward plan, so any session (or human) can resume without needing prior
+   context. Update it in the same change as any work that completes, reprioritizes, or adds a
+   planned slice — an out-of-date roadmap actively misleads the next reader, which is worse
+   than having none.
