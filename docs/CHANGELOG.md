@@ -8,6 +8,15 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ### Added
 
+- `docs/MANIFEST_SCHEMA.md`: documents pointing a manifest's `directory` at the repo root itself
+  (`"."`) for a config file that lives at the top level of a repo rather than inside a project
+  subfolder — no schema change, since `directory` was already just a plain relative path; this
+  writes down that `"."` is a valid, ordinary value for it, notes the working-directory-relative
+  caveat that makes `"."` mean "repo root" specifically, and clarifies that git-crypt's
+  `.configtransform/**` encryption scope (`CONFIG_MANAGEMENT.md` §7.1) is unconditional and
+  independent of what `directory` resolves to — a root-pointing manifest's overlays are
+  encrypted automatically like any other project's.
+
 - `docs/SECRETS_AND_LOCAL_SETUP.md`: what a *consuming* repo needs configured — GitHub Packages
   feed auth (including the cross-repo `GITHUB_TOKEN` wrinkle) and, for repos that use it,
   git-crypt — in CI and locally, with explicit Windows/macOS/Linux commands throughout. This

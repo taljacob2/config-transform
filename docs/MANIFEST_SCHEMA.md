@@ -65,6 +65,47 @@ Concretely, this means:
   existing design without a redesign, but not yet implemented; see
   [`CONFIG_MANAGEMENT.md`](CONFIG_MANAGEMENT.md) §5.5.
 
+## Pointing `directory` at the repo root itself
+
+`directory` doesn't have to name a subdirectory — `"."` works, and resolves to the repo root
+exactly like any other relative path does, for a config file that genuinely lives at the top
+level of the repo rather than inside a project subfolder:
+
+```json
+{
+  "directory": ".",
+  "files": [
+    { "relativeToDirectory": "appsettings.json", "type": "json" }
+  ]
+}
+```
+
+There's no separate "root" keyword or special case in the schema for this — `directory`'s value
+is passed through `Path.GetFullPath` (`CliRunner`, in `ConfigTransform.Core`) exactly as written,
+and `.` is just an ordinary relative path that means "here." The `.configtransform/<Name>/`
+folder holding this manifest can be named anything, including `root` — that name is purely an
+organizational label for humans, never parsed or given meaning by the tool (see the "not a
+`.csproj` reference" section above for the same point about `directory` generally).
+
+One real caveat: `Path.GetFullPath` resolves against the CLI process's *working directory*, not
+the manifest file's own location. `"."` means "repo root" specifically because every documented
+invocation (`SECRETS_AND_LOCAL_SETUP.md`, every `build-transformed.yml`-style workflow) runs
+`dotnet tool run configtransform-*` from the repo root. Running the same manifest from a
+different working directory would resolve `"."` to that directory instead — the same is true of
+every other `directory` value, this isn't unique to `"."`, but it's easy to miss precisely
+because `"."` looks like it should mean something absolute.
+
+**Encryption at rest is unaffected by any of this.** `config-transform` never encrypts anything
+itself — a consuming repo's git-crypt `.gitattributes` rule (`CONFIG_MANAGEMENT.md` §7.1) is a
+single glob, `.configtransform/** filter=git-crypt diff=git-crypt`, covering the whole
+`.configtransform/` tree unconditionally. It has nothing to do with what any manifest's
+`directory` resolves to. So a root-pointing manifest's `Environments`/`Clients` overlays under
+`.configtransform/root/appsettings.json/` (or whatever the folder is named) are encrypted
+automatically, the same as every other project's — nothing extra to configure. The one thing
+git-crypt does *not* encrypt is the actual base file at the real path `directory` +
+`relativeToDirectory` resolves to (here, the real `./appsettings.json` at the repo root) — that's
+true for every project's base file, not specific to pointing `directory` at the root.
+
 ## Example: a project with multiple config files
 
 ```json

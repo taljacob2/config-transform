@@ -318,6 +318,12 @@ with authorized developers and pasted (base64) into a CI secret. Developers run
 `config-transform`) for the concrete, platform-by-platform commands (Windows included) this
 summary skips over.
 
+This `.gitattributes` glob is unconditional and has nothing to do with any manifest's `directory`
+field — every project's `.configtransform/<Name>/` overlay tree is covered the same way,
+including a manifest whose `directory` points at the repo root itself (`"."`) rather than a
+subfolder. See `MANIFEST_SCHEMA.md`'s "Pointing `directory` at the repo root itself" for that
+case specifically.
+
 > **Disclaimer for whoever runs this the first time:** losing this key, with no backup, means
 > everything under `.configtransform/**` becomes **permanently unrecoverable** — this is not a
 > bug, it's what encryption without a backdoor means. This is intentional and accepted as part
