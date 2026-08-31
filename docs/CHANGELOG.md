@@ -6,6 +6,16 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+### Fixed
+
+- `ManifestLoader.Load` now detects a still-git-crypt-locked manifest by its magic header (NUL +
+  `GITCRYPT` + NUL) and raises an actionable error naming the fix (`git-crypt unlock`, and where
+  to find the key) instead of the confusing raw JSON parse failure
+  (`'0x00' is an invalid start of a value`) a locked file's ciphertext used to produce. Found via
+  `config-transform-pilot`'s real local-dev usage — running the CLI against a manifest under a
+  `.configtransform/**` tree that hadn't been unlocked yet gave that opaque error with no hint
+  the file was actually encrypted, not malformed.
+
 ### Added
 
 - `docs/MANIFEST_SCHEMA.md`: documents pointing a manifest's `directory` at the repo root itself

@@ -282,6 +282,12 @@ workflow, which should never need the key at all, per §8.1):
    `.configtransform/**` is now plaintext in your working copy. `git-crypt lock` re-encrypts it
    locally (to double check the round-trip, or before leaving a shared machine unattended).
 
+Forgetting this step and running the CLI anyway is a common enough mistake that the tool
+detects it directly: it names the manifest file, says it's still git-crypt encrypted, and tells
+you to run `git-crypt unlock` — rather than surfacing a raw, confusing JSON parse error
+(`'0x00' is an invalid start of a value`) for what is actually just ciphertext, not malformed
+JSON.
+
 ## Related reading
 
 - `CONFIG_MANAGEMENT.md` §7 for the git-crypt design rationale, §10.2–§10.4 for the packaging
