@@ -97,6 +97,18 @@ from `github.com`), pointing `nuget.config` at the right URL is necessary but no
    every invocation while credentials are only checked lazily when a package actually needs to
    be pulled from that source.
 
+   **This applies to every workflow file in the repo that runs `dotnet build`/`dotnet
+   restore`/`dotnet tool restore` on anything — not just the workflow that invokes
+   `config-transform`'s own CLI tools.** `nuget.config` is resolved per-repo, not per-workflow:
+   once its `packageSources` entry reads `%CONFIGTRANSFORM_PACKAGES_SOURCE%`, a plain CI build
+   workflow that has nothing to do with `config-transform` (say, one that just builds and tests
+   the consuming repo's own projects on every push) needs these same three job-level env vars
+   too, or its very first `dotnet restore` after adopting this pattern fails with the same
+   `NU1301`. Confirmed the hard way in `config-transform-pilot`: its plain per-push `build.yml`
+   had never needed any of this before and had no `env:` block at all, so it broke on the next
+   push after only the `config-transform`-specific workflow was fixed. Audit every workflow file
+   that touches `dotnet`, not just the ones that call `config-transform`'s tools directly.
+
 #### Why no default
 
 An earlier draft of this workflow snippet had

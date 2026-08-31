@@ -35,6 +35,17 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   GitHub hosts entirely. `config-transform-pilot`'s `nuget.config` and
   `.github/workflows/build-transformed.yml` were updated to the new variable as a real (if
   same-host) exercise of the pattern.
+- `docs/SECRETS_AND_LOCAL_SETUP.md` §1's CI example now sets `GITHUB_ACTOR`/`GITHUB_TOKEN`/
+  `CONFIGTRANSFORM_PACKAGES_SOURCE` at the **job level**, not on a single step, and says so
+  explicitly, plus a note that this applies to every workflow in a consuming repo that runs
+  `dotnet build`/`dotnet restore`/`dotnet tool restore` on anything, not just the one invoking
+  `config-transform`'s own CLI tools — `nuget.config` is resolved per-repo, and `dotnet build`'s
+  implicit restore enumerates every configured source regardless of which workflow runs it.
+  Found the hard way in `config-transform-pilot`: step-level scoping broke its
+  `build-transformed.yml` (`NU1301` on a project with no dependency on the feed) and, once fixed
+  there, broke its separate, previously-untouched `build.yml` the same way, since that workflow
+  had never needed any of these env vars before `nuget.config` started referencing them
+  repo-wide.
 
 ## [0.2.0-alpha] - 2026-08-31
 
