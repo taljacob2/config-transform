@@ -17,6 +17,25 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   written, from when this doc predated the tool actually existing) are fixed to point at the
   real docs instead.
 
+### Changed
+
+- `docs/SECRETS_AND_LOCAL_SETUP.md` §1 now generalizes to GitHub Enterprise Cloud with data
+  residency (`*.ghe.com`) tenants, not just `github.com`. The feed URL isn't a simple hostname
+  substitution — `github.com`'s `nuget.pkg.github.com` becomes `nuget.<subdomain>.ghe.com` on a
+  `ghe.com` tenant, dropping the `.pkg.` segment, confirmed against GitHub's own docs rather than
+  assumed. The full feed URL is now supplied via a new **repository variable**,
+  `CONFIGTRANSFORM_PACKAGES_SOURCE` (a variable, not a secret — it's a URL, not sensitive), read
+  by `nuget.config` through the same `%VAR%` expansion already used for the feed credentials.
+  Deliberately no default value anywhere for this one: an earlier draft had a
+  `vars.X || 'https://nuget.pkg.github.com/<owner>/index.json'` fallback, which would let a repo
+  that forgets to set the variable silently restore from one specific hardcoded account's feed
+  instead of failing loudly — removed in favor of requiring the variable always be set. Also adds
+  a cross-host consumption caveat (Actions egress allowlists, PAT-must-be-minted-on-the-serving-
+  host) for the case where the consuming repo and the packages-publishing repo live on different
+  GitHub hosts entirely. `config-transform-pilot`'s `nuget.config` and
+  `.github/workflows/build-transformed.yml` were updated to the new variable as a real (if
+  same-host) exercise of the pattern.
+
 ## [0.2.0-alpha] - 2026-08-31
 
 ### Changed

@@ -24,25 +24,76 @@ access token (PAT) with `read:packages` is required in the consuming repo whenev
 from `config-transform`'s own repo — which is the normal case, by design (§2: the tool lives in
 its own dedicated repo, not copied into each solution repo).
 
-First check whether it's even needed: `https://github.com/<owner>?tab=packages` — if
-`ConfigTransform.Xml`/`.Json` show "Public", skip straight to `nuget.config` below.
+First check whether it's even needed: `https://<host>/<owner>?tab=packages` — if
+`ConfigTransform.Xml`/`.Json` show "Public", skip straight to `nuget.config` below. `<host>` is
+`github.com` for the ordinary case; see "Which host?" below if `config-transform` is published
+from a GitHub Enterprise Cloud tenant instead.
 
-### CI: add a repo secret
+### Which host, and which feed URL
 
-1. Generate a PAT scoped to **only** `read:packages`:
-   `https://github.com/settings/tokens/new` → check that one scope → set an expiry → Generate.
-2. Add it as a secret in the consuming repo (any name works, since it's referenced explicitly in
-   the workflow — this doc uses `GH_PACKAGES_TOKEN`): Settings → Secrets and variables → Actions
-   → New repository secret.
-3. In the workflow step that runs `dotnet tool restore`, supply it (falling back to the
-   workflow's own token means repos where the packages happen to be public need nothing extra):
+Two things about the feed URL are worth getting right before wiring anything up, because getting
+either wrong produces a working-looking `nuget.config` that fails at restore time:
+
+- **The host isn't always `github.com`.** A GitHub Enterprise Cloud tenant with data residency
+  (`https://<subdomain>.ghe.com`) is a different, fully separate host from `github.com` — its own
+  domain, identity, and package registry, not a region flag on the regular github.com feed.
+- **The feed URL isn't just the host with a different name swapped in.** On `github.com` the
+  NuGet v3 feed is `https://nuget.pkg.github.com/<owner>/index.json`. On a `ghe.com` tenant it's
+  `https://nuget.<subdomain>.ghe.com/<owner>/index.json` — the `.pkg.` segment is simply absent.
+  A template that does `s/github.com/<subdomain>.ghe.com/` on the github.com URL produces
+  `nuget.pkg.<subdomain>.ghe.com`, which does not exist. Always use the full feed URL for
+  whichever host actually applies — don't derive it from a github.com template at request time.
+
+**Cross-host consumption is a separate concern from picking the right URL.** If the consuming
+repo and the repo that actually publishes `config-transform`'s packages live on *different*
+GitHub hosts (e.g. the consuming repo is on a `ghe.com` tenant, but `config-transform` publishes
+from `github.com`), pointing `nuget.config` at the right URL is necessary but not sufficient:
+  - The tenant's Actions runners need outbound network access to the *other* host — many
+    enterprise tenants restrict Actions egress to an allowlist, and `nuget.pkg.github.com` (or
+    whichever host the packages actually live on) needs to be on it.
+  - The PAT used to authenticate must be minted from an account **on the host that serves the
+    packages**, not the consuming repo's own host — a `ghe.com` tenant's own identity system
+    doesn't carry authorization for a github.com-hosted feed, and vice versa.
+
+  If both repos live on the same host (the common case — including two repos on the same
+  `ghe.com` tenant), none of this applies; it's a plain URL substitution.
+
+### CI: one secret, one variable
+
+1. Generate a PAT scoped to **only** `read:packages`, on whichever host actually serves the
+   packages: `https://<host>/settings/tokens/new` → check that one scope → set an expiry →
+   Generate.
+2. Add it as a **secret** in the consuming repo (any name works, since it's referenced explicitly
+   in the workflow — this doc uses `GH_PACKAGES_TOKEN`): Settings → Secrets and variables →
+   Actions → Secrets tab → New repository secret.
+3. Add the full feed URL as a **variable** in the same repo (this doc uses
+   `CONFIGTRANSFORM_PACKAGES_SOURCE`): Settings → Secrets and variables → Actions → Variables tab
+   → New repository variable. A variable, not a secret — a feed URL isn't sensitive, and it's
+   genuinely useful to see which feed a run pulled from directly in the log. Set its value to the
+   full URL for whichever host applies (see above) — there is deliberately no default baked into
+   the workflow for this; see "Why no default" below.
+4. In the workflow step that runs `dotnet tool restore`, supply both (the token falls back to the
+   workflow's own, so repos where the packages happen to be public need only the variable):
    ```yaml
    - name: Restore local tools
      env:
        GITHUB_ACTOR: ${{ github.actor }}
        GITHUB_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+       CONFIGTRANSFORM_PACKAGES_SOURCE: ${{ vars.CONFIGTRANSFORM_PACKAGES_SOURCE }}
      run: dotnet tool restore
    ```
+
+#### Why no default
+
+An earlier draft of this workflow snippet had
+`vars.CONFIGTRANSFORM_PACKAGES_SOURCE || 'https://nuget.pkg.github.com/<owner>/index.json'` — a
+fallback so repos wouldn't need to set the variable at all in the common case. That's a mistake
+for a *template* doc like this one: any concrete `<owner>` baked in as a "default" is one specific
+account's feed, and a repo that copies this snippet without setting the variable would silently,
+successfully restore from that account's packages instead of failing loudly — easy to not notice,
+worse when it's noticed late. Requiring the variable to always be set, with no fallback, costs one
+repository-variable click and removes that whole failure mode: no `nuget.config` or workflow
+anywhere in this doc names a real owner or host.
 
 ### `nuget.config` (in the consuming repo, committed)
 
@@ -52,7 +103,7 @@ First check whether it's even needed: `https://github.com/<owner>?tab=packages` 
   <packageSources>
     <clear />
     <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
-    <add key="github-config-transform" value="https://nuget.pkg.github.com/<owner>/index.json" />
+    <add key="github-config-transform" value="%CONFIGTRANSFORM_PACKAGES_SOURCE%" />
   </packageSources>
   <packageSourceCredentials>
     <github-config-transform>
@@ -63,18 +114,21 @@ First check whether it's even needed: `https://github.com/<owner>?tab=packages` 
 </configuration>
 ```
 
-The `%GITHUB_ACTOR%`/`%GITHUB_TOKEN%` env-var substitution keeps the credential out of the
-committed file entirely — the same file works locally and in CI, as long as both env vars are
-set wherever `dotnet tool restore` runs.
+The `%CONFIGTRANSFORM_PACKAGES_SOURCE%`/`%GITHUB_ACTOR%`/`%GITHUB_TOKEN%` env-var substitution
+keeps both the feed URL and the credential out of the committed file entirely — NuGet's `%VAR%`
+expansion isn't limited to credentials, it applies to config values generally. The same file
+works locally, in CI on `github.com`, and in CI on a `ghe.com` tenant, unchanged — only the env
+var values differ.
 
 ### Local developer setup
 
-1. Set the two env vars, then restore — pick your shell:
+1. Set the three env vars, then restore — pick your shell:
 
    **Linux/macOS/Git Bash:**
    ```bash
    export GITHUB_ACTOR=<your-github-username>
    export GITHUB_TOKEN=<a PAT with read:packages>
+   export CONFIGTRANSFORM_PACKAGES_SOURCE=<the feed URL for your host>
    dotnet tool restore
    ```
 
@@ -82,6 +136,7 @@ set wherever `dotnet tool restore` runs.
    ```powershell
    $env:GITHUB_ACTOR = "<your-github-username>"
    $env:GITHUB_TOKEN = "<a PAT with read:packages>"
+   $env:CONFIGTRANSFORM_PACKAGES_SOURCE = "<the feed URL for your host>"
    dotnet tool restore
    ```
 
@@ -89,14 +144,15 @@ set wherever `dotnet tool restore` runs.
    ```
    set GITHUB_ACTOR=<your-github-username>
    set GITHUB_TOKEN=<a PAT with read:packages>
+   set CONFIGTRANSFORM_PACKAGES_SOURCE=<the feed URL for your host>
    dotnet tool restore
    ```
 
-   A personal PAT (same scope, `read:packages`) works fine here — it doesn't need to be the
-   same token as the CI secret, though it can be.
+   A personal PAT (same scope, `read:packages`, minted on the host that serves the packages)
+   works fine here — it doesn't need to be the same token as the CI secret, though it can be.
 2. Setting env vars this way only lasts the shell session. To persist: a shell profile
    (`.bashrc`, PowerShell `$PROFILE`) or a durable env var (`setx GITHUB_ACTOR ...` on Windows).
-3. Run the tool exactly as CI does — identical invocation on every platform:
+3. Run the tool exactly as CI does — identical invocation on every platform, regardless of host:
    ```
    dotnet tool run configtransform-xml -- --manifest .configtransform/<Project>/manifest.json --file App.config --client ClientA --environment Production --diff
    ```
