@@ -72,16 +72,30 @@ from `github.com`), pointing `nuget.config` at the right URL is necessary but no
    genuinely useful to see which feed a run pulled from directly in the log. Set its value to the
    full URL for whichever host applies (see above) — there is deliberately no default baked into
    the workflow for this; see "Why no default" below.
-4. In the workflow step that runs `dotnet tool restore`, supply both (the token falls back to the
+4. Supply both **at the job level**, not on a single step (the token falls back to the
    workflow's own, so repos where the packages happen to be public need only the variable):
    ```yaml
-   - name: Restore local tools
-     env:
-       GITHUB_ACTOR: ${{ github.actor }}
-       GITHUB_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
-       CONFIGTRANSFORM_PACKAGES_SOURCE: ${{ vars.CONFIGTRANSFORM_PACKAGES_SOURCE }}
-     run: dotnet tool restore
+   jobs:
+     transform:
+       runs-on: ubuntu-latest
+       env:
+         GITHUB_ACTOR: ${{ github.actor }}
+         GITHUB_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+         CONFIGTRANSFORM_PACKAGES_SOURCE: ${{ vars.CONFIGTRANSFORM_PACKAGES_SOURCE }}
+       steps:
+         - name: Restore local tools
+           run: dotnet tool restore
    ```
+   Job-level matters here, confirmed the hard way: `dotnet build`'s implicit restore for *any*
+   project in the repo enumerates every source configured in `nuget.config`, even one that
+   project has no dependency on — so `%CONFIGTRANSFORM_PACKAGES_SOURCE%` needs to be expandable
+   on every step that runs `dotnet build`/`dotnet restore`, not just the one that runs
+   `dotnet tool restore`. Scoping it to a single step's own `env:` (as an earlier draft of this
+   doc had it) leaves it unexpanded on every other step — NuGet then treats the literal
+   `%CONFIGTRANSFORM_PACKAGES_SOURCE%` string as a nonexistent local path and fails with
+   `NU1301`, not an auth error, because the source's `value=` is evaluated unconditionally on
+   every invocation while credentials are only checked lazily when a package actually needs to
+   be pulled from that source.
 
 #### Why no default
 
