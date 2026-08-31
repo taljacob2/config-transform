@@ -23,6 +23,11 @@ here.
 4. **Add a `docs/CHANGELOG.md` entry for merged changes.**
 5. **If it isn't written down in this repo, treat it as lost.** No session should assume
    another session's unwritten context will still be available.
+6. **Fix drift you notice, not just what the task required.** When you're editing a file for
+   one reason, check the rest of it for staleness — a claim that's no longer true, a status
+   that's outdated — and fix that too, in the same change. Don't leave known-stale content
+   behind because it wasn't the reason you opened the file. See
+   `docs/DOCUMENTATION_POLICY.md` rule 8 for why this matters more than it might seem.
 
 ## What this is
 

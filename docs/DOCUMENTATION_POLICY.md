@@ -47,3 +47,14 @@ means documentation is not an afterthought bolted on before a release — it's p
    context. Update it in the same change as any work that completes, reprioritizes, or adds a
    planned slice — an out-of-date roadmap actively misleads the next reader, which is worse
    than having none.
+8. **Fix drift opportunistically, not just what the task required.** When you're already
+   editing a file, check the rest of it for staleness and fix what you find in the same
+   change — don't scope the edit narrowly to only what the immediate task needed. Documentation
+   that's *mostly* accurate is worse than documentation clearly marked incomplete: a reader
+   can't tell which claim to distrust, so partial staleness erodes confidence in the whole
+   document, not just the wrong part of it. Worked example: while adding a
+   `GETTING_STARTED.md` cross-reference to `CLAUDE.md`, its "Core concepts" section still
+   called `FileResolver` "planned" (it had long since been implemented), and its "Status"
+   section still said "scaffold stage" (the tool was fully implemented *and released* by that
+   point). Neither was the reason the file was open — both got fixed in the same change anyway,
+   rather than left behind or filed as a follow-up that might never happen.

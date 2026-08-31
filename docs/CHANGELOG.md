@@ -19,6 +19,9 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 - The `init`-command deferral is now a tracked item in `docs/ROADMAP.md`'s "Later / not yet
   scheduled" (with an explicit trigger condition — repeated identical manual setups, not a
   fixed timeline), not just a passing note in `GETTING_STARTED.md`.
+- `docs/DOCUMENTATION_POLICY.md` gains rule 8: fix drift you notice while already editing a
+  file, not just what the immediate task required — with a worked example. `CLAUDE.md`'s rules
+  gain a matching rule 6 pointing at it.
 
 ## [0.1.0-alpha] - 2026-08-31
 
