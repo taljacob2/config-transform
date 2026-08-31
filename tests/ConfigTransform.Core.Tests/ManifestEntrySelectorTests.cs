@@ -7,20 +7,20 @@ public class ManifestEntrySelectorTests
     [Fact]
     public void Single_entry_manifest_does_not_need_file_arg()
     {
-        var manifest = new Manifest("Project/Project.csproj", new[]
+        var manifest = new Manifest("Project", new[]
         {
             new ManifestFileEntry("App.config", "xml")
         });
 
         var entry = ManifestEntrySelector.Select(manifest, fileArg: null);
 
-        Assert.Equal("App.config", entry.RelativeToProject);
+        Assert.Equal("App.config", entry.RelativeToDirectory);
     }
 
     [Fact]
     public void Multi_entry_manifest_without_file_arg_throws()
     {
-        var manifest = new Manifest("Project/Project.csproj", new[]
+        var manifest = new Manifest("Project", new[]
         {
             new ManifestFileEntry("App.config", "xml"),
             new ManifestFileEntry("NLog.config", "xml")
@@ -32,7 +32,7 @@ public class ManifestEntrySelectorTests
     [Fact]
     public void Matches_by_overlay_folder_name()
     {
-        var manifest = new Manifest("Project/Project.csproj", new[]
+        var manifest = new Manifest("Project", new[]
         {
             new ManifestFileEntry("App.config", "xml"),
             new ManifestFileEntry("NLog.config", "xml")
@@ -40,13 +40,13 @@ public class ManifestEntrySelectorTests
 
         var entry = ManifestEntrySelector.Select(manifest, "NLog.config");
 
-        Assert.Equal("NLog.config", entry.RelativeToProject);
+        Assert.Equal("NLog.config", entry.RelativeToDirectory);
     }
 
     [Fact]
     public void No_match_throws()
     {
-        var manifest = new Manifest("Project/Project.csproj", new[]
+        var manifest = new Manifest("Project", new[]
         {
             new ManifestFileEntry("App.config", "xml")
         });
@@ -57,7 +57,7 @@ public class ManifestEntrySelectorTests
     [Fact]
     public void Empty_manifest_throws()
     {
-        var manifest = new Manifest("Project/Project.csproj", Array.Empty<ManifestFileEntry>());
+        var manifest = new Manifest("Project", Array.Empty<ManifestFileEntry>());
 
         Assert.Throws<InvalidOperationException>(() => ManifestEntrySelector.Select(manifest, fileArg: null));
     }

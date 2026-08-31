@@ -11,12 +11,12 @@ public class ManifestLoaderTests
         using var dir = new TempDirectory();
         var path = Path.Combine(dir.Path, "manifest.json");
         File.WriteAllText(path, """
-            { "project": "Project/Project.csproj", "files": [ { "relativeToProject": "App.config", "type": "xml" } ] }
+            { "directory": "Project", "files": [ { "relativeToDirectory": "App.config", "type": "xml" } ] }
             """);
 
         var manifest = ManifestLoader.Load(path);
 
-        Assert.Equal("Project/Project.csproj", manifest.Project);
+        Assert.Equal("Project", manifest.Directory);
         Assert.Single(manifest.Files);
     }
 

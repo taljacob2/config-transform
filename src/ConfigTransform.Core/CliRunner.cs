@@ -22,11 +22,10 @@ public static class CliRunner
             var manifestDir = Path.GetDirectoryName(manifestFullPath)
                 ?? throw new InvalidOperationException($"Could not determine the directory of '{manifestFullPath}'.");
             var overlayRoot = Path.Combine(manifestDir, entry.OverlayFolderName);
-            var projectDir = Path.GetDirectoryName(Path.GetFullPath(manifest.Project))
-                ?? throw new InvalidOperationException($"Could not determine the directory of '{manifest.Project}'.");
+            var directory = Path.GetFullPath(manifest.Directory);
 
             var resolution = LayerResolution.Resolve(
-                projectDir, entry.RelativeToProject, overlayRoot, options.Client, options.Environment);
+                directory, entry.RelativeToDirectory, overlayRoot, options.Client, options.Environment);
 
             foreach (var line in resolution.Report)
                 stdout.WriteLine(line);

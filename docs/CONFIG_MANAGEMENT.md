@@ -57,7 +57,7 @@ needs a different mechanism — not an assumption that this design already cover
 | git-crypt key model | Single default symmetric key | Per-user GPG keys | GPG gives an auditable grant history but **not** free revocation — revoking access still requires generating a new content key and re-encrypting everything, the same cost as symmetric-key rotation. Given the team's time constraints, the operational overhead of GPG (per-dev keypairs, key exchange/trust, a CI GPG identity) isn't worth it for a benefit (audit trail of grants) that's thin relative to its cost. |
 | Per-client key segmentation | Not implemented now; kept as an explicit future escape hatch | Per-client keys/filters from day one | Adds bookkeeping with no current benefit while everything shares one key. Revisit only if a specific client has an actual isolation requirement. |
 | `.gitattributes` scope | One glob: `.configtransform/** filter=git-crypt diff=git-crypt` | Per-client filter names | Per-client filter names only matter once a client is actually split onto its own key (a distinct key collection). Until then it's pure ceremony. |
-| Config file location assumption | None — each project's location is declared explicitly via a manifest pointing at its `.csproj` | Assuming a `src/<Project>/` convention | Source layout is not guaranteed to be consistent (flat at root, arbitrarily nested). The manifest decouples the `.configtransform/` tree from wherever code actually lives. |
+| Config file location assumption | None — each project's location is declared explicitly via a manifest's `directory` field, pointing at wherever the config file's own directory actually is (not specifically a `.csproj`'s directory — see §4) | Assuming a `src/<Project>/` convention | Source layout is not guaranteed to be consistent (flat at root, arbitrarily nested). The manifest decouples the `.configtransform/` tree from wherever code actually lives — and, as a consequence of that decoupling, from any particular language ecosystem too. |
 | Client/environment directory naming | Nested: `Clients/<Client>/<Environment>.config` | Flat: `Clients/<Client>-<Environment>.config` | Nested scales better for browsing once client count grows past a handful, avoids any hyphen-in-name ambiguity for humans reading the tree, and keeps the door open for future per-client git-crypt key scoping via a directory glob. |
 | Environment-wide layer | Included: `Environments/<Environment>.config`, applied before the client layer | Skipping straight to `Clients/<Client>/<Environment>.config` | Exists specifically to avoid duplicating settings that are identical across all clients within one environment (e.g. `debug=false` in Production). If a given project turns out to have nothing genuinely shared across clients, this layer can be omitted for that project — decide per project based on actual content, not globally. |
 | History of already-committed secrets | Rotate by default; history purge (`git filter-repo`) is optional cleanup, not a substitute | — | Rotation is the only thing that actually closes exposure to anyone who already had repo access. Purging history only stops *future* clones from getting the plaintext; it does not undo exposure to existing clones/forks/CI logs/GitHub's own caches. For credentials in broad use where rotation is genuinely infeasible, purging without rotating is an accepted, informed risk-acceptance — not a claim that the secret is now safe. |
@@ -133,20 +133,27 @@ live in this repo. It lives in its own dedicated repository and is consumed as a
 
 ```json
 {
-  "project": "services/billing/ProjectB.Core/ProjectB.Core.csproj",
+  "directory": "services/billing/ProjectB.Core",
   "files": [
-    { "relativeToProject": "appsettings.json", "type": "json" }
+    { "relativeToDirectory": "appsettings.json", "type": "json" }
   ]
 }
 ```
 
-- `project`: repo-relative path to the `.csproj`, wherever it actually is.
-- `files[].relativeToProject`: path to the base config file, relative to the csproj's own
-  directory.
+- `directory`: repo-relative path to the directory holding the project's config file(s),
+  wherever it actually is. **Not** a `.csproj` reference, despite earlier revisions of this
+  schema calling the field `project` and describing it that way — the tool never opens or
+  validates anything at this path, it only resolves `relativeToDirectory` against it. See
+  `MANIFEST_SCHEMA.md`'s "`directory` is not a `.csproj` reference" section for the full
+  implication: this is why the tool has no `TargetFramework` coupling (§11, confirmed via the
+  pilot's net35 project), and why it works identically for a Node.js/Angular/React app's JSON
+  config, not just a `.csproj`-anchored one — the only real constraint is the config file format
+  (XML or JSON today), not the language or ecosystem of the project it belongs to.
+- `files[].relativeToDirectory`: path to the base config file, relative to `directory`.
 - `files[].type`: `xml` or `json` — selects which transform tool handles it.
 - `files[].name` (optional): the subfolder name under `.configtransform/<Project>/` holding
   that file's `Environments/` and `Clients/` overlays. When omitted (the normal case), it's
-  derived automatically from `relativeToProject`'s own filename — `appsettings.json` →
+  derived automatically from `relativeToDirectory`'s own filename — `appsettings.json` →
   `appsettings.json/`, `App.config` → `App.config/`. Supply it explicitly only to disambiguate
   the rare case of two base files sharing a filename in different subdirectories of the same
   project, where auto-derivation would otherwise collide.

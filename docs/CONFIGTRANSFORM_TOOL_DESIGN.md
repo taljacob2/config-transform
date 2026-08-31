@@ -161,9 +161,9 @@ hardcoded assumptions.
 - **UTF-8 BOM handling**: Visual Studio commonly saves XML/JSON with a byte-order mark — a
   realistic fixture with a BOM must round-trip correctly, not get corrupted or silently
   stripped in a way that changes the file's encoding declaration.
-- **Manifest validation**: malformed JSON, a `project` path pointing at a non-existent
-  `.csproj`, a `relativeToProject` pointing at a non-existent file — each producing a clear,
-  specific error rather than a generic crash.
+- **Manifest validation**: malformed JSON, a `directory` pointing at a location with no base
+  file present, a `relativeToDirectory` pointing at a non-existent file — each producing a
+  clear, specific error rather than a generic crash.
 
 ### 3.4 `ConfigTransform.Core.Tests`
 

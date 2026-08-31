@@ -32,9 +32,9 @@ internal sealed class TempCliWorkspace : IDisposable
             """);
 
         ManifestPath = Path.Combine(RootPath, "manifest.json");
-        var projectCsprojPath = Path.Combine(projectDir, "Project.csproj").Replace('\\', '/');
+        var projectDirPath = projectDir.Replace('\\', '/');
         File.WriteAllText(ManifestPath,
-            $$"""{ "project": "{{projectCsprojPath}}", "files": [ { "relativeToProject": "appsettings.json", "type": "json" } ] }""");
+            $$"""{ "directory": "{{projectDirPath}}", "files": [ { "relativeToDirectory": "appsettings.json", "type": "json" } ] }""");
     }
 
     public void Dispose()

@@ -8,6 +8,20 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ### Changed
 
+- **Breaking: manifest schema field rename.** `manifest.json`'s `project` field is now
+  `directory`, and `files[].relativeToProject` is now `files[].relativeToDirectory` — with a
+  real semantic fix alongside the rename, not just a relabel. `project` was never actually
+  opened, parsed, or validated by the tool; it was only ever fed to `Path.GetDirectoryName()`
+  to derive the real base directory, which meant every manifest had to name a fake `.csproj`
+  path it didn't need. `directory` is now literally that base directory itself — no more
+  fictional filename required. Existing manifests need `"project": "X/Y.csproj"` changed to
+  `"directory": "X/Y"` (drop the fake filename) and `relativeToProject` renamed to
+  `relativeToDirectory` throughout. This also makes explicit something that was already true of
+  the old field but obscured by its name and `.csproj`-flavored docs: the manifest has no
+  coupling to `.csproj`, .NET, or any specific `TargetFramework` — see `MANIFEST_SCHEMA.md`'s
+  new "`directory` is not a `.csproj` reference" section and `CLAUDE.md`'s "Core concepts" for
+  the full implication (this works for a Node.js/Angular/React/Flutter project's JSON config
+  too, not just a `.csproj`-anchored one).
 - `docs/CONFIG_MANAGEMENT.md` §11 and `docs/ROADMAP.md` updated with the solution-repo pilot's
   first-round results: several open items (feed auth mechanics, the GitHub Packages feed's
   existence, layering/partial-coverage behavior) are now confirmed by a real pilot run rather

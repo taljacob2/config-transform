@@ -21,7 +21,7 @@ public static class ManifestEntrySelector
         }
 
         var match = manifest.Files.FirstOrDefault(f =>
-            f.RelativeToProject == fileArg ||
+            f.RelativeToDirectory == fileArg ||
             string.Equals(f.OverlayFolderName, fileArg, StringComparison.OrdinalIgnoreCase));
 
         return match ?? throw new ArgumentException($"No manifest entry matches --file '{fileArg}'.");

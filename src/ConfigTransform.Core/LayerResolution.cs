@@ -20,25 +20,25 @@ public sealed record LayerResolutionResult(
 /// </summary>
 public static class LayerResolution
 {
-    /// <param name="projectDirectory">The project's own directory (containing the base file).</param>
-    /// <param name="relativeToProject">Base file name/path, relative to <paramref name="projectDirectory"/> — from the manifest.</param>
+    /// <param name="directory">The directory declared in the manifest (containing the base file).</param>
+    /// <param name="relativeToDirectory">Base file name/path, relative to <paramref name="directory"/> — from the manifest.</param>
     /// <param name="overlayRoot">The file's own overlay folder, e.g. .configtransform/&lt;Project&gt;/App.config/.</param>
     /// <param name="client">Client name — selects Clients/&lt;client&gt;/.</param>
     /// <param name="environment">Environment name — selects the Environments/&lt;environment&gt;.&lt;ext&gt; and Clients/&lt;client&gt;/&lt;environment&gt;.&lt;ext&gt; file names.</param>
     /// <exception cref="FileNotFoundException">The base file does not exist.</exception>
     public static LayerResolutionResult Resolve(
-        string projectDirectory,
-        string relativeToProject,
+        string directory,
+        string relativeToDirectory,
         string overlayRoot,
         string client,
         string environment)
     {
         var report = new List<string>();
 
-        var basePath = FileResolver.ResolveCaseInsensitiveRequired(projectDirectory, relativeToProject);
-        report.Add($"base: '{relativeToProject}' found at '{basePath}'");
+        var basePath = FileResolver.ResolveCaseInsensitiveRequired(directory, relativeToDirectory);
+        report.Add($"base: '{relativeToDirectory}' found at '{basePath}'");
 
-        var extension = Path.GetExtension(relativeToProject);
+        var extension = Path.GetExtension(relativeToDirectory);
         var overlayFileName = $"{environment}{extension}";
 
         var environmentOverlayPath = TryResolveOverlay(

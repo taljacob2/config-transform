@@ -7,19 +7,19 @@ namespace ConfigTransform.Core;
 /// .configtransform/&lt;Project&gt;/manifest.json.
 /// </summary>
 public sealed record Manifest(
-    [property: JsonPropertyName("project")] string Project,
+    [property: JsonPropertyName("directory")] string Directory,
     [property: JsonPropertyName("files")] IReadOnlyList<ManifestFileEntry> Files);
 
 public sealed record ManifestFileEntry(
-    [property: JsonPropertyName("relativeToProject")] string RelativeToProject,
+    [property: JsonPropertyName("relativeToDirectory")] string RelativeToDirectory,
     [property: JsonPropertyName("type")] string Type,
     [property: JsonPropertyName("name")] string? Name = null)
 {
     /// <summary>
     /// The overlay subfolder name under .configtransform/&lt;Project&gt;/ — <see cref="Name"/>
     /// when explicitly set (only needed to disambiguate two base files sharing a filename in
-    /// different subdirectories of the same project), otherwise derived automatically from
-    /// <see cref="RelativeToProject"/>'s own filename per CONFIG_MANAGEMENT.md §4.
+    /// different subdirectories of the same directory), otherwise derived automatically from
+    /// <see cref="RelativeToDirectory"/>'s own filename per CONFIG_MANAGEMENT.md §4.
     /// </summary>
-    public string OverlayFolderName => Name ?? Path.GetFileName(RelativeToProject);
+    public string OverlayFolderName => Name ?? Path.GetFileName(RelativeToDirectory);
 }

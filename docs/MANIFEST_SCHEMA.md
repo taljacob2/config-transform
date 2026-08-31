@@ -9,9 +9,9 @@ project, at `.configtransform/<Project>/manifest.json` in a consuming repository
 
 ```json
 {
-  "project": "services/billing/ProjectB.Core/ProjectB.Core.csproj",
+  "directory": "services/billing/ProjectB.Core",
   "files": [
-    { "relativeToProject": "appsettings.json", "type": "json" }
+    { "relativeToDirectory": "appsettings.json", "type": "json" }
   ]
 }
 ```
@@ -20,20 +20,59 @@ project, at `.configtransform/<Project>/manifest.json` in a consuming repository
 
 | Field | Required | Description |
 |---|---|---|
-| `project` | yes | Repo-relative path to the project's `.csproj`, wherever it actually is in the repo. No assumption about a `src/` convention or any particular directory layout. |
+| `directory` | yes | Repo-relative path to the directory holding the project's config file(s), wherever it actually is in the repo. No assumption about a `src/` convention or any particular directory layout. |
 | `files` | yes | Array of config files belonging to this project that this tool manages. |
-| `files[].relativeToProject` | yes | Path to the base config file, relative to the `.csproj`'s own directory. Resolved case-insensitively at runtime — this value does not need to match the real file's exact casing. |
+| `files[].relativeToDirectory` | yes | Path to the base config file, relative to `directory`. Resolved case-insensitively at runtime — this value does not need to match the real file's exact casing. |
 | `files[].type` | yes | `"xml"` or `"json"` — selects which tool (`ConfigTransform.Xml` or `ConfigTransform.Json`) handles this entry. `"yaml"` and `"env"` are reserved for future use (not yet implemented — see the design doc's "future extensibility" notes). |
-| `files[].name` | no | Overlay subfolder name under `.configtransform/<Project>/`. When omitted (the normal case), derived automatically from `relativeToProject`'s own filename — `App.config` → `App.config/`, `appsettings.json` → `appsettings.json/`. Only needed to disambiguate the rare case of two base files sharing a filename in different subdirectories of the same project, where auto-derivation would otherwise collide. |
+| `files[].name` | no | Overlay subfolder name under `.configtransform/<Project>/`. When omitted (the normal case), derived automatically from `relativeToDirectory`'s own filename — `App.config` → `App.config/`, `appsettings.json` → `appsettings.json/`. Only needed to disambiguate the rare case of two base files sharing a filename in different subdirectories of the same project, where auto-derivation would otherwise collide. |
+
+## `directory` is not a `.csproj` reference — it's just a path
+
+Earlier revisions of this schema called the field `project` and described it as "the path to
+the `.csproj`". That was never accurate to what the tool actually does with it: `directory`'s
+value is never opened, parsed, or validated as a project file of any kind — the tool only ever
+takes it as-is and resolves `relativeToDirectory` against it (`CliRunner`, in
+`ConfigTransform.Core`). Nothing about the manifest, the CLI, or either merge engine
+(`Microsoft.Web.Xdt` for XML, `Microsoft.Extensions.Configuration` for JSON) knows or cares that
+a `.csproj` exists at all.
+
+Concretely, this means:
+
+- **`directory` should point at the directory itself**, not at a project file inside it — e.g.
+  `"services/billing/ProjectB.Core"`, not `"services/billing/ProjectB.Core/ProjectB.Core.csproj"`.
+  (Earlier examples in this repo's history used the `.csproj`-suffixed form; that was cosmetic,
+  never a real requirement, and the field is renamed specifically so the shape now matches what
+  it means.)
+- **No `TargetFramework` coupling** — a `directory` pointing at a net35, net48, or net8.0 project
+  behaves identically, since the tool never touches the project file or the consuming project's
+  own build output. See `CLAUDE.md`'s "Core concepts" for the fuller version of this claim and
+  how it's verified.
+- **No C#/.NET coupling at all, beyond the config file format.** `directory` can point at any
+  directory in the repo — a Flutter package, a Node.js/Angular/React app, anything — as long as
+  the config file it points at via `relativeToDirectory` is XML or JSON (the two formats this
+  tool currently merges). For example, a Node.js app's custom JSON config:
+  ```json
+  {
+    "directory": "frontend/checkout-app",
+    "files": [
+      { "relativeToDirectory": "src/config/app-config.json", "type": "json" }
+    ]
+  }
+  ```
+  works exactly the same way as a `.csproj`-anchored `appsettings.json` — same layering, same
+  CLI, same tool. What doesn't yet work is a config file in YAML or `.env` format (Flutter's
+  typical `.env`-based config, for instance) — those formats are confirmed compatible with the
+  existing design without a redesign, but not yet implemented; see
+  [`CONFIG_MANAGEMENT.md`](CONFIG_MANAGEMENT.md) §5.5.
 
 ## Example: a project with multiple config files
 
 ```json
 {
-  "project": "ProjectA.Framework/ProjectA.Framework.csproj",
+  "directory": "ProjectA.Framework",
   "files": [
-    { "relativeToProject": "App.config", "type": "xml" },
-    { "relativeToProject": "NLog.config", "type": "xml" }
+    { "relativeToDirectory": "App.config", "type": "xml" },
+    { "relativeToDirectory": "NLog.config", "type": "xml" }
   ]
 }
 ```

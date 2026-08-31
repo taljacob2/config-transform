@@ -41,8 +41,10 @@ here is accidental rather than deliberate.
 ## Core concepts — read before touching code
 
 - **Manifest** ([`docs/MANIFEST_SCHEMA.md`](docs/MANIFEST_SCHEMA.md), implemented in
-  `src/ConfigTransform.Core/Manifest.cs`): one per project. Declares the project's `.csproj`
-  path explicitly — never assume a `src/` layout, repos vary.
+  `src/ConfigTransform.Core/Manifest.cs`): one per project. Declares the project's `directory`
+  explicitly — never assume a `src/` layout, repos vary. `directory` is genuinely just a path;
+  the tool never opens or validates anything at it, only resolves `relativeToDirectory` against
+  it (`CliRunner`). Don't add code that assumes it points at a `.csproj` — it doesn't have to.
 - **Layering, fixed order**: base file → `Environments/<Env>.<ext>` (optional) →
   `Clients/<Client>/<Env>.<ext>` (optional) → merged result. The order is a rule inside the
   tool, not declared per-file — there is no per-overlay manifest to read, unlike Kustomize
@@ -53,13 +55,16 @@ here is accidental rather than deliberate.
   `Microsoft.Extensions.Configuration`. This is proven, not just claimed: the `GenericXml` and
   `GenericJson` test fixtures use arbitrary, made-up schemas specifically to catch any
   accidental special-casing. Don't add logic that assumes a specific filename or schema.
-- **No `TargetFramework` coupling to the projects whose config files it resolves.** Both tools
-  are plain `net8.0` executables operating on App.config/Web.config/appsettings.json purely as
-  file content — they never compile against, reference, or otherwise depend on what TFM the
-  owning project targets. A consuming project on net35, net40, net45, or net472 works exactly
-  the same as one on net48 or net8.0. Confirmed via `config-transform-pilot`'s
-  `LegacyGateway.Framework` (a deliberately vanilla net35 project). Don't add anything here that
-  assumes a specific TFM, or that requires the consuming project's own SDK/build tooling.
+- **No coupling to any language, ecosystem, or `TargetFramework`.** Both tools are plain
+  `net8.0` executables operating on config files purely as XML/JSON content — they never
+  compile against, reference, or otherwise depend on the project the config file belongs to.
+  A `.NET` project on net35, net40, net45, or net472 works exactly the same as one on net48 or
+  net8.0 (confirmed via `config-transform-pilot`'s `LegacyGateway.Framework`, a deliberately
+  vanilla net35 project) — and the same is true for a Node.js, Angular, React, or Flutter
+  project's own JSON config, since `directory` is just a path (see the Manifest bullet above).
+  The only real constraint is the config file's *format*: XML or JSON today, not the ecosystem
+  or TFM it happens to live in. Don't add anything here that assumes a specific TFM, language,
+  or the consuming project's own SDK/build tooling.
 - **Case-insensitive file resolution** (`FileResolver`, in Core). Exists because CI
   runners are typically Linux (case-sensitive) while local dev is typically Windows
   (case-insensitive) — a hazard that can pass locally and fail silently or loudly in CI. Full

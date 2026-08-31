@@ -34,7 +34,7 @@ cat > smoke-xml/Project/App.config <<'CONFIG'
 </configuration>
 CONFIG
 cat > smoke-xml/manifest.json <<MANIFEST
-{ "project": "$WORKDIR/smoke-xml/Project/Smoke.csproj", "files": [ { "relativeToProject": "App.config", "type": "xml" } ] }
+{ "directory": "$WORKDIR/smoke-xml/Project", "files": [ { "relativeToDirectory": "App.config", "type": "xml" } ] }
 MANIFEST
 
 dotnet tool run configtransform-xml -- \
@@ -46,7 +46,7 @@ cat > smoke-json/Project/appsettings.json <<'CONFIG'
 { "ApiUrl": "https://dev.example.com" }
 CONFIG
 cat > smoke-json/manifest.json <<MANIFEST
-{ "project": "$WORKDIR/smoke-json/Project/Smoke.csproj", "files": [ { "relativeToProject": "appsettings.json", "type": "json" } ] }
+{ "directory": "$WORKDIR/smoke-json/Project", "files": [ { "relativeToDirectory": "appsettings.json", "type": "json" } ] }
 MANIFEST
 
 dotnet tool run configtransform-json -- \

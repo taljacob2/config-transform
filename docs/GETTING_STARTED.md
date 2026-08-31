@@ -43,12 +43,16 @@ flowchart LR
 2. Create `.configtransform/<ProjectName>/manifest.json`:
    ```json
    {
-     "project": "path/to/YourProject.csproj",
+     "directory": "path/to/YourProject",
      "files": [
-       { "relativeToProject": "App.config", "type": "xml" }
+       { "relativeToDirectory": "App.config", "type": "xml" }
      ]
    }
    ```
+   `directory` is just a path to the folder holding the config file — not a `.csproj`
+   reference, despite the name of the field it used to be called. See `MANIFEST_SCHEMA.md`
+   for what that actually means (including: this works for non-.NET projects too, as long as
+   the config file itself is XML or JSON).
    (`type` is `"xml"` or `"json"` — see `MANIFEST_SCHEMA.md` for the full field reference.)
 3. Create overlay folders **only when you actually need an override** — don't pre-create empty
    ones for every environment/client up front:

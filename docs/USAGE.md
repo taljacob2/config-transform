@@ -13,7 +13,7 @@ fully implemented, including `--dry-run` and `--diff`.
 --diff                                   print a unified diff (base vs. merged) via `git diff --no-index`; nothing written to disk
 ```
 
-`--manifest` and the manifest's own `project` field (`docs/MANIFEST_SCHEMA.md`) are both
+`--manifest` and the manifest's own `directory` field (`docs/MANIFEST_SCHEMA.md`) are both
 resolved relative to the current working directory — run the tool from the repository root, the
 same way CI does.
 
