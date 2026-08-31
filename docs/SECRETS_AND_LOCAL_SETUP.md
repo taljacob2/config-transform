@@ -282,6 +282,17 @@ workflow, which should never need the key at all, per §8.1):
    `.configtransform/**` is now plaintext in your working copy. `git-crypt lock` re-encrypts it
    locally (to double check the round-trip, or before leaving a shared machine unattended).
 
+   **A real mistake worth flagging directly: this must be the raw decoded key, not the base64
+   text.** The same key exists in two forms — the binary file `git-crypt export-key` produces,
+   and the base64-encoded single line of it that goes into the CI secret (§1's `GIT_CRYPT_KEY_BASE64`-equivalent, if the repo uses one). Saving the base64 text itself as the local key file
+   (easy to do if whoever shared the key handed you that form, or a password-manager entry held
+   the base64 string) fails with `git-crypt unlock: <path>: not a valid git-crypt key file` — hit
+   for real while setting up `config-transform-pilot`. Decode it back to binary first:
+   ```powershell
+   [IO.File]::WriteAllBytes("C:\keys\the.key", [Convert]::FromBase64String((Get-Content "C:\keys\the.key.b64" -Raw)))
+   ```
+   (or `base64 -d` on Linux/macOS/Git Bash) before pointing `git-crypt unlock` at it.
+
 Forgetting this step and running the CLI anyway is a common enough mistake that the tool
 detects it directly: it names the manifest file, says it's still git-crypt encrypted, and tells
 you to run `git-crypt unlock` — rather than surfacing a raw, confusing JSON parse error
