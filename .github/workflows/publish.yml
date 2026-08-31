@@ -1,0 +1,39 @@
+name: publish
+
+on:
+  push:
+    # Bare SemVer tags, no "v" prefix — 1.2.0, 0.3.0-beta, etc.
+    # See CONFIGTRANSFORM_TOOL_DESIGN.md §4 and CONFIG_MANAGEMENT.md §10.8.
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - run: dotnet restore
+
+      - run: dotnet build --no-restore --configuration Release
+
+      - run: dotnet test --no-build --configuration Release
+
+      - name: Pack
+        # ${{ github.ref_name }} is the bare tag value (e.g. "1.2.0") — used directly as the
+        # package version with no prefix-stripping needed.
+        run: dotnet pack --no-build --configuration Release -p:Version=${{ github.ref_name }} --output ./nupkg
+
+      - name: Push to GitHub Packages
+        run: >
+          dotnet nuget push "./nupkg/*.nupkg"
+          --source "https://nuget.pkg.github.com/taljacob2/index.json"
+          --api-key ${{ secrets.GITHUB_TOKEN }}
+          --skip-duplicate

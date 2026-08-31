@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>configtransform-xml</ToolCommandName>
+    <PackageId>ConfigTransform.Xml</PackageId>
+    <Description>Base + Environments + Clients layered XDT transform resolution for App.config, Web.config, and other XML config files. See CONFIG_MANAGEMENT.md §5.2 and §6.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.Xdt" Version="3.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ConfigTransform.Core\ConfigTransform.Core.csproj" />
+  </ItemGroup>
+
+</Project>

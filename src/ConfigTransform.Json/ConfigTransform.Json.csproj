@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>configtransform-json</ToolCommandName>
+    <PackageId>ConfigTransform.Json</PackageId>
+    <Description>Base + Environments + Clients layered resolution for appsettings.json and other JSON config files, using Microsoft.Extensions.Configuration as the merge engine at build time. See CONFIG_MANAGEMENT.md §5.3 and §6.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ConfigTransform.Core\ConfigTransform.Core.csproj" />
+  </ItemGroup>
+
+</Project>

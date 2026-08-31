@@ -1,0 +1,11 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Authors>taljacob2</Authors>
+    <RepositoryUrl>https://github.com/taljacob2/config-transform</RepositoryUrl>
+  </PropertyGroup>
+</Project>
