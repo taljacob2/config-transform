@@ -6,7 +6,8 @@ agents alike. This index is the map for everything beyond that.
 | Document | What it's for |
 |---|---|
 | [`ROADMAP.md`](ROADMAP.md) | **Read this first when resuming work.** The single source of truth for what's planned and what's next — survives across sessions even though conversation context doesn't. |
-| [`GETTING_STARTED.md`](GETTING_STARTED.md) | **Start here if you just want to use this tool**, not understand the whole architecture first: the layering diagram, setting up a project from scratch, and day-to-day tasks like adding a field. |
+| [`ONBOARDING.md`](ONBOARDING.md) | **Joining a repo that already uses this tool? Start here.** A strict, linear, copy-paste checklist to get from a fresh clone to a working local setup and a first successful command — no architecture reading required first. |
+| [`GETTING_STARTED.md`](GETTING_STARTED.md) | **Setting `config-transform` up in a new project, or want the day-to-day usage?** The layering diagram, setting up a project from scratch, and tasks like adding a field. Assumes local setup (`ONBOARDING.md`/`SECRETS_AND_LOCAL_SETUP.md`) is already done. |
 | [`CONFIG_MANAGEMENT.md`](CONFIG_MANAGEMENT.md) | The overall architecture this tool is one piece of: multi-client/multi-environment config resolution, git-crypt encryption, CI/CD, deployment. Read this for *why this tool exists and what problem it solves*. |
 | [`CONFIGTRANSFORM_TOOL_DESIGN.md`](CONFIGTRANSFORM_TOOL_DESIGN.md) | This repo's own structure and full test plan. |
 | [`MANIFEST_SCHEMA.md`](MANIFEST_SCHEMA.md) | The `manifest.json` input contract this tool consumes. |

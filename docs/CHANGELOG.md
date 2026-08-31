@@ -6,6 +6,20 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+### Added
+
+- `docs/ONBOARDING.md`: a strict, linear, copy-paste checklist for a developer joining a repo
+  that already uses `config-transform` — install prerequisites, get a PAT, set env vars, unlock
+  git-crypt, restore the tool, run a first `--list`/`--diff`. Complements
+  `SECRETS_AND_LOCAL_SETUP.md`'s comprehensive reference (which explains every edge case and the
+  *why*) with a fast path for developers who just want a working setup with no time to learn the
+  tool first. The troubleshooting table is pulled directly from real incidents hit during this
+  project's own pilot testing, not hypothetical ones: the locked-manifest error (`[0.3.0-alpha]`
+  above), the base64-vs-raw git-crypt key mixup (also this changelog, `[0.4.0-alpha]`), the
+  wrong-working-directory `Manifest not found` error (`config-transform-pilot`'s `FINDINGS.md`),
+  and `NU1301` from env vars not set in the current shell/CI step
+  (`SECRETS_AND_LOCAL_SETUP.md` §1).
+
 ## [0.4.0-alpha] - 2026-08-31
 
 ### Added

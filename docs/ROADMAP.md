@@ -73,6 +73,17 @@ base64-vs-raw-key documentation fix from this same session, rather than publishi
 separately. `config-transform-pilot` needs its `.config/dotnet-tools.json` re-pinned to
 `0.4.0-alpha` (currently `0.3.0-alpha`) to actually pick up `--list` locally.
 
+**Added `docs/ONBOARDING.md`**: a strict, linear, copy-paste checklist for a developer joining a
+repo that already uses `config-transform` — distinct from `SECRETS_AND_LOCAL_SETUP.md`'s
+comprehensive reference and from `GETTING_STARTED.md`'s new-project/day-to-day usage. Prompted by
+a product-brainstorming session about making the tool accessible to "developers who don't have
+time to learn it": since the packages feed is intentionally private (not a wall to remove), the
+highest-leverage move for that audience is minimizing friction for people already granted access,
+not changing the distribution model. Every troubleshooting entry in it is a real incident this
+project actually hit, not a hypothetical one. See `docs/CHANGELOG.md`'s `[Unreleased]` section.
+Not yet validated against a real second developer's onboarding — that's the natural next test,
+whenever one is available, with the doc itself as the artifact to watch them use.
+
 One operational note worth carrying forward: this session's GitHub credentials can push
 branches but not tags (a real `403`, confirmed via verbose tracing, not a bug) — cutting the
 `0.1.0-alpha`, `0.1.0-alpha2`, and `0.2.0-alpha` tags all required the repo owner to push them

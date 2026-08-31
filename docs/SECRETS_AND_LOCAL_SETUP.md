@@ -6,6 +6,10 @@ recommendation (`CONFIG_MANAGEMENT.md` §7) — and how to set each up, in CI an
 machine, on every platform. `GETTING_STARTED.md` assumes this is already done; this is the doc
 that gets it done.
 
+**Just joining a repo and want the fast path, not the full reference?** See
+[`ONBOARDING.md`](ONBOARDING.md) — a linear checklist distilled from this doc, with the same
+information but none of the "why."
+
 ## 1. Authenticating to the GitHub Packages feed
 
 `ConfigTransform.Xml`/`.Json` are published to a **private-by-default** GitHub Packages NuGet
