@@ -2,7 +2,9 @@
 
 Orientation for any AI agent (or human moving fast) working in this repo. Kept short and
 high-signal on purpose — for depth, follow the links into `docs/`, starting with
-[`docs/INDEX.md`](docs/INDEX.md).
+[`docs/INDEX.md`](docs/INDEX.md). If the question is just "how do I use this tool," skip
+straight to [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) instead of reading further
+here.
 
 ## Rules — read first, every session
 
@@ -46,7 +48,7 @@ here is accidental rather than deliberate.
   `Microsoft.Extensions.Configuration`. This is proven, not just claimed: the `GenericXml` and
   `GenericJson` test fixtures use arbitrary, made-up schemas specifically to catch any
   accidental special-casing. Don't add logic that assumes a specific filename or schema.
-- **Case-insensitive file resolution** (`FileResolver`, planned in Core). Exists because CI
+- **Case-insensitive file resolution** (`FileResolver`, in Core). Exists because CI
   runners are typically Linux (case-sensitive) while local dev is typically Windows
   (case-insensitive) — a hazard that can pass locally and fail silently or loudly in CI. Full
   incident this prevents: `docs/CONFIG_MANAGEMENT.md` §5.4.
@@ -81,6 +83,7 @@ here is accidental rather than deliberate.
 
 See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the current plan (this is the doc rule #1 above
 points at) and [`docs/CHANGELOG.md`](docs/CHANGELOG.md) for exactly what's implemented so far.
-Short version as of the last update here: scaffold stage — solution/project structure, CI
-workflow skeletons, and the `Manifest` data model are implemented and tested; merge logic,
-CLI argument parsing, and `--dry-run`/`--diff` are not yet implemented.
+Short version as of the last update here: `ConfigTransform.Xml` and `ConfigTransform.Json` are
+both fully implemented, tested, and released (`0.1.0-alpha`, published to GitHub Packages).
+Nothing is actionable purely within this repo right now — see `docs/ROADMAP.md`'s "Next up" for
+what needs either a solution repo that doesn't exist yet or an owner decision.

@@ -6,7 +6,13 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- `docs/GETTING_STARTED.md`: a task-oriented guide for using the tool without reading the full
+  architecture first — the base→Environments→Clients layering as a Mermaid diagram, setting up
+  a project from scratch, day-to-day field-adding recipes (same-for-everyone,
+  per-environment, per-client), the XML-vs-JSON difference when adding a brand-new key, and a
+  reasoned recommendation against building an `init` command yet.
 
 ## [0.1.0-alpha] - 2026-08-31
 
