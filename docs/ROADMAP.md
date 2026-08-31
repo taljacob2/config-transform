@@ -44,10 +44,20 @@ succeeded), the pilot re-pinned to it, and `build-transformed.yml` has since run
 end to end for three real client/environment combinations, confirming the fix and the rest of
 the design's core claims. Full writeup: `config-transform-pilot`'s `FINDINGS.md`.
 
+**`0.2.0-alpha` is a breaking manifest-schema change**: `manifest.json`'s `project` field is
+renamed to `directory` (and `relativeToProject` to `relativeToDirectory`), with a real semantic
+fix alongside the rename — `directory` is now literally the base directory itself, not a fake
+`.csproj` path fed to `Path.GetDirectoryName()`. This also makes explicit something that was
+already true but obscured by the old field's name: the manifest has no coupling to `.csproj`,
+.NET, or any `TargetFramework` at all — see `docs/CHANGELOG.md`'s `[0.2.0-alpha]` section and
+`docs/MANIFEST_SCHEMA.md` for the full implication (a Node.js/Angular/React/Flutter project's
+JSON config works identically to a `.csproj`-anchored one). Every manifest in this repo and in
+`config-transform-pilot` needs updating to the new field names before pinning this version.
+
 One operational note worth carrying forward: this session's GitHub credentials can push
-branches but not tags (a real `403`, confirmed via verbose tracing, not a bug) — cutting both
-the `0.1.0-alpha` and `0.1.0-alpha2` tags required the repo owner to push them manually. Expect
-the same for any future release tag.
+branches but not tags (a real `403`, confirmed via verbose tracing, not a bug) — cutting the
+`0.1.0-alpha`, `0.1.0-alpha2`, and `0.2.0-alpha` tags all required the repo owner to push them
+manually. Expect the same for any future release tag.
 
 ## Next up
 

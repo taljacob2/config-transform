@@ -6,6 +6,8 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.2.0-alpha] - 2026-08-31
+
 ### Changed
 
 - **Breaking: manifest schema field rename.** `manifest.json`'s `project` field is now
