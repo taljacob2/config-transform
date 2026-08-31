@@ -101,3 +101,23 @@ ready, rather than assuming the next item in this list is the default next step.
   across multiple onboardings — that repetition is the signal the automation would earn its
   complexity, not a fixed timeline. See `docs/GETTING_STARTED.md`'s "Should there be an `init`
   command?" section for the full reasoning.
+- **A TUI (`configtransform-tui`) and/or a cross-platform GUI (`configtransform-gui`)** —
+  investigated, not started. Two separate blockers, not one:
+  1. There's no CLI-level field-authoring feature to build a UI around yet. Today every overlay
+     is hand-written XDT or JSON — nothing computes or writes one. That's a real feature in its
+     own right before any UI wraps it, and XML is the harder half: "add/set a field" isn't one
+     operation, it branches three ways depending on intent — add a genuinely new key to the
+     *base* file (applies to everyone, the normal case), `SetAttributes`+`Locator="Match(key)"`
+     an overlay to override an existing key for one environment/client, or `Transform="Insert"`
+     an overlay for the unusual case of a client-only field that exists nowhere else (see
+     `docs/GETTING_STARTED.md`'s "One real difference between XML and JSON when the key is
+     brand new"). JSON's version is simpler — any layer can introduce a new key with no special
+     syntax — but the command still has to know which of the three XML cases it's in, which
+     needs the base document's real shape, not just a key/value pair.
+  2. Same validation gap that deferred `init`, more so: designing a UI's workflows now would be
+     guessing at real usage patterns from one synthetic pilot, not real per-repo variation.
+     `--diff`/`--dry-run` already cover "see the merged result easily" without either UI.
+
+  **Trigger to actually pick this up:** a CLI-level field-authoring command exists, is validated
+  against real content, and people using it still hit friction that `--list`-style introspection
+  or better docs don't solve — not a fixed timeline.
