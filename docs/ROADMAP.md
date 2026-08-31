@@ -54,6 +54,15 @@ already true but obscured by the old field's name: the manifest has no coupling 
 JSON config works identically to a `.csproj`-anchored one). Every manifest in this repo and in
 `config-transform-pilot` needs updating to the new field names before pinning this version.
 
+**`0.3.0-alpha` is live**: `ManifestLoader.Load` now recognizes git-crypt's own encrypted-file
+magic header and fails with an actionable "run `git-crypt unlock`" message instead of a raw,
+confusing JSON parse error when a manifest under a `.configtransform/**` tree hasn't been
+unlocked yet — see `docs/CHANGELOG.md`'s `[0.3.0-alpha]` section. Also generalizes GitHub
+Packages feed setup to `*.ghe.com` tenants and documents pointing a manifest's `directory` at a
+repo's own root (`"."`) — both doc-only, folded into this release rather than published
+separately. `config-transform-pilot` needs its `.config/dotnet-tools.json` re-pinned to
+`0.3.0-alpha` (currently `0.2.0-alpha`) to actually pick up the new error message locally.
+
 One operational note worth carrying forward: this session's GitHub credentials can push
 branches but not tags (a real `403`, confirmed via verbose tracing, not a bug) — cutting the
 `0.1.0-alpha`, `0.1.0-alpha2`, and `0.2.0-alpha` tags all required the repo owner to push them

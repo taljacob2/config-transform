@@ -6,6 +6,8 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.3.0-alpha] - 2026-08-31
+
 ### Fixed
 
 - `ManifestLoader.Load` now detects a still-git-crypt-locked manifest by its magic header (NUL +
