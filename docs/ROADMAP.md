@@ -57,3 +57,12 @@ ready, rather than assuming the next item in this list is the default next step.
   redesign, see `docs/CONFIG_MANAGEMENT.md` §5.5. Not needed yet.
 - **A real (non-`-alpha`) `1.0.0` release** — once the solution-repo pilot validates the design
   against real content, worth promoting out of pre-release.
+- **A `configtransform init` command** — investigate once a few solution repos have actually
+  gone through the manual setup in `docs/GETTING_STARTED.md` ("Setting up a project from
+  scratch"). Deliberately not built now: the manual setup is small, and no real repo has
+  validated the design yet, so an `init` command today would risk baking in wrong defaults
+  (folder names, file-type detection, "typical" manifest shape). **Trigger to actually pick
+  this up:** the same setup steps get repeated identically, with no real per-repo variation,
+  across multiple onboardings — that repetition is the signal the automation would earn its
+  complexity, not a fixed timeline. See `docs/GETTING_STARTED.md`'s "Should there be an `init`
+  command?" section for the full reasoning.

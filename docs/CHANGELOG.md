@@ -14,6 +14,12 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   per-environment, per-client), the XML-vs-JSON difference when adding a brand-new key, and a
   reasoned recommendation against building an `init` command yet.
 
+### Changed
+
+- The `init`-command deferral is now a tracked item in `docs/ROADMAP.md`'s "Later / not yet
+  scheduled" (with an explicit trigger condition — repeated identical manual setups, not a
+  fixed timeline), not just a passing note in `GETTING_STARTED.md`.
+
 ## [0.1.0-alpha] - 2026-08-31
 
 ### Added

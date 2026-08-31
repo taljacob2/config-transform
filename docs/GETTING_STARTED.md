@@ -154,3 +154,6 @@ Not yet — here's the reasoning, not just the answer:
 Revisit this once a few solution repos have gone through the manual steps above. If the exact
 same steps get repeated identically every time with no real per-repo variation, that repetition
 is the signal that automating it would actually earn its complexity. Premature right now.
+
+Tracked as a future investigation, not just a passing note here — see `ROADMAP.md`'s "Later /
+not yet scheduled" for the tracked item and its trigger condition.
