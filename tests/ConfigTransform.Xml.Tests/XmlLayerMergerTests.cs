@@ -71,6 +71,36 @@ public class XmlLayerMergerTests
         Assert.Equal("60", GetAppSetting(appSettings, "Timeout"));
     }
 
+    [Fact]
+    public void Merged_result_survives_a_real_disk_round_trip_through_a_strict_parser()
+    {
+        // XDocument.Parse(string), used by every other test here, parses an already-decoded
+        // .NET string and ignores whatever encoding the XML declaration claims — so it cannot
+        // catch a declared-vs-actual encoding mismatch. CliRunner's real (--output) path
+        // instead writes the merged string to disk via File.WriteAllText (UTF-8), then a
+        // consumer reads those bytes back. Reproduce that here: write to a real file and load
+        // it with XDocument.Load(path), which does honor the declared encoding, the same way
+        // any standards-compliant XML parser reading the file from disk would.
+        var projectDir = Path.Combine(FixturesRoot, "Project");
+        var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
+
+        var resolution = LayerResolution.Resolve(projectDir, "App.config", overlayRoot, "ClientA", "Production");
+        var merged = XmlLayerMerger.Merge(resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
+
+        var tempPath = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(tempPath, merged);
+            var doc = XDocument.Load(tempPath);
+            Assert.Equal("https://clienta.example.com",
+                GetAppSetting(doc.Root!.Element("appSettings")!, "ApiUrl"));
+        }
+        finally
+        {
+            File.Delete(tempPath);
+        }
+    }
+
     private static string GetAppSetting(XElement appSettings, string key) =>
         appSettings.Elements("add").Single(e => (string)e.Attribute("key")! == key).Attribute("value")!.Value;
 }

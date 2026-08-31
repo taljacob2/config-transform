@@ -23,6 +23,22 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   file, not just what the immediate task required — with a worked example. `CLAUDE.md`'s rules
   gain a matching rule 6 pointing at it.
 
+### Fixed
+
+- `XmlLayerMerger.Merge` declared `encoding="utf-16"` in the merged XML's own prolog (a plain
+  `StringWriter`'s default `Encoding`), while `CliRunner`'s real-run path (`--output`) persists
+  that string to disk via `File.WriteAllText`, which defaults to UTF-8 — a declared-vs-actual
+  encoding mismatch invisible to this project's own tests (`XDocument.Parse(string)` ignores
+  the declared encoding entirely for an already-decoded .NET string) but rejected by any
+  standards-compliant parser reading the file back from disk (caught via `config-transform-pilot`,
+  a real `workflow_dispatch` run failing on `xml.etree.ElementTree.parse`: "encoding specified
+  in XML declaration is incorrect"). Fixed with a `StringWriter` subclass that reports
+  `Encoding.UTF8`, matching what actually lands on disk; a new regression test
+  (`Merged_result_survives_a_real_disk_round_trip_through_a_strict_parser`) writes the merged
+  result to a real temp file and reloads it with `XDocument.Load(path)` — unlike
+  `XDocument.Parse(string)`, `.Load` honors the declared encoding, so it would have caught this
+  before it ever shipped.
+
 ## [0.1.0-alpha] - 2026-08-31
 
 ### Added

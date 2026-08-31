@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.Web.XmlTransform;
 
 namespace ConfigTransform.Xml;
@@ -23,7 +24,17 @@ public static class XmlLayerMerger
         if (clientOverlayPath is not null)
             Apply(document, clientOverlayPath);
 
-        using var writer = new StringWriter();
+        // XmlDocument.Save(TextWriter) writes the XML declaration's encoding attribute from
+        // writer.Encoding — a plain StringWriter reports UTF-16 (its in-memory
+        // representation), regardless of how the caller later persists the returned string.
+        // CliRunner's real-run path (--output) persists it via File.WriteAllText, which
+        // defaults to UTF-8 — so the file would end up declaring "utf-16" while actually
+        // being UTF-8 bytes. In-memory assertions (XDocument.Parse(string) in this project's
+        // own tests) never surface this, because parsing an already-decoded .NET string
+        // ignores the declared encoding entirely; only a real disk round-trip through a
+        // standards-compliant parser does. Force the declaration to match what actually gets
+        // written to disk.
+        using var writer = new Utf8StringWriter();
         document.Save(writer);
         return writer.ToString();
     }
@@ -33,5 +44,10 @@ public static class XmlLayerMerger
         using var transformation = new XmlTransformation(transformPath);
         if (!transformation.Apply(document))
             throw new InvalidOperationException($"XDT transform failed to apply: '{transformPath}'.");
+    }
+
+    private sealed class Utf8StringWriter : StringWriter
+    {
+        public override Encoding Encoding => Encoding.UTF8;
     }
 }
