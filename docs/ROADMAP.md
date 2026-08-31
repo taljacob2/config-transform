@@ -16,39 +16,44 @@ made. An out-of-date roadmap is worse than none, because it's actively misleadin
 
 ## Current state
 
-**Both `ConfigTransform.Xml` and `ConfigTransform.Json` are now fully implemented and tested
-end to end**, including `--dry-run` and `--diff` for both. Shared orchestration
-(`CliRunner` in Core, taking the format-specific merge function as a delegate — extracted once
-the JSON tool made the near-total duplication with `XmlCliRunner` worth eliminating) plus the
-Core resolution primitives (`FileResolver`, `LayerResolution`, `CliOptionsParser`,
-`ManifestLoader`, `ManifestEntrySelector`, `GitDiff`) back both tools. Verified against all XML
-fixture sets (`DotNetFramework`, `IisWebConfig`, `GenericXml`) and both JSON fixture sets
-(`DotNetCore`, `GenericJson`) `CONFIGTRANSFORM_TOOL_DESIGN.md` §3 calls for, including a pinned
-test for the JSON array-overrides-by-index (not wholesale) behavior and one for JSON
-type-preservation (bool/number survive round-tripping through `IConfiguration`'s
-string-only internal model, rather than becoming quoted strings). See `docs/CHANGELOG.md`'s
-`[Unreleased]` section for the precise, current list of what exists.
+**`ConfigTransform.Xml` and `ConfigTransform.Json` are fully implemented, tested, and
+released.** `0.1.0-alpha` (tag, no `v` prefix) is live: `publish.yml` ran end to end for the
+first time — build, test, pack, push to GitHub Packages, `scripts/smoke-test-published-tool.sh`
+(installed both packages from the real feed and invoked them, not just from the local build),
+and GitHub Release creation with notes extracted from `docs/CHANGELOG.md` — all succeeded on
+the first real attempt. Release: https://github.com/taljacob2/config-transform/releases/tag/0.1.0-alpha
+
+Shared orchestration (`CliRunner` in Core, taking the format-specific merge function as a
+delegate) plus the Core resolution primitives (`FileResolver`, `LayerResolution`,
+`CliOptionsParser`, `ManifestLoader`, `ManifestEntrySelector`, `GitDiff`) back both tools,
+verified against all XML fixture sets (`DotNetFramework`, `IisWebConfig`, `GenericXml`) and
+both JSON fixture sets (`DotNetCore`, `GenericJson`) `CONFIGTRANSFORM_TOOL_DESIGN.md` §3 calls
+for. See `docs/CHANGELOG.md`'s `[0.1.0-alpha]` section for the precise, full list of what
+exists.
+
+One operational note worth carrying forward: this session's GitHub credentials can push
+branches but not tags (a real `403`, confirmed via verbose tracing, not a bug) — cutting the
+`0.1.0-alpha` tag required the repo owner to push it manually. Expect the same for any future
+release tag.
 
 ## Next up
 
-**Slice: real packaging verification.** Confirm `dotnet pack`/`PackAsTool` actually produce
-installable tools — not just that they build. Cut a real first tagged pre-release (e.g.
-`0.1.0-alpha`, no `v` prefix per `docs/CONFIG_MANAGEMENT.md` §10.8) to validate `publish.yml`
-end-to-end against the GitHub Packages feed, then actually install the published tool locally
-(`dotnet tool install --local`) and run it against a manifest, confirming the whole distribution
-path — not just the build — works as designed.
+Nothing is actionable purely within this repo right now — every remaining item below either
+needs a solution repo that doesn't exist yet, or a decision only the repo owner can make. Not
+a "next slice" in the same sense as the ones so far; pick from below (or something new) when
+ready, rather than assuming the next item in this list is the default next step.
 
-Definition of done: a real tag is pushed, `publish.yml` succeeds, the package appears in GitHub
-Packages, and `dotnet tool install` + a real invocation of the installed tool succeeds locally.
-`docs/CHANGELOG.md` gets a new entry recording the first real version.
-
-## Later / not yet scheduled
-
-Tracked in more detail in `docs/CONFIG_MANAGEMENT.md` §11 and
-`docs/CONFIGTRANSFORM_TOOL_DESIGN.md` §5 — pulled up here only as a pointer, not duplicated:
-
-- First real solution-repo pilot (no solution repo exists yet).
-- Deployment transport mechanism (self-hosted runner vs. WinRM vs. Octopus Deploy) — not this
-  repo's concern directly, but blocks the consuming architecture's `build-transformed.yml`.
-- git-crypt key rotation trigger — deferred by design, not blocking.
-- YAML/`.env` format support — confirmed compatible with the existing design, not needed yet.
+- **First real solution-repo pilot** — no solution repo exists yet. This is the natural next
+  major step: attach or create the actual .NET solution repo, do the real inventory of its
+  config files against `CONFIG_MANAGEMENT.md`'s assumptions (validate `.configtransform/`
+  naming doesn't collide, confirm the `Environments`/`Clients` layering actually matches real
+  content, etc. — see `CONFIG_MANAGEMENT.md` §11), and wire this tool into it via the
+  `.config/dotnet-tools.json` local-tool-manifest flow (`CONFIG_MANAGEMENT.md` §10.3).
+- **Deployment transport mechanism** (self-hosted runner vs. WinRM vs. Octopus Deploy) — not
+  this repo's concern directly, but blocks the consuming architecture's
+  `build-transformed.yml`. `CONFIG_MANAGEMENT.md` §8.3.
+- **git-crypt key rotation trigger** — deferred by design, not blocking.
+- **YAML/`.env` format support** — confirmed compatible with the existing design without a
+  redesign, see `docs/CONFIG_MANAGEMENT.md` §5.5. Not needed yet.
+- **A real (non-`-alpha`) `1.0.0` release** — once the solution-repo pilot validates the design
+  against real content, worth promoting out of pre-release.
