@@ -41,6 +41,14 @@ dotnet run --project src/ConfigTransform.Json -- \
   --manifest .configtransform/ProjectB.Core/manifest.json \
   --file appsettings.json --client ClientA --environment Production \
   --output publish/appsettings.json
+
+# --file is only required above because ProjectA.Framework's manifest (see
+# MANIFEST_SCHEMA.md's own multi-file example) declares two files, App.config and
+# NLog.config. ProjectB.Core has exactly one file entry, so --file can be dropped
+# entirely — ManifestEntrySelector auto-selects the only entry:
+dotnet run --project src/ConfigTransform.Json -- \
+  --manifest .configtransform/ProjectB.Core/manifest.json \
+  --client ClientA --environment Production --diff
 ```
 
 On every run, the tool prints an explicit found/not-found line for each layer (base,
