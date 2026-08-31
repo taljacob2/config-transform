@@ -1,0 +1,71 @@
+namespace ConfigTransform.Core;
+
+/// <summary>
+/// Parses the CLI shape shared by ConfigTransform.Xml and ConfigTransform.Json (docs/USAGE.md).
+/// --dry-run and --diff parse successfully here even though neither front-end implements them
+/// yet (see docs/ROADMAP.md) — a user passing them gets a specific "not yet implemented"
+/// message from the front-end, not a generic "unrecognized argument" error from this parser.
+/// </summary>
+public static class CliOptionsParser
+{
+    public static CliOptions Parse(string[] args)
+    {
+        string? manifest = null;
+        string? file = null;
+        string? client = null;
+        string? environment = null;
+        string? output = null;
+        var dryRun = false;
+        var diff = false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--manifest":
+                    manifest = RequireValue(args, ref i, "--manifest");
+                    break;
+                case "--file":
+                    file = RequireValue(args, ref i, "--file");
+                    break;
+                case "--client":
+                    client = RequireValue(args, ref i, "--client");
+                    break;
+                case "--environment":
+                    environment = RequireValue(args, ref i, "--environment");
+                    break;
+                case "--output":
+                    output = RequireValue(args, ref i, "--output");
+                    break;
+                case "--dry-run":
+                    dryRun = true;
+                    break;
+                case "--diff":
+                    diff = true;
+                    break;
+                default:
+                    throw new ArgumentException($"Unrecognized argument: '{args[i]}'.");
+            }
+        }
+
+        if (manifest is null)
+            throw new ArgumentException("--manifest is required.");
+        if (client is null)
+            throw new ArgumentException("--client is required.");
+        if (environment is null)
+            throw new ArgumentException("--environment is required.");
+        if (output is null && !dryRun && !diff)
+            throw new ArgumentException("--output is required for a real run (omit only with --dry-run or --diff).");
+
+        return new CliOptions(manifest, file, client, environment, output, dryRun, diff);
+    }
+
+    private static string RequireValue(string[] args, ref int i, string flag)
+    {
+        if (i + 1 >= args.Length)
+            throw new ArgumentException($"{flag} requires a value.");
+
+        i++;
+        return args[i];
+    }
+}

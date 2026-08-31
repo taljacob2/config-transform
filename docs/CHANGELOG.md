@@ -31,5 +31,19 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   report per layer. Missing overlays are reported but not fatal; a missing base file throws
   `FileNotFoundException`. Fully tested, including that the overlay file name's extension is
   derived from the base file's own extension.
+- `CliOptionsParser`/`CliOptions` in `ConfigTransform.Core`: parses the CLI shape shared by
+  both tools (`docs/USAGE.md`); `--dry-run`/`--diff` parse successfully but the front-ends
+  reject them with an explicit "not yet implemented" message.
+- `ManifestLoader` and `ManifestEntrySelector` in `ConfigTransform.Core`: load and validate a
+  manifest file, and select the targeted file entry (by exact path or by the derived/explicit
+  overlay folder name), each with clear errors for the invalid cases.
+- `XmlLayerMerger` in `ConfigTransform.Xml`: real base → Environments → Clients merge via
+  `Microsoft.Web.Xdt`. `ConfigTransform.Xml`'s real-run CLI path is now fully wired end to end.
+- Real `DotNetFramework` fixture set (base App.config, an environment-wide `Timeout` override,
+  a client-specific `ApiUrl`/connection-string override), replacing the placeholder, with tests
+  covering all three layers present, no overlays present, and environment-only (no client
+  override) — verifying the layering order and the "missing overlay ≠ error" rule together,
+  end to end, not just each piece in isolation.
 
-No CLI argument parsing or actual XDT/JSON merge logic yet — that's the next roadmap slice.
+`ConfigTransform.Json` and `--dry-run`/`--diff` are not yet implemented — see
+`docs/ROADMAP.md`.

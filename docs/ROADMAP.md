@@ -16,40 +16,37 @@ made. An out-of-date roadmap is worse than none, because it's actively misleadin
 
 ## Current state
 
-Scaffold stage, plus Core resolution primitives: solution/project structure, CI workflow
-skeletons, the `Manifest` data model, `FileResolver` (case-insensitive resolution), and
-`LayerResolution` (found/not-found reporting) are all implemented and tested. See
+Scaffold, Core resolution primitives, and a working end-to-end `ConfigTransform.Xml` real-run
+path are all implemented and tested: solution/project structure, CI workflow skeletons, the
+`Manifest` data model, `FileResolver`, `LayerResolution`, CLI argument parsing
+(`CliOptionsParser`), manifest loading and entry selection, and `XmlLayerMerger` (base → env →
+client via `Microsoft.Web.Xdt`), verified against the real `DotNetFramework` fixture set. See
 `docs/CHANGELOG.md`'s `[Unreleased]` section for the precise, current list of what exists.
 
 ## Next up
 
-**Slice: XML merge engine, end-to-end vertical slice.** Wire real merge logic into
-`ConfigTransform.Xml` (`Microsoft.Web.Xdt`, base → env → client via `LayerResolution`),
-implement CLI argument parsing (`--manifest`, `--file`, `--client`, `--environment`,
-`--output`), and get the `DotNetFramework` fixture set (write real fixture files, replacing the
-`.gitkeep` placeholder) passing end-to-end. This is the slice that proves the whole shape
-actually works, not just compiles.
+**Slice: expand XML fixture coverage.** Add `IisWebConfig` and `GenericXml` fixtures + tests,
+per `CONFIGTRANSFORM_TOOL_DESIGN.md` §3.1 — `IisWebConfig` specifically needs nested/
+`<location>`-wrapped structures (not just flat `appSettings`) to genuinely exercise
+`Locator="Match(...)"` beyond what `DotNetFramework` already covers; `GenericXml` needs an
+arbitrary, made-up schema to prove `XmlLayerMerger` has no hidden App.config-specific
+assumptions (it doesn't, by construction, but this is the fixture set that actually
+demonstrates it).
 
-Definition of done: `dotnet run --project src/ConfigTransform.Xml -- --manifest ... --file
-App.config --client ClientA --environment Production --output ...` produces a correctly merged
-file against the `DotNetFramework` fixtures, with a passing test asserting it, and
-`docs/CHANGELOG.md` gets a new entry.
+Definition of done: both fixture sets exist with real content, both have passing
+`XmlLayerMergerTests`-style tests, and `docs/CHANGELOG.md` gets a new entry.
 
 ## After that, in order
 
-1. **Expand XML fixture coverage** — `IisWebConfig` and `GenericXml` fixtures + tests, per
-   `CONFIGTRANSFORM_TOOL_DESIGN.md` §3.1.
-2. **`--dry-run` and `--diff`** — per `CONFIG_MANAGEMENT.md` §6, with tests asserting no file
+1. **`--dry-run` and `--diff`** — per `CONFIG_MANAGEMENT.md` §6, with tests asserting no file
    outside an explicit `--output` is ever written.
-3. **JSON tool** — mirror the XML slice for `ConfigTransform.Json`
+2. **JSON tool** — mirror the XML slice for `ConfigTransform.Json`
    (`Microsoft.Extensions.Configuration`-based merge), `DotNetCore` and `GenericJson`
    fixtures, including the documented JSON-array-merge behavior test
    (`CONFIGTRANSFORM_TOOL_DESIGN.md` §3.2).
-4. **Real packaging verification** — confirm `dotnet pack`/`PackAsTool` actually produces
+3. **Real packaging verification** — confirm `dotnet pack`/`PackAsTool` actually produces
    installable tools; cut a real first tagged pre-release (e.g. `0.1.0-alpha`, no `v` prefix)
    to validate `publish.yml` end-to-end against the GitHub Packages feed.
-5. **`docs/USAGE.md`** — replace the stub with the real, verified CLI reference once the CLI
-   exists.
 
 ## Later / not yet scheduled
 
