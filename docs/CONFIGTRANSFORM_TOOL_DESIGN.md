@@ -1,8 +1,12 @@
 # ConfigTransform Tool Repository — Design & Test Plan
 
-Companion document to `CONFIG_MANAGEMENT.md` §10 (Tool distribution & versioning). That
-document describes how solution repos *consume* this tool; this document describes the tool
-repo's own internal structure and test strategy. Status: design only, repo not yet created.
+Companion document to [`CONFIG_MANAGEMENT.md`](CONFIG_MANAGEMENT.md) §10 (Tool distribution &
+versioning). That document describes how solution repos *consume* this tool; this document
+describes the tool repo's own internal structure and test strategy.
+
+Status: this repo (`taljacob2/config-transform`) now exists, with a scaffold in place — see
+[`CHANGELOG.md`](CHANGELOG.md) for exactly what's implemented so far. The detailed test matrix
+below is still design-only until each fixture set is actually written.
 
 ## 1. Repository structure
 
@@ -187,4 +191,6 @@ platform.
 
 ## 5. Open items
 
-- Repo not yet created — this is design only, per `CONFIG_MANAGEMENT.md` §11.
+- Repo created (`taljacob2/config-transform`), scaffolded (solution, project stubs, CI
+  skeletons, `Manifest` model). The fixture-set-driven test matrix in §3 is not yet
+  implemented — current test coverage is scaffold-only, see `CHANGELOG.md`.

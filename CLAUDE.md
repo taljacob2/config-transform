@@ -1,0 +1,69 @@
+# CLAUDE.md
+
+Orientation for any AI agent (or human moving fast) working in this repo. Kept short and
+high-signal on purpose — for depth, follow the links into `docs/`, starting with
+[`docs/INDEX.md`](docs/INDEX.md).
+
+## What this is
+
+`config-transform` resolves per-client, per-environment configuration overrides for .NET
+projects — App.config, Web.config, appsettings.json, and eventually other formats — by
+layering **base → Environments → Clients** overlays through a manifest-driven model. It's one
+piece of a larger architecture; the full "why" lives in
+[`docs/CONFIG_MANAGEMENT.md`](docs/CONFIG_MANAGEMENT.md) — read that before assuming something
+here is accidental rather than deliberate.
+
+## Core concepts — read before touching code
+
+- **Manifest** ([`docs/MANIFEST_SCHEMA.md`](docs/MANIFEST_SCHEMA.md), implemented in
+  `src/ConfigTransform.Core/Manifest.cs`): one per project. Declares the project's `.csproj`
+  path explicitly — never assume a `src/` layout, repos vary.
+- **Layering, fixed order**: base file → `Environments/<Env>.<ext>` (optional) →
+  `Clients/<Client>/<Env>.<ext>` (optional) → merged result. The order is a rule inside the
+  tool, not declared per-file — there is no per-overlay manifest to read, unlike Kustomize
+  (see `docs/CONFIG_MANAGEMENT.md` §9 for that comparison).
+- **Format-generic by design.** `ConfigTransform.Xml` (via `Microsoft.Web.Xdt`) treats
+  App.config, Web.config, NLog.config, or any other XML file identically — there is no
+  App.config-specific logic anywhere in it. `ConfigTransform.Json` is the same for JSON via
+  `Microsoft.Extensions.Configuration`. This is proven, not just claimed: the `GenericXml` and
+  `GenericJson` test fixtures use arbitrary, made-up schemas specifically to catch any
+  accidental special-casing. Don't add logic that assumes a specific filename or schema.
+- **Case-insensitive file resolution** (`FileResolver`, planned in Core). Exists because CI
+  runners are typically Linux (case-sensitive) while local dev is typically Windows
+  (case-insensitive) — a hazard that can pass locally and fail silently or loudly in CI. Full
+  incident this prevents: `docs/CONFIG_MANAGEMENT.md` §5.4.
+- **Missing overlay ≠ error; missing base file = error.** A client with no override for some
+  environment is the normal case, not a bug — don't "fix" a missing-overlay path into an
+  error. See `docs/CONFIG_MANAGEMENT.md` §5.1 for the reporting rule that goes with this
+  (found/not-found is always reported, but absence at the overlay layer is never fatal).
+
+## Repo structure — where to look
+
+- `src/ConfigTransform.Core/` — shared, format-agnostic logic (manifest parsing, file
+  resolution, layer-resolution reporting). Change here first for anything that should behave
+  identically across XML and JSON.
+- `src/ConfigTransform.Xml/`, `src/ConfigTransform.Json/` — thin CLI front-ends, one per
+  format, each wrapping a different merge engine.
+- `tests/*/Fixtures/` — real-shaped fixture files per scenario: `DotNetFramework`,
+  `IisWebConfig`, `GenericXml` (XML); `DotNetCore`, `GenericJson` (JSON). New merge-behavior
+  test cases belong here as fixtures, exercised by data-driven tests — not as inline strings
+  duplicated per test method. Full test matrix: `docs/CONFIGTRANSFORM_TOOL_DESIGN.md` §3.
+- `docs/` — see [`docs/INDEX.md`](docs/INDEX.md) for the full map.
+  `docs/CONFIG_MANAGEMENT.md` carries the "why" behind almost every non-obvious decision in
+  this codebase.
+
+## Conventions
+
+- Every merge-behavior change needs fixture-backed tests across every applicable scenario
+  category, not just one (`docs/CONFIGTRANSFORM_TOOL_DESIGN.md` §3).
+- Full SemVer, tags with **no `v` prefix** (`1.2.0`, not `v1.2.0`) —
+  `docs/CONFIG_MANAGEMENT.md` §10.8.
+- Documentation is updated in the *same* change as the code, not filed as follow-up —
+  [`docs/DOCUMENTATION_POLICY.md`](docs/DOCUMENTATION_POLICY.md), which this file follows too.
+
+## Status
+
+Scaffold stage: solution/project structure, CI workflow skeletons, and the `Manifest` data
+model are implemented and tested. Merge logic (`FileResolver`, the actual XDT/
+`ConfigurationBuilder`-based transform, CLI argument parsing, `--dry-run`/`--diff`) is not yet
+implemented — see `docs/CHANGELOG.md`'s `[Unreleased]` section for the current, precise state.

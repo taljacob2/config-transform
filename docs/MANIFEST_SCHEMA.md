@@ -2,8 +2,8 @@
 
 Authoritative reference for `manifest.json` — the tool's own input contract. One manifest per
 project, at `.configtransform/<Project>/manifest.json` in a consuming repository (the
-`.configtransform/` root name is itself configurable per repo; see the consuming repo's own
-`CONFIG_MANAGEMENT.md` §10.5).
+`.configtransform/` root name is itself configurable per repo; see [`CONFIG_MANAGEMENT.md`](CONFIG_MANAGEMENT.md)
+§10.5).
 
 ## Shape
 
@@ -54,7 +54,7 @@ Produces the overlay tree:
 ## Web.config
 
 No special handling — Web.config is XML, resolved through the same `"type": "xml"` engine as
-App.config. See the consuming repo's `CONFIG_MANAGEMENT.md` §5.2 for the one real caveat: on
+App.config. See [`CONFIG_MANAGEMENT.md`](CONFIG_MANAGEMENT.md) §5.2 for the one real caveat: on
 ASP.NET Web Application projects with an existing native MSBuild Web.config transform
 (`Web.Debug.config`/`Web.Release.config`), this tool's step must run *after* that native
 pipeline step in the deploy workflow.

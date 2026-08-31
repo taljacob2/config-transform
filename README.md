@@ -19,12 +19,10 @@ place; merge logic is not yet implemented.
 
 ## Docs
 
-- [`CONFIGTRANSFORM_TOOL_DESIGN.md`](CONFIGTRANSFORM_TOOL_DESIGN.md) — this repo's structure
-  and full test plan.
-- [`docs/MANIFEST_SCHEMA.md`](docs/MANIFEST_SCHEMA.md) — the `manifest.json` schema reference.
-- [`docs/USAGE.md`](docs/USAGE.md) — CLI reference (stub until the CLI is implemented).
-- [`docs/CHANGELOG.md`](docs/CHANGELOG.md) — version history.
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — building and testing.
+Start with [`CLAUDE.md`](CLAUDE.md) for a fast orientation (written for AI agents and humans
+alike), then [`docs/INDEX.md`](docs/INDEX.md) for the full map — architecture, this repo's
+design, manifest schema, CLI reference, changelog, and the documentation policy itself.
+[`CONTRIBUTING.md`](CONTRIBUTING.md) covers building and testing.
 
 ## Building
 
