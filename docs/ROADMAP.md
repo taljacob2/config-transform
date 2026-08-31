@@ -16,35 +16,31 @@ made. An out-of-date roadmap is worse than none, because it's actively misleadin
 
 ## Current state
 
-`ConfigTransform.Xml` is now fully implemented and tested end to end, including `--dry-run` and
-`--diff`: scaffold, Core resolution primitives (`FileResolver`, `LayerResolution`,
-`CliOptionsParser`, `ManifestLoader`, `ManifestEntrySelector`, `GitDiff`), `XmlLayerMerger`, and
-`XmlCliRunner` (the full CLI orchestration, factored out of `Program.cs` so it's directly
-testable) — verified against all three XML fixture sets `CONFIGTRANSFORM_TOOL_DESIGN.md` §3.1
-calls for (`DotNetFramework`, `IisWebConfig`, `GenericXml`), plus dedicated tests confirming
-`--dry-run`/`--diff` never write to disk anywhere, not just to the base file. See
-`docs/CHANGELOG.md`'s `[Unreleased]` section for the precise, current list of what exists.
+**Both `ConfigTransform.Xml` and `ConfigTransform.Json` are now fully implemented and tested
+end to end**, including `--dry-run` and `--diff` for both. Shared orchestration
+(`CliRunner` in Core, taking the format-specific merge function as a delegate — extracted once
+the JSON tool made the near-total duplication with `XmlCliRunner` worth eliminating) plus the
+Core resolution primitives (`FileResolver`, `LayerResolution`, `CliOptionsParser`,
+`ManifestLoader`, `ManifestEntrySelector`, `GitDiff`) back both tools. Verified against all XML
+fixture sets (`DotNetFramework`, `IisWebConfig`, `GenericXml`) and both JSON fixture sets
+(`DotNetCore`, `GenericJson`) `CONFIGTRANSFORM_TOOL_DESIGN.md` §3 calls for, including a pinned
+test for the JSON array-overrides-by-index (not wholesale) behavior and one for JSON
+type-preservation (bool/number survive round-tripping through `IConfiguration`'s
+string-only internal model, rather than becoming quoted strings). See `docs/CHANGELOG.md`'s
+`[Unreleased]` section for the precise, current list of what exists.
 
 ## Next up
 
-**Slice: JSON tool.** Mirror the XML slice for `ConfigTransform.Json` —
-`Microsoft.Extensions.Configuration`-based merge (base → env → client via `AddJsonFile`,
-flattened back to a single JSON file), a `JsonCliRunner` mirroring `XmlCliRunner`'s shape
-(reusing `GitDiff`, `ManifestLoader`, `ManifestEntrySelector`, `LayerResolution` from Core
-unchanged — none of that is XML-specific), and the `DotNetCore`/`GenericJson` fixture sets from
-`CONFIGTRANSFORM_TOOL_DESIGN.md` §3.2, including the documented JSON-array-merge behavior test
-(arrays flatten to indexed keys rather than merging element-wise — a real gotcha worth a test
-that pins the actual behavior, not the intuitive-but-wrong one).
+**Slice: real packaging verification.** Confirm `dotnet pack`/`PackAsTool` actually produce
+installable tools — not just that they build. Cut a real first tagged pre-release (e.g.
+`0.1.0-alpha`, no `v` prefix per `docs/CONFIG_MANAGEMENT.md` §10.8) to validate `publish.yml`
+end-to-end against the GitHub Packages feed, then actually install the published tool locally
+(`dotnet tool install --local`) and run it against a manifest, confirming the whole distribution
+path — not just the build — works as designed.
 
-Definition of done: `ConfigTransform.Json` reaches parity with `ConfigTransform.Xml` — real-run,
-`--dry-run`, and `--diff` all working against both JSON fixture sets, with tests — and
-`docs/USAGE.md`/`docs/CHANGELOG.md` are updated accordingly.
-
-## After that, in order
-
-1. **Real packaging verification** — confirm `dotnet pack`/`PackAsTool` actually produces
-   installable tools; cut a real first tagged pre-release (e.g. `0.1.0-alpha`, no `v` prefix)
-   to validate `publish.yml` end-to-end against the GitHub Packages feed.
+Definition of done: a real tag is pushed, `publish.yml` succeeds, the package appears in GitHub
+Packages, and `dotnet tool install` + a real invocation of the installed tool succeeds locally.
+`docs/CHANGELOG.md` gets a new entry recording the first real version.
 
 ## Later / not yet scheduled
 

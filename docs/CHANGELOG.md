@@ -68,4 +68,24 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   anything. Tests confirm both flags never write to disk anywhere — not just "not to the base
   file" — across a snapshot of the entire test workspace before and after.
 
-`ConfigTransform.Json` is not yet implemented — see `docs/ROADMAP.md`.
+- `CliRunner` in `ConfigTransform.Core`: the shared CLI orchestration extracted out of
+  `XmlCliRunner` (now a one-line delegation) once `ConfigTransform.Json` made the near-total
+  duplication worth eliminating — takes the format-specific merge function as a
+  `Func<string, string?, string?, string>` delegate, so it knows nothing about XML or JSON.
+- `JsonLayerMerger` in `ConfigTransform.Json`: real base → Environments → Clients merge via
+  `Microsoft.Extensions.Configuration`'s `ConfigurationBuilder`, flattened back to a single JSON
+  document. Handles two real correctness issues inherent to `IConfiguration`'s flat, string-only
+  internal model, both documented in the class and pinned by tests: values are type-inferred
+  (bool/integer/float/string, in that order) rather than round-tripping everything as quoted
+  strings, and overlay arrays override by index rather than replacing the base array wholesale
+  (any base-layer indices beyond what the overlay specifies survive untouched).
+- `JsonCliRunner` in `ConfigTransform.Json`: `ConfigTransform.Json`'s real-run,`--dry-run`, and
+  `--diff` CLI path, now fully wired end to end via the shared `CliRunner`.
+- Real `DotNetCore` fixture set (base appsettings.json, an environment-wide `RetryCount`/log
+  level override, a client-specific `ApiUrl`/feature-flag override, and an array field to
+  exercise the index-override behavior), and `GenericJson` (an arbitrary schema unlike
+  appsettings.json, proving no hidden assumptions) — both per
+  `docs/CONFIGTRANSFORM_TOOL_DESIGN.md` §3.2, with tests mirroring the XML suite's coverage
+  (all layers, environment-only, real-run/dry-run/diff disk-write guarantees).
+
+`ConfigTransform.Xml` and `ConfigTransform.Json` are now both fully implemented and at parity.

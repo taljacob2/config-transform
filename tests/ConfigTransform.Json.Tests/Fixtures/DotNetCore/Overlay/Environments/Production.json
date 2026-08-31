@@ -1,0 +1,9 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Warning"
+    }
+  },
+  "RetryCount": 5,
+  "AllowedOrigins": [ "https://prod.example.com" ]
+}
