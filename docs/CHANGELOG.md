@@ -22,5 +22,14 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   what's next, plus explicit numbered rules at the top of `CLAUDE.md` requiring it be read
   before starting work and kept updated as work progresses — see `docs/DOCUMENTATION_POLICY.md`
   rule 7.
+- `FileResolver` in `ConfigTransform.Core`: case-insensitive file lookup
+  (`TryResolveCaseInsensitive`, `ResolveCaseInsensitiveRequired`), with tests covering exact
+  match, differently-cased match, no match, ambiguous match (Linux-only, via
+  `Xunit.SkippableFact` — see the test's own comment for why), and a missing directory.
+- `LayerResolution` in `ConfigTransform.Core`: resolves base + Environments + Clients for one
+  (project, file, client, environment) combination and produces an explicit found/not-found
+  report per layer. Missing overlays are reported but not fatal; a missing base file throws
+  `FileNotFoundException`. Fully tested, including that the overlay file name's extension is
+  derived from the base file's own extension.
 
-No merge logic, CLI argument parsing, or case-insensitive file resolution yet — scaffold only.
+No CLI argument parsing or actual XDT/JSON merge logic yet — that's the next roadmap slice.

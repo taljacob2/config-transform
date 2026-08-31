@@ -8,6 +8,10 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <!-- Runtime-conditional skip (e.g. a test only meaningful on a case-sensitive filesystem)
+         reported honestly as "Skipped" in CI, not silently "Passed" — xunit v2 has no
+         built-in equivalent. -->
+    <PackageReference Include="Xunit.SkippableFact" Version="1.4.13" />
   </ItemGroup>
 
   <ItemGroup>
