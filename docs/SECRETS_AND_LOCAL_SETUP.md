@@ -136,6 +136,12 @@ var values differ.
 
 ### Local developer setup
 
+The job-level-scoping requirement above is a CI-specific wrinkle, not something to worry about
+here: a plain shell's `export`/`$env:`/`set` sets the variable for the rest of that shell
+session, so once it's set, every later command — `dotnet tool restore`, `dotnet build`,
+`dotnet restore` on any project — sees it. No per-command re-scoping needed, unlike a GitHub
+Actions job made of separate steps.
+
 1. Set the three env vars, then restore — pick your shell:
 
    **Linux/macOS/Git Bash:**
