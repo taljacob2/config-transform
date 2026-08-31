@@ -6,6 +6,14 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+### Changed
+
+- `docs/CONFIG_MANAGEMENT.md` §11 and `docs/ROADMAP.md` updated with the solution-repo pilot's
+  first-round results: several open items (feed auth mechanics, the GitHub Packages feed's
+  existence, layering/partial-coverage behavior) are now confirmed by a real pilot run rather
+  than only a design claim — see `config-transform-pilot`'s `FINDINGS.md` for the full writeup,
+  including the real bug it found and got fixed (`[0.1.0-alpha2]` below).
+
 ## [0.1.0-alpha2] - 2026-08-31
 
 ### Added

@@ -595,23 +595,39 @@ drop-in change or needs review.
   remoting, or a dedicated tool like Octopus Deploy) is not decided.
 - **YAML/`.env` support** — see §5.5: confirmed to fit the existing design without a redesign,
   intentionally not built now.
-- **No repository has been chosen for implementation yet** — neither a solution repo to pilot
-  this in, nor the dedicated repo for the `ConfigTransform` tool itself.
+- **No repository has been chosen for implementation yet** — the tool has its own dedicated
+  repo (`config-transform`, implemented and released) and a *synthetic* solution-repo pilot
+  (`config-transform-pilot`) now exists and validated the design end to end — see that repo's
+  `FINDINGS.md`. The real, employer-owned multi-client repo this design targets is still
+  unpiloted; that has to happen in a separate session inside that organization's own
+  environment.
 - **The GitHub Packages NuGet feed does not exist yet**, and the tool repo's own publish
   workflow (build → pack → push on release) has not been designed — only decided that it will
-  work this way (§10.2).
+  work this way (§10.2). *Update:* both now exist and work — `config-transform`'s `publish.yml`
+  has shipped two releases, and `config-transform-pilot` consumes them via the local-tool-manifest
+  flow described below.
 - **Feed authentication mechanics** (token type/scope, how it's supplied to developers vs. CI)
-  named as a requirement (§10.4) but not yet worked out in detail.
+  named as a requirement (§10.4) but not yet worked out in detail. *Update, confirmed by the
+  pilot:* a plain PAT with `read:packages`, supplied to CI as a repo secret and substituted into
+  `nuget.config` via `%GITHUB_ACTOR%`/`%GITHUB_TOKEN%` env-var placeholders (never committed
+  literally), is sufficient — with one wrinkle worth calling out explicitly: a workflow's own
+  default `GITHUB_TOKEN` cannot read packages published under a *different* private repository
+  owned by the same account, even the same owner's own repo, so a real PAT is required whenever
+  the tool repo and the consuming repo are separate private repos (the common case here).
 - **SDK-on-every-developer-machine assumption** (§10.6) not yet explicitly confirmed across
   the team.
 - **`.configtransform/` has not actually been checked against any real target repo** for an
-  existing name collision (§10.5) — only chosen as a lower-collision-risk default. Verify per
-  repo before rollout.
+  existing name collision (§10.5) — only chosen as a lower-collision-risk default. No collision
+  in the pilot repo, but that's a fresh repo with nothing else in it — a real target repo (with
+  its own existing tooling) is still the real test. Verify per repo before rollout.
 - **No real inventory has been done** of which projects have which config files, what
   format they're in, or how much content is actually shared-across-clients vs.
   client-specific per project. The `Environments/` layer, the XDT-vs-flat choice, and the
   overall shape of `.configtransform/` should be validated against real files before or during
-  implementation, not assumed from this spec alone.
+  implementation, not assumed from this spec alone. *Partially addressed by the synthetic
+  pilot*: layering order, per-project partial coverage, and the "zero client overlays at all"
+  case are all now confirmed correct via real CI runs — but a *synthetic* inventory is not a
+  *real* one; this item stays open until validated against actual solution-repo content.
 - Exact CI platform assumed to be GitHub Actions (matches the repos discussed), not yet
   confirmed as final.
 - The manifest-casing lint/validation approach was superseded by case-insensitive resolution
