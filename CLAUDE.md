@@ -53,6 +53,13 @@ here is accidental rather than deliberate.
   `Microsoft.Extensions.Configuration`. This is proven, not just claimed: the `GenericXml` and
   `GenericJson` test fixtures use arbitrary, made-up schemas specifically to catch any
   accidental special-casing. Don't add logic that assumes a specific filename or schema.
+- **No `TargetFramework` coupling to the projects whose config files it resolves.** Both tools
+  are plain `net8.0` executables operating on App.config/Web.config/appsettings.json purely as
+  file content — they never compile against, reference, or otherwise depend on what TFM the
+  owning project targets. A consuming project on net35, net40, net45, or net472 works exactly
+  the same as one on net48 or net8.0. Confirmed via `config-transform-pilot`'s
+  `LegacyGateway.Framework` (a deliberately vanilla net35 project). Don't add anything here that
+  assumes a specific TFM, or that requires the consuming project's own SDK/build tooling.
 - **Case-insensitive file resolution** (`FileResolver`, in Core). Exists because CI
   runners are typically Linux (case-sensitive) while local dev is typically Windows
   (case-insensitive) — a hazard that can pass locally and fail silently or loudly in CI. Full

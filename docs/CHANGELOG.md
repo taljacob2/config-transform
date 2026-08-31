@@ -13,6 +13,11 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   existence, layering/partial-coverage behavior) are now confirmed by a real pilot run rather
   than only a design claim — see `config-transform-pilot`'s `FINDINGS.md` for the full writeup,
   including the real bug it found and got fixed (`[0.1.0-alpha2]` below).
+- `CLAUDE.md`'s "Core concepts" gains a new bullet: neither tool has any `TargetFramework`
+  coupling to the projects whose config files it resolves (a real concern raised — the actual
+  multi-client repos this design targets may have projects on much older TFMs than net48).
+  Confirmed via `config-transform-pilot`'s `LegacyGateway.Framework`, a deliberately vanilla
+  net35 project whose App.config resolves identically to every other project's.
 
 ## [0.1.0-alpha2] - 2026-08-31
 
