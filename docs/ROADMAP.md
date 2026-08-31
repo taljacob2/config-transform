@@ -16,33 +16,33 @@ made. An out-of-date roadmap is worse than none, because it's actively misleadin
 
 ## Current state
 
-Scaffold, Core resolution primitives, and a working end-to-end `ConfigTransform.Xml` real-run
-path — all implemented and tested against all three XML fixture sets `CONFIGTRANSFORM_TOOL_DESIGN.md`
-§3.1 calls for: `DotNetFramework` (flat appSettings), `IisWebConfig` (nested/`<location>`-wrapped
-structures, proving `Locator` matching beyond flat cases), and `GenericXml` (an arbitrary schema
-with a non-".config" extension, proving no hidden App.config-specific assumptions anywhere in
-`XmlLayerMerger` or `LayerResolution`). See `docs/CHANGELOG.md`'s `[Unreleased]` section for the
-precise, current list of what exists.
+`ConfigTransform.Xml` is now fully implemented and tested end to end, including `--dry-run` and
+`--diff`: scaffold, Core resolution primitives (`FileResolver`, `LayerResolution`,
+`CliOptionsParser`, `ManifestLoader`, `ManifestEntrySelector`, `GitDiff`), `XmlLayerMerger`, and
+`XmlCliRunner` (the full CLI orchestration, factored out of `Program.cs` so it's directly
+testable) — verified against all three XML fixture sets `CONFIGTRANSFORM_TOOL_DESIGN.md` §3.1
+calls for (`DotNetFramework`, `IisWebConfig`, `GenericXml`), plus dedicated tests confirming
+`--dry-run`/`--diff` never write to disk anywhere, not just to the base file. See
+`docs/CHANGELOG.md`'s `[Unreleased]` section for the precise, current list of what exists.
 
 ## Next up
 
-**Slice: `--dry-run` and `--diff`.** Per `CONFIG_MANAGEMENT.md` §6 — print the fully merged
-result to stdout (`--dry-run`) or a unified diff of base vs. merged via `git diff --no-index`
-(`--diff`), for both `ConfigTransform.Xml` (implemented) and — once it exists —
-`ConfigTransform.Json`. Tests must assert neither flag ever writes to the base file's own
-location or anywhere outside an explicitly passed `--output`, under any input.
+**Slice: JSON tool.** Mirror the XML slice for `ConfigTransform.Json` —
+`Microsoft.Extensions.Configuration`-based merge (base → env → client via `AddJsonFile`,
+flattened back to a single JSON file), a `JsonCliRunner` mirroring `XmlCliRunner`'s shape
+(reusing `GitDiff`, `ManifestLoader`, `ManifestEntrySelector`, `LayerResolution` from Core
+unchanged — none of that is XML-specific), and the `DotNetCore`/`GenericJson` fixture sets from
+`CONFIGTRANSFORM_TOOL_DESIGN.md` §3.2, including the documented JSON-array-merge behavior test
+(arrays flatten to indexed keys rather than merging element-wise — a real gotcha worth a test
+that pins the actual behavior, not the intuitive-but-wrong one).
 
-Definition of done: both flags work end-to-end against the existing XML fixture sets, with
-tests, `docs/USAGE.md` updated to remove the "not yet implemented" caveat for these two flags,
-and `docs/CHANGELOG.md` gets a new entry.
+Definition of done: `ConfigTransform.Json` reaches parity with `ConfigTransform.Xml` — real-run,
+`--dry-run`, and `--diff` all working against both JSON fixture sets, with tests — and
+`docs/USAGE.md`/`docs/CHANGELOG.md` are updated accordingly.
 
 ## After that, in order
 
-1. **JSON tool** — mirror the XML slice for `ConfigTransform.Json`
-   (`Microsoft.Extensions.Configuration`-based merge), `DotNetCore` and `GenericJson`
-   fixtures, including the documented JSON-array-merge behavior test
-   (`CONFIGTRANSFORM_TOOL_DESIGN.md` §3.2).
-2. **Real packaging verification** — confirm `dotnet pack`/`PackAsTool` actually produces
+1. **Real packaging verification** — confirm `dotnet pack`/`PackAsTool` actually produces
    installable tools; cut a real first tagged pre-release (e.g. `0.1.0-alpha`, no `v` prefix)
    to validate `publish.yml` end-to-end against the GitHub Packages feed.
 

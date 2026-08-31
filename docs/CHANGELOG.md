@@ -55,5 +55,17 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   no hidden App.config/Web.config-specific assumptions — including that the overlay file name's
   extension is genuinely derived from the base file, not hardcoded to `.config`.
 
-`ConfigTransform.Json` and `--dry-run`/`--diff` are not yet implemented — see
-`docs/ROADMAP.md`.
+- `GitDiff` in `ConfigTransform.Core`: renders a unified diff between two strings via
+  `git diff --no-index` and throwaway temp files, cleaned up immediately after. Format-agnostic
+  and reusable — not XML-specific — for when `ConfigTransform.Json` needs the same capability.
+- `XmlCliRunner` in `ConfigTransform.Xml`: the CLI orchestration factored out of `Program.cs`
+  (now a two-line wrapper) so the full flow — including `--dry-run` and `--diff` — is directly
+  testable without spawning a subprocess.
+- `--dry-run` and `--diff` are now fully implemented for `ConfigTransform.Xml`. `--diff`
+  compares the base file rendered with no overlays against the fully merged result (through the
+  identical `XmlLayerMerger` code path on both sides, avoiding spurious serialization-only
+  differences) and prints `(no changes)` rather than an empty diff when neither layer overrides
+  anything. Tests confirm both flags never write to disk anywhere — not just "not to the base
+  file" — across a snapshot of the entire test workspace before and after.
+
+`ConfigTransform.Json` is not yet implemented — see `docs/ROADMAP.md`.
