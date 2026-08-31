@@ -8,6 +8,15 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ### Added
 
+- **`--list`**, a new flag on both `ConfigTransform.Xml` and `ConfigTransform.Json`: prints a
+  manifest's file entries and, for each, which `Environments`/`Clients` overlays actually exist
+  on disk — pure introspection, needing only `--manifest` (`--file` optionally narrows to one
+  entry; omitted, every entry is listed, unlike a real run where an ambiguous manifest without
+  `--file` is an error). Implemented once in `ConfigTransform.Core` (`ManifestLister`) and shared
+  by both tools, same as the rest of `CliRunner`. Addresses "I have to remember/browse the
+  manifest schema to know what clients or environments exist" — the cheapest of the friendlier-
+  UX ideas raised (`ROADMAP.md`'s deferred TUI/GUI entry references this directly) before
+  reaching for anything bigger.
 - `docs/USAGE.md`: a second `ConfigTransform.Json` example showing `--file` dropped entirely for
   `ProjectB.Core` (a single-file manifest), alongside the existing examples — those correctly
   keep `--file App.config` since `ProjectA.Framework` is `MANIFEST_SCHEMA.md`'s own multi-file

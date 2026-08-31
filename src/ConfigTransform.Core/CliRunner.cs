@@ -3,8 +3,10 @@ namespace ConfigTransform.Core;
 /// <summary>
 /// Shared CLI orchestration for both ConfigTransform.Xml and ConfigTransform.Json: parse args,
 /// load the manifest, resolve layers, merge (via the format-specific <paramref name="merge"/>
-/// delegate), and either print (--dry-run/--diff) or write (--output) the result. This class
-/// knows nothing about XML or JSON specifically — only the shape both tools share.
+/// delegate), and either print (--dry-run/--diff) or write (--output) the result. --list is a
+/// separate, earlier branch: pure manifest introspection, no merge and no --client/--environment
+/// needed. This class knows nothing about XML or JSON specifically — only the shape both tools
+/// share.
 /// </summary>
 public static class CliRunner
 {
@@ -17,15 +19,24 @@ public static class CliRunner
 
             var manifestFullPath = Path.GetFullPath(options.ManifestPath);
             var manifest = ManifestLoader.Load(manifestFullPath);
-            var entry = ManifestEntrySelector.Select(manifest, options.File);
 
             var manifestDir = Path.GetDirectoryName(manifestFullPath)
                 ?? throw new InvalidOperationException($"Could not determine the directory of '{manifestFullPath}'.");
+
+            if (options.List)
+            {
+                ManifestLister.List(manifest, options.File, manifestDir, stdout);
+                return 0;
+            }
+
+            var entry = ManifestEntrySelector.Select(manifest, options.File);
             var overlayRoot = Path.Combine(manifestDir, entry.OverlayFolderName);
             var directory = Path.GetFullPath(manifest.Directory);
+            var client = options.Client ?? throw new InvalidOperationException("--client was not set for a real run.");
+            var environment = options.Environment ?? throw new InvalidOperationException("--environment was not set for a real run.");
 
             var resolution = LayerResolution.Resolve(
-                directory, entry.RelativeToDirectory, overlayRoot, options.Client, options.Environment);
+                directory, entry.RelativeToDirectory, overlayRoot, client, environment);
 
             foreach (var line in resolution.Report)
                 stdout.WriteLine(line);

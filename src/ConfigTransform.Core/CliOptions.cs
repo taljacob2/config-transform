@@ -4,8 +4,9 @@ namespace ConfigTransform.Core;
 public sealed record CliOptions(
     string ManifestPath,
     string? File,
-    string Client,
-    string Environment,
+    string? Client,
+    string? Environment,
     string? Output,
     bool DryRun,
-    bool Diff);
+    bool Diff,
+    bool List);

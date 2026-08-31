@@ -17,6 +17,7 @@ public static class CliOptionsParser
         string? output = null;
         var dryRun = false;
         var diff = false;
+        var list = false;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -43,6 +44,9 @@ public static class CliOptionsParser
                 case "--diff":
                     diff = true;
                     break;
+                case "--list":
+                    list = true;
+                    break;
                 default:
                     throw new ArgumentException($"Unrecognized argument: '{args[i]}'.");
             }
@@ -50,14 +54,20 @@ public static class CliOptionsParser
 
         if (manifest is null)
             throw new ArgumentException("--manifest is required.");
-        if (client is null)
-            throw new ArgumentException("--client is required.");
-        if (environment is null)
-            throw new ArgumentException("--environment is required.");
-        if (output is null && !dryRun && !diff)
-            throw new ArgumentException("--output is required for a real run (omit only with --dry-run or --diff).");
 
-        return new CliOptions(manifest, file, client, environment, output, dryRun, diff);
+        // --list is pure introspection (what files/clients/environments does this manifest
+        // have), not a resolve -- it needs none of --client/--environment/--output.
+        if (!list)
+        {
+            if (client is null)
+                throw new ArgumentException("--client is required.");
+            if (environment is null)
+                throw new ArgumentException("--environment is required.");
+            if (output is null && !dryRun && !diff)
+                throw new ArgumentException("--output is required for a real run (omit only with --dry-run or --diff).");
+        }
+
+        return new CliOptions(manifest, file, client, environment, output, dryRun, diff, list);
     }
 
     private static string RequireValue(string[] args, ref int i, string flag)

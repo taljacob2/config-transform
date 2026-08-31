@@ -99,6 +99,29 @@ public class CliOptionsParserTests
     }
 
     [Fact]
+    public void List_needs_only_manifest()
+    {
+        var options = CliOptionsParser.Parse(new[] { "--manifest", "manifest.json", "--list" });
+
+        Assert.True(options.List);
+        Assert.Null(options.Client);
+        Assert.Null(options.Environment);
+        Assert.Null(options.Output);
+    }
+
+    [Fact]
+    public void List_still_accepts_an_optional_file_filter()
+    {
+        var options = CliOptionsParser.Parse(new[]
+        {
+            "--manifest", "manifest.json", "--file", "App.config", "--list"
+        });
+
+        Assert.True(options.List);
+        Assert.Equal("App.config", options.File);
+    }
+
+    [Fact]
     public void Unrecognized_argument_throws()
     {
         Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { "--bogus" }));

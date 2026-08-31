@@ -89,6 +89,28 @@ public class XmlCliRunnerTests
         Assert.Contains("https://dev.example.com", baseContent);
     }
 
+    [Fact]
+    public void List_prints_available_environments_and_clients_without_client_or_environment_or_output()
+    {
+        using var workspace = new TempCliWorkspace();
+        var before = Snapshot(workspace.RootPath);
+
+        var stdout = new StringWriter();
+        var stderr = new StringWriter();
+
+        var exitCode = XmlCliRunner.Run(new[]
+        {
+            "--manifest", workspace.ManifestPath, "--list"
+        }, stdout, stderr);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("App.config (xml)", stdout.ToString());
+        Assert.Contains("Production", stdout.ToString());
+        Assert.Contains("ClientA", stdout.ToString());
+        Assert.Equal(before, Snapshot(workspace.RootPath));
+        Assert.Empty(stderr.ToString());
+    }
+
     private static Dictionary<string, DateTime> Snapshot(string root) =>
         Directory.GetFiles(root, "*", SearchOption.AllDirectories)
             .ToDictionary(f => f, File.GetLastWriteTimeUtc);

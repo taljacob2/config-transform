@@ -11,6 +11,7 @@ fully implemented, including `--dry-run` and `--diff`.
 --output <path>                          required for a real run (omit only with --dry-run/--diff)
 --dry-run                                print the fully merged result to stdout; nothing written to disk
 --diff                                   print a unified diff (base vs. merged) via `git diff --no-index`; nothing written to disk
+--list                                   print the manifest's file entries and which Environments/Clients overlays actually exist on disk; needs only --manifest (and optionally --file to filter to one entry) — no --client/--environment/--output
 ```
 
 `--manifest` and the manifest's own `directory` field (`docs/MANIFEST_SCHEMA.md`) are both
@@ -49,6 +50,12 @@ dotnet run --project src/ConfigTransform.Json -- \
 dotnet run --project src/ConfigTransform.Json -- \
   --manifest .configtransform/ProjectB.Core/manifest.json \
   --client ClientA --environment Production --diff
+
+# --list — what clients/environments does this manifest actually have overlays for?
+# No --client/--environment/--output needed; --file narrows to one entry if the
+# manifest declares more than one (omit it to see every entry).
+dotnet run --project src/ConfigTransform.Xml -- \
+  --manifest .configtransform/ProjectA.Framework/manifest.json --list
 ```
 
 On every run, the tool prints an explicit found/not-found line for each layer (base,
