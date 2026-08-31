@@ -63,6 +63,15 @@ repo's own root (`"."`) — both doc-only, folded into this release rather than 
 separately. `config-transform-pilot` needs its `.config/dotnet-tools.json` re-pinned to
 `0.3.0-alpha` (currently `0.2.0-alpha`) to actually pick up the new error message locally.
 
+**`0.4.0-alpha` adds `--list`**: a new flag on both tools that prints a manifest's file entries
+and which `Environments`/`Clients` overlays actually exist on disk, needing only `--manifest` —
+no `--client`/`--environment`/`--output` — so a user doesn't have to already know what a
+manifest has overlays for just to find out. Implemented once in `ConfigTransform.Core`
+(`ManifestLister`), shared by both tools. See `docs/CHANGELOG.md`'s `[0.4.0-alpha]` section and
+`docs/USAGE.md`. Also folds in the `USAGE.md` `--file`-omission example and the git-crypt
+base64-vs-raw-key documentation fix from this same session, rather than publishing those
+separately. Tag push is next — pending, per the operational note below.
+
 One operational note worth carrying forward: this session's GitHub credentials can push
 branches but not tags (a real `403`, confirmed via verbose tracing, not a bug) — cutting the
 `0.1.0-alpha`, `0.1.0-alpha2`, and `0.2.0-alpha` tags all required the repo owner to push them

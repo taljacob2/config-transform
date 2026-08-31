@@ -6,6 +6,8 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.4.0-alpha] - 2026-08-31
+
 ### Added
 
 - **`--list`**, a new flag on both `ConfigTransform.Xml` and `ConfigTransform.Json`: prints a
@@ -21,7 +23,6 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   `ProjectB.Core` (a single-file manifest), alongside the existing examples — those correctly
   keep `--file App.config` since `ProjectA.Framework` is `MANIFEST_SCHEMA.md`'s own multi-file
   example (`App.config` + `NLog.config`), where `--file` is genuinely required.
-
 - `docs/SECRETS_AND_LOCAL_SETUP.md` §2: warns explicitly against saving the base64-encoded git-crypt
   key as the local keyfile instead of decoding it back to binary first — the two forms are easy to
   mix up, and doing so fails `git-crypt unlock` with `not a valid git-crypt key file` rather than
