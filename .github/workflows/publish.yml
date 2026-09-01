@@ -49,8 +49,13 @@ jobs:
         # written a second time — see docs/RELEASING.md.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_HOST: ${{ github.server_url }}
         run: |
           set -euo pipefail
+          # gh's GH_HOST must be a bare hostname, not a full URL — strip the scheme.
+          export GH_HOST="${GH_HOST#https://}"
+          export GH_HOST="${GH_HOST#http://}"
+
           PRERELEASE_FLAG=""
           if [[ "${{ github.ref_name }}" == *-* ]]; then
             PRERELEASE_FLAG="--prerelease"
