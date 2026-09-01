@@ -18,7 +18,7 @@ trap 'rm -rf "$WORKDIR"' EXIT
 cd "$WORKDIR"
 
 dotnet new tool-manifest
-dotnet nuget add source "https://nuget.pkg.github.com/${GITHUB_USER}/index.json" \
+dotnet nuget add source https://nuget.tradeone.ghe.com/ea-financial/index.json \
   --name github-packages-verify --username "$GITHUB_USER" --password "$GITHUB_TOKEN" --store-password-in-clear-text
 
 dotnet tool install --local ConfigTransform.Xml --version "$VERSION"

@@ -34,7 +34,7 @@ jobs:
       - name: Push to GitHub Packages
         run: >
           dotnet nuget push "./nupkg/*.nupkg"
-          --source "https://nuget.pkg.github.com/taljacob2/index.json"
+          --source "https://nuget.tradeone.ghe.com/ea-financial/index.json"
           --api-key ${{ secrets.GITHUB_TOKEN }}
           --skip-duplicate
 
@@ -42,7 +42,7 @@ jobs:
         # Not redundant with `dotnet build`/`dotnet test`: packaging bugs (a missing
         # PackAsTool, a wrong ToolCommandName, a dependency left out of the .nupkg) are
         # invisible to those and only show up when a real consumer installs the package.
-        run: bash scripts/smoke-test-published-tool.sh "${{ github.ref_name }}" "taljacob2" "${{ secrets.GITHUB_TOKEN }}"
+        run: bash scripts/smoke-test-published-tool.sh "${{ github.ref_name }}" "ea-financial" "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Create GitHub Release with notes from CHANGELOG.md
         # Release notes are sourced from docs/CHANGELOG.md's matching version section, not
