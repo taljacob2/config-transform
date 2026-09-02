@@ -84,6 +84,15 @@ project actually hit, not a hypothetical one. See `docs/CHANGELOG.md`'s `[Unrele
 Not yet validated against a real second developer's onboarding — that's the natural next test,
 whenever one is available, with the doc itself as the artifact to watch them use.
 
+**Added manifest auto-discovery and short flag aliases** (`--manifest`/`-m` optional when the
+current directory has exactly one `.configtransform/*/manifest.json`; `-m`/`-f`/`-c`/`-e`/`-o`
+short forms for `--manifest`/`--file`/`--client`/`--environment`/`--output`), directly
+prompted by the same accessibility brainstorming session that produced `docs/ONBOARDING.md`
+above — see `docs/CHANGELOG.md`'s `[Unreleased]` section for the full writeup and
+`docs/USAGE.md`'s "Manifest auto-discovery" section for the user-facing behavior. Not yet
+released as a version bump; folding into whatever the next release is once there's more to
+release alongside it.
+
 One operational note worth carrying forward: this session's GitHub credentials can push
 branches but not tags (a real `403`, confirmed via verbose tracing, not a bug) — cutting the
 `0.1.0-alpha`, `0.1.0-alpha2`, and `0.2.0-alpha` tags all required the repo owner to push them

@@ -40,12 +40,40 @@ public class CliOptionsParserTests
     }
 
     [Fact]
-    public void Missing_manifest_throws()
+    public void Missing_manifest_leaves_ManifestPath_null_for_CliRunner_to_auto_discover()
     {
-        Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
+        var options = CliOptionsParser.Parse(new[]
         {
             "--client", "ClientA", "--environment", "Production", "--output", "out.config"
-        }));
+        });
+
+        Assert.Null(options.ManifestPath);
+    }
+
+    [Fact]
+    public void Short_flags_parse_the_same_as_their_long_forms()
+    {
+        var options = CliOptionsParser.Parse(new[]
+        {
+            "-m", "manifest.json",
+            "-f", "App.config",
+            "-c", "ClientA",
+            "-e", "Production",
+            "-o", "out.config"
+        });
+
+        Assert.Equal("manifest.json", options.ManifestPath);
+        Assert.Equal("App.config", options.File);
+        Assert.Equal("ClientA", options.Client);
+        Assert.Equal("Production", options.Environment);
+        Assert.Equal("out.config", options.Output);
+    }
+
+    [Fact]
+    public void Short_flag_missing_its_value_throws_naming_the_short_flag()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { "-m" }));
+        Assert.Contains("-m", ex.Message);
     }
 
     [Fact]

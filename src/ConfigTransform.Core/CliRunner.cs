@@ -11,13 +11,15 @@ namespace ConfigTransform.Core;
 public static class CliRunner
 {
     public static int Run(string[] args, TextWriter stdout, TextWriter stderr,
-        Func<string, string?, string?, string> merge)
+        Func<string, string?, string?, string> merge, string? workingDirectory = null)
     {
         try
         {
             var options = CliOptionsParser.Parse(args);
+            var workDir = workingDirectory ?? Directory.GetCurrentDirectory();
 
-            var manifestFullPath = Path.GetFullPath(options.ManifestPath);
+            var manifestPath = options.ManifestPath ?? ManifestDiscovery.Discover(workDir);
+            var manifestFullPath = Path.GetFullPath(manifestPath, workDir);
             var manifest = ManifestLoader.Load(manifestFullPath);
 
             var manifestDir = Path.GetDirectoryName(manifestFullPath)
@@ -31,7 +33,7 @@ public static class CliRunner
 
             var entry = ManifestEntrySelector.Select(manifest, options.File);
             var overlayRoot = Path.Combine(manifestDir, entry.OverlayFolderName);
-            var directory = Path.GetFullPath(manifest.Directory);
+            var directory = Path.GetFullPath(manifest.Directory, workDir);
             var client = options.Client ?? throw new InvalidOperationException("--client was not set for a real run.");
             var environment = options.Environment ?? throw new InvalidOperationException("--environment was not set for a real run.");
 

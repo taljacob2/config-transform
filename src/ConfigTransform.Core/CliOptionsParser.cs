@@ -5,6 +5,11 @@ namespace ConfigTransform.Core;
 /// --dry-run and --diff parse successfully here even though neither front-end implements them
 /// yet (see docs/ROADMAP.md) — a user passing them gets a specific "not yet implemented"
 /// message from the front-end, not a generic "unrecognized argument" error from this parser.
+/// --manifest/--file/--client/--environment/--output each also accept a short alias
+/// (-m/-f/-c/-e/-o) for interactive use. --manifest/-m is optional here: omitting it is not an
+/// error at parse time — <see cref="CliRunner"/> auto-discovers it (<see cref="ManifestDiscovery"/>)
+/// when it's null, since that needs filesystem/working-directory access this pure parser
+/// deliberately doesn't have.
 /// </summary>
 public static class CliOptionsParser
 {
@@ -24,19 +29,24 @@ public static class CliOptionsParser
             switch (args[i])
             {
                 case "--manifest":
-                    manifest = RequireValue(args, ref i, "--manifest");
+                case "-m":
+                    manifest = RequireValue(args, ref i, args[i]);
                     break;
                 case "--file":
-                    file = RequireValue(args, ref i, "--file");
+                case "-f":
+                    file = RequireValue(args, ref i, args[i]);
                     break;
                 case "--client":
-                    client = RequireValue(args, ref i, "--client");
+                case "-c":
+                    client = RequireValue(args, ref i, args[i]);
                     break;
                 case "--environment":
-                    environment = RequireValue(args, ref i, "--environment");
+                case "-e":
+                    environment = RequireValue(args, ref i, args[i]);
                     break;
                 case "--output":
-                    output = RequireValue(args, ref i, "--output");
+                case "-o":
+                    output = RequireValue(args, ref i, args[i]);
                     break;
                 case "--dry-run":
                     dryRun = true;
@@ -51,9 +61,6 @@ public static class CliOptionsParser
                     throw new ArgumentException($"Unrecognized argument: '{args[i]}'.");
             }
         }
-
-        if (manifest is null)
-            throw new ArgumentException("--manifest is required.");
 
         // --list is pure introspection (what files/clients/environments does this manifest
         // have), not a resolve -- it needs none of --client/--environment/--output.

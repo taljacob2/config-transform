@@ -81,6 +81,10 @@ flowchart LR
      --manifest .configtransform/<ProjectName>/manifest.json \
      --client ClientA --environment Production --diff
    ```
+   If this is the only project under `.configtransform/`, `--manifest` can be dropped — it's
+   auto-discovered — and every flag above has a short form for less typing:
+   `dotnet tool run configtransform-xml -- -c ClientA -e Production --diff`. See
+   `docs/USAGE.md` for the full flag reference.
 
 That's the whole setup. No other configuration is needed.
 

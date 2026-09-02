@@ -9,6 +9,6 @@ namespace ConfigTransform.Json;
 /// </summary>
 public static class JsonCliRunner
 {
-    public static int Run(string[] args, TextWriter stdout, TextWriter stderr) =>
-        CliRunner.Run(args, stdout, stderr, JsonLayerMerger.Merge);
+    public static int Run(string[] args, TextWriter stdout, TextWriter stderr, string? workingDirectory = null) =>
+        CliRunner.Run(args, stdout, stderr, JsonLayerMerger.Merge, workingDirectory);
 }

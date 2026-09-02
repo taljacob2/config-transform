@@ -4,19 +4,34 @@
 fully implemented, including `--dry-run` and `--diff`.
 
 ```
---manifest <path to manifest.json>       required
---file <base filename, e.g. App.config>  required if the manifest has more than one file entry
---client <ClientName>                    required
---environment <EnvironmentName>          required
---output <path>                          required for a real run (omit only with --dry-run/--diff)
---dry-run                                print the fully merged result to stdout; nothing written to disk
---diff                                   print a unified diff (base vs. merged) via `git diff --no-index`; nothing written to disk
---list                                   print the manifest's file entries and which Environments/Clients overlays actually exist on disk; needs only --manifest (and optionally --file to filter to one entry) — no --client/--environment/--output
+--manifest, -m <path to manifest.json>       optional — auto-discovered if omitted, see below
+--file, -f <base filename, e.g. App.config>  required if the manifest has more than one file entry
+--client, -c <ClientName>                    required
+--environment, -e <EnvironmentName>          required
+--output, -o <path>                          required for a real run (omit only with --dry-run/--diff)
+--dry-run                                    print the fully merged result to stdout; nothing written to disk
+--diff                                       print a unified diff (base vs. merged) via `git diff --no-index`; nothing written to disk
+--list                                       print the manifest's file entries and which Environments/Clients overlays actually exist on disk; needs only --manifest (and optionally --file to filter to one entry) — no --client/--environment/--output
 ```
 
-`--manifest` and the manifest's own `directory` field (`docs/MANIFEST_SCHEMA.md`) are both
+Every flag that takes a value also accepts the short form shown above (`-m`, `-f`, `-c`, `-e`,
+`-o`) — meant for typing a command out by hand; scripts and CI can keep using the long forms for
+readability in a pipeline log. Both forms can be mixed freely in the same invocation.
+
+`--manifest`/`-m` and the manifest's own `directory` field (`docs/MANIFEST_SCHEMA.md`) are both
 resolved relative to the current working directory — run the tool from the repository root, the
 same way CI does.
+
+## Manifest auto-discovery
+
+`--manifest`/`-m` can be omitted: if the current directory has a `.configtransform/` folder
+containing exactly one `*/manifest.json` — the layout `docs/GETTING_STARTED.md` sets up for a
+repo with a single project under management — that's the one used. This never guesses between
+multiple candidates: with zero or more than one `.configtransform/*/manifest.json` found, the
+tool fails with an error naming what it found (or didn't), and `--manifest`/`-m` has to be given
+explicitly. Implemented in `ConfigTransform.Core`'s `ManifestDiscovery`, invoked from
+`CliRunner` before anything else runs — every flag downstream (`--list`, `--diff`, a real run)
+benefits from it equally, since it's the same manifest-path resolution step for all of them.
 
 ## Examples
 
@@ -56,6 +71,10 @@ dotnet run --project src/ConfigTransform.Json -- \
 # manifest declares more than one (omit it to see every entry).
 dotnet run --project src/ConfigTransform.Xml -- \
   --manifest .configtransform/ProjectA.Framework/manifest.json --list
+
+# Short flags + manifest auto-discovery, for typing out by hand — equivalent to the
+# ProjectB.Core --diff example above, assuming it's the only project under .configtransform/:
+dotnet run --project src/ConfigTransform.Json -- -c ClientA -e Production --diff
 ```
 
 On every run, the tool prints an explicit found/not-found line for each layer (base,
