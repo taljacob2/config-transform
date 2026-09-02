@@ -111,6 +111,15 @@ declined for `0.5.0` in the conversation that produced this section), not an acc
 casually undo. Left for the owner to reconcile: either backfill a `## [0.4.1]` CHANGELOG.md
 section for consistency, or explain the intent here so a future session doesn't re-trip on it.
 
+**Added `docs/FIELD_AUTHORING_DESIGN.md`**: a completed design (not yet implemented) for a `set`
+command that authors an overlay field's `SetAttributes`/`Insert`/base-edit operation
+mechanically instead of by hand — see that document for the full `--match`/`--set` model and
+the "verify against the real document, refuse only when creating something brand new with
+nothing to check against" rule that resolves every ambiguity case it hit. This is a deliberate,
+named exception to the validation gate the `init`/TUI/GUI entries below are held to — see the
+design doc's own "Why this exists, and why now" section for the reasoning, rather than repeating
+it here. Not implemented; see that document's "Open items" for what implementing it needs.
+
 One operational note worth carrying forward: this session's GitHub credentials can push
 branches but not tags (a real `403`, confirmed via verbose tracing, not a bug) — cutting the
 `0.1.0-alpha`, `0.1.0-alpha2`, `0.2.0-alpha`, `0.3.0-alpha`, `0.4.0-alpha`, and `0.5.0-alpha`
@@ -120,11 +129,18 @@ tag.
 
 ## Next up
 
-Nothing is actionable purely within this repo right now — every remaining item below either
-needs a solution repo that doesn't exist yet, or a decision only the repo owner can make. Not
-a "next slice" in the same sense as the ones so far; pick from below (or something new) when
-ready, rather than assuming the next item in this list is the default next step.
+One item below is now actionable purely within this repo (see the first bullet); every other
+remaining item still either needs a solution repo that doesn't exist yet, or a decision only the
+repo owner can make. Not a "next slice" in the same sense as the ones before this section; pick
+from below (or something new) when ready, rather than assuming the next item in this list is the
+default next step.
 
+- **Implement `set` per `docs/FIELD_AUTHORING_DESIGN.md`** — the design is complete; building it
+  is actionable now, doesn't need a solution repo or an owner decision. XML first is the natural
+  order (real fixtures already exist — `DotNetFramework`, `IisWebConfig`, `GenericXml`; JSON's
+  array-of-objects and `:`-collision paths need new fixtures of their own). Needs fixture-backed
+  tests per `docs/CONFIGTRANSFORM_TOOL_DESIGN.md` §3, not just the happy path — the design doc's
+  "Open items" section has the specifics.
 - **Solution-repo pilot, first round complete** — `config-transform-pilot` (synthetic, three
   projects at varying nesting depth, one per config format) validated the core design claims
   end to end and found/fixed one real bug (see "Current state" above and the pilot's
@@ -163,7 +179,9 @@ ready, rather than assuming the next item in this list is the default next step.
      `docs/GETTING_STARTED.md`'s "One real difference between XML and JSON when the key is
      brand new"). JSON's version is simpler — any layer can introduce a new key with no special
      syntax — but the command still has to know which of the three XML cases it's in, which
-     needs the base document's real shape, not just a key/value pair.
+     needs the base document's real shape, not just a key/value pair. **This half is now
+     designed** — see `docs/FIELD_AUTHORING_DESIGN.md` and this section's first "Next up" bullet
+     — just not implemented yet.
   2. Same validation gap that deferred `init`, more so: designing a UI's workflows now would be
      guessing at real usage patterns from one synthetic pilot, not real per-repo variation.
      `--diff`/`--dry-run` already cover "see the merged result easily" without either UI.

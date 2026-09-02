@@ -102,5 +102,6 @@ See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the current plan (this is the doc r
 points at) and [`docs/CHANGELOG.md`](docs/CHANGELOG.md) for exactly what's implemented so far.
 Short version as of the last update here: `ConfigTransform.Xml` and `ConfigTransform.Json` are
 both fully implemented, tested, and released (`0.1.0-alpha`, published to GitHub Packages).
-Nothing is actionable purely within this repo right now — see `docs/ROADMAP.md`'s "Next up" for
-what needs either a solution repo that doesn't exist yet or an owner decision.
+See `docs/ROADMAP.md`'s "Next up" for what's actionable now (implementing the `set` command per
+`docs/FIELD_AUTHORING_DESIGN.md`) versus what needs either a solution repo that doesn't exist
+yet or an owner decision.

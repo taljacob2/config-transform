@@ -6,6 +6,18 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+### Added
+
+- `docs/FIELD_AUTHORING_DESIGN.md`: a completed design (not yet implemented) for a `set` command
+  that authors an overlay field's `SetAttributes`/`Insert`/base-edit operation mechanically
+  instead of by hand, removing the silent-failure risk of a hand-picked `Locator` matching
+  nothing. Covers the `--match`/`--set` model (repeatable, same shape across XML/JSON/YAML/
+  `.env`), per-format matching rules, verified-vs-unverifiable default handling, and the single
+  "verify against the real document, refuse only when creating something brand new" rule that
+  resolved every ambiguity case raised during design. A deliberate, named exception to the
+  `init`/TUI/GUI validation gate in `docs/ROADMAP.md` — see that document's own reasoning for
+  why this specific piece doesn't need real-content validation to design correctly.
+
 ## [0.5.0-alpha] - 2026-09-02
 
 ### Added
