@@ -6,6 +6,8 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.5.0-alpha] - 2026-09-02
+
 ### Added
 
 - **Manifest auto-discovery and short flag aliases**, on both `ConfigTransform.Xml` and

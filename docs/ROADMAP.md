@@ -80,7 +80,7 @@ a product-brainstorming session about making the tool accessible to "developers 
 time to learn it": since the packages feed is intentionally private (not a wall to remove), the
 highest-leverage move for that audience is minimizing friction for people already granted access,
 not changing the distribution model. Every troubleshooting entry in it is a real incident this
-project actually hit, not a hypothetical one. See `docs/CHANGELOG.md`'s `[Unreleased]` section.
+project actually hit, not a hypothetical one. See `docs/CHANGELOG.md`'s `[0.5.0-alpha]` section.
 Not yet validated against a real second developer's onboarding — that's the natural next test,
 whenever one is available, with the doc itself as the artifact to watch them use.
 
@@ -88,15 +88,22 @@ whenever one is available, with the doc itself as the artifact to watch them use
 current directory has exactly one `.configtransform/*/manifest.json`; `-m`/`-f`/`-c`/`-e`/`-o`
 short forms for `--manifest`/`--file`/`--client`/`--environment`/`--output`), directly
 prompted by the same accessibility brainstorming session that produced `docs/ONBOARDING.md`
-above — see `docs/CHANGELOG.md`'s `[Unreleased]` section for the full writeup and
-`docs/USAGE.md`'s "Manifest auto-discovery" section for the user-facing behavior. Not yet
-released as a version bump; folding into whatever the next release is once there's more to
-release alongside it.
+above — see `docs/CHANGELOG.md`'s `[0.5.0-alpha]` section for the full writeup and
+`docs/USAGE.md`'s "Manifest auto-discovery" section for the user-facing behavior.
+
+**`0.5.0-alpha` is cut but not yet published**: `docs/CHANGELOG.md` has the `[0.5.0-alpha]`
+section (both items above) committed to `main`, ready for `scripts/extract-changelog-section.sh`
+to pick up as release notes once tagged. The tag itself (`0.5.0-alpha`, no `v` prefix) still
+needs the repo owner to push it — see the operational note below — which then triggers
+`publish.yml`. Once that succeeds, `config-transform-pilot`'s `.config/dotnet-tools.json` needs
+re-pinning from `0.4.0-alpha` to `0.5.0-alpha` to actually pick up auto-discovery/short flags
+there.
 
 One operational note worth carrying forward: this session's GitHub credentials can push
 branches but not tags (a real `403`, confirmed via verbose tracing, not a bug) — cutting the
-`0.1.0-alpha`, `0.1.0-alpha2`, and `0.2.0-alpha` tags all required the repo owner to push them
-manually. Expect the same for any future release tag.
+`0.1.0-alpha`, `0.1.0-alpha2`, `0.2.0-alpha`, `0.3.0-alpha`, and `0.4.0-alpha` tags all required
+the repo owner to push them manually. Expect the same for `0.5.0-alpha` and any future release
+tag.
 
 ## Next up
 
