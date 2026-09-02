@@ -8,6 +8,22 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ### Added
 
+- **Manifest auto-discovery and short flag aliases**, on both `ConfigTransform.Xml` and
+  `ConfigTransform.Json`: `--manifest`/`-m` is now optional — when omitted, `ManifestDiscovery`
+  (new, in `ConfigTransform.Core`) looks for exactly one `.configtransform/*/manifest.json`
+  under the current directory and uses it, failing with an actionable error naming every
+  candidate it found (or that none exist) rather than ever guessing between more than one. Every
+  value-taking flag also gained a short alias — `-m`/`-f`/`-c`/`-e`/`-o` for
+  `--manifest`/`--file`/`--client`/`--environment`/`--output` — for less typing on an
+  interactive command; the long forms are unchanged and still what CI should keep using for a
+  readable pipeline log. Prompted directly by a product-brainstorming session on the tool's
+  accessibility: the ergonomics gap wasn't the base→Environments→Clients model, which is simple
+  to explain, but that every invocation demanded five fully-spelled flags with no defaults. This
+  is the first of that session's non-breaking, no-guessing-added ideas (a repo-local wrapper
+  script naming its own manifest path is the other, left to individual solution repos rather
+  than built here). `CliRunner.Run` (and both front-ends' `Run`) also gained an optional
+  `workingDirectory` parameter (defaulting to the real process CWD) purely as a test seam for
+  auto-discovery, with no effect on `Program.cs`'s existing call sites.
 - `docs/ONBOARDING.md`: a strict, linear, copy-paste checklist for a developer joining a repo
   that already uses `config-transform` — install prerequisites, get a PAT, set env vars, unlock
   git-crypt, restore the tool, run a first `--list`/`--diff`. Complements

@@ -9,6 +9,6 @@ namespace ConfigTransform.Xml;
 /// </summary>
 public static class XmlCliRunner
 {
-    public static int Run(string[] args, TextWriter stdout, TextWriter stderr) =>
-        CliRunner.Run(args, stdout, stderr, XmlLayerMerger.Merge);
+    public static int Run(string[] args, TextWriter stdout, TextWriter stderr, string? workingDirectory = null) =>
+        CliRunner.Run(args, stdout, stderr, XmlLayerMerger.Merge, workingDirectory);
 }
