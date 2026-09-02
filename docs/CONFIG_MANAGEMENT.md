@@ -602,6 +602,16 @@ per SemVer's own rule for pre-1.0 releases) — so a consuming repo can tell fro
 number alone in its `.config/dotnet-tools.json` (§10.3) whether an upgrade is expected to be a
 drop-in change or needs review.
 
+**`-alpha` tracks validation status, not code quality.** A release can be functionally solid —
+well-tested, working correctly in `config-transform-pilot` — and still carry `-alpha`, because
+that suffix signals the tool as a whole hasn't been validated against real (non-synthetic)
+content yet, not that this particular release is shaky. §11's "no real solution repo piloted
+yet" is the actual gate; it isn't re-evaluated release by release. Revisited explicitly for
+`0.5.0-alpha`: confirmed as still the right call — "business-wise still alpha" even though the
+tool itself works and is usable — precisely because that gate hasn't moved. Don't drop `-alpha`
+on the strength of one release being good; only the real-content pilot (or an explicit,
+deliberate owner decision to call it otherwise, documented here when made) changes that.
+
 ## 11. Open items — not yet decided or validated
 
 - **git-crypt key rotation trigger** — *when* (e.g. a key-holder leaving) and *who* decides to
