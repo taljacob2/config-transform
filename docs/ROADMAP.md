@@ -91,18 +91,31 @@ prompted by the same accessibility brainstorming session that produced `docs/ONB
 above — see `docs/CHANGELOG.md`'s `[0.5.0-alpha]` section for the full writeup and
 `docs/USAGE.md`'s "Manifest auto-discovery" section for the user-facing behavior.
 
-**`0.5.0-alpha` is cut but not yet published**: `docs/CHANGELOG.md` has the `[0.5.0-alpha]`
-section (both items above) committed to `main`, ready for `scripts/extract-changelog-section.sh`
-to pick up as release notes once tagged. The tag itself (`0.5.0-alpha`, no `v` prefix) still
-needs the repo owner to push it — see the operational note below — which then triggers
-`publish.yml`. Once that succeeds, `config-transform-pilot`'s `.config/dotnet-tools.json` needs
-re-pinning from `0.4.0-alpha` to `0.5.0-alpha` to actually pick up auto-discovery/short flags
-there.
+**`0.5.0-alpha` is live**: the repo owner pushed the tag, `publish.yml` succeeded (build, test,
+pack, push to GitHub Packages, smoke-test, GitHub Release —
+https://github.com/taljacob2/config-transform/releases/tag/0.5.0-alpha), and
+`config-transform-pilot`'s `.config/dotnet-tools.json` has been re-pinned from `0.4.0-alpha` to
+`0.5.0-alpha` accordingly (its `README.md`'s "not yet verified" caveat is resolved too — see
+that repo's own history).
+
+**Drift found while doing that re-pin, flagged rather than silently fixed**: a `0.4.1` tag
+exists on GitHub (non-prerelease, published 2026-09-01) between `0.4.0-alpha` and `0.5.0-alpha`
+that this document and `docs/CHANGELOG.md` never recorded. It points at the exact same commit as
+`0.4.0-alpha`'s successor docs commit (`b4087d7`, "Add docs/ONBOARDING.md") — so its actual tool
+code is identical to `0.4.0-alpha`'s, just re-tagged non-alpha. Because `docs/RELEASING.md`'s
+process wasn't followed for it, `docs/CHANGELOG.md` has no `## [0.4.1]` section, so its GitHub
+Release notes (extracted via `scripts/extract-changelog-section.sh`) are empty. Not fixed here —
+this looks like a deliberate manual action by the repo owner outside the documented process
+(notably: dropping `-alpha` for what's functionally `0.4.0`'s code, the same question raised and
+declined for `0.5.0` in the conversation that produced this section), not an accident to
+casually undo. Left for the owner to reconcile: either backfill a `## [0.4.1]` CHANGELOG.md
+section for consistency, or explain the intent here so a future session doesn't re-trip on it.
 
 One operational note worth carrying forward: this session's GitHub credentials can push
 branches but not tags (a real `403`, confirmed via verbose tracing, not a bug) — cutting the
-`0.1.0-alpha`, `0.1.0-alpha2`, `0.2.0-alpha`, `0.3.0-alpha`, and `0.4.0-alpha` tags all required
-the repo owner to push them manually. Expect the same for `0.5.0-alpha` and any future release
+`0.1.0-alpha`, `0.1.0-alpha2`, `0.2.0-alpha`, `0.3.0-alpha`, `0.4.0-alpha`, and `0.5.0-alpha`
+tags all required the repo owner to push them manually (`0.4.1` too, going by its publish date,
+though not part of this session's own release work). Expect the same for any future release
 tag.
 
 ## Next up
