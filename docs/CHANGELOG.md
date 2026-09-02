@@ -38,6 +38,18 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   and `NU1301` from env vars not set in the current shell/CI step
   (`SECRETS_AND_LOCAL_SETUP.md` §1).
 
+## [0.4.1] - 2026-09-01
+
+Published directly by the repo owner as a test of the release/publish pipeline, not through
+`docs/RELEASING.md`'s documented process (this section is backfilled after the fact, which is
+why it wasn't already here). Points at the same commit as `0.4.0-alpha`'s immediate docs
+follow-up (`b4087d7`, "Add docs/ONBOARDING.md") — so its actual `ConfigTransform.Xml`/
+`ConfigTransform.Json` code is identical to `0.4.0-alpha`'s. No functional changes. Also the
+first release in this repo's history published as non-prerelease (no `-alpha`/`-beta` suffix) —
+not a deliberate graduation out of pre-release status; see `docs/CONFIG_MANAGEMENT.md` §10.8 for
+why `0.5.0-alpha` kept the suffix instead. Not recommended for use — pin to `0.5.0-alpha` or
+later.
+
 ## [0.4.0-alpha] - 2026-08-31
 
 ### Added
