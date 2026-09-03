@@ -1,18 +1,20 @@
 # Self-describing overlays (`configtransform.json`) — design
 
-**Status: proposed, not implemented, partially decided.** This document exists to get the open
-questions on the table before any code changes, the same way `FIELD_AUTHORING_DESIGN.md` did for
-`set`. Four of the questions below are now settled by the repo owner — **file format is JSON**
-(`configtransform.json`, not `.yaml`); **scope is one file per client×environment, spanning
-every project/format that client+environment touches** (meaning `ConfigTransform.Xml`/
-`ConfigTransform.Json` unifying into one CLI dispatcher is an accepted, first-class consequence,
-not a side effect to avoid); **each resource carries its own patch directly, as a field on
-the same entry**, not two separate lists cross-referenced by convention; and **every path in the
-file — `extends`, `path`, and `patch` alike — is repo-root-relative, with no exception for a
-patch file that happens to live in the same directory as the `configtransform.json` referencing
-it**. The remaining questions below are still open — this is not a completed design waiting on an
-implementation pass yet. Do not implement against this document until every open decision below
-is resolved.
+**Status: proposed, fully decided, not yet implemented.** This document exists to get every open
+question on the table before any code changes, the same way `FIELD_AUTHORING_DESIGN.md` did for
+`set` — and, like that document once it reached this stage, every design question below is now
+settled by the repo owner. In order: **file format is JSON** (`configtransform.json`, not
+`.yaml`); **scope is one file per client×environment, spanning every project/format that
+client+environment touches** (meaning `ConfigTransform.Xml`/`ConfigTransform.Json` unifying into
+one CLI dispatcher is an accepted, first-class consequence, not a side effect to avoid); **each
+resource carries its own patch directly, as a field on the same entry**, not two separate lists
+cross-referenced by convention; **every path in the file — `extends`, `path`, and `patch`
+alike — is repo-root-relative**, with no exception for a patch file that happens to live in the
+same directory as the `configtransform.json` referencing it; **`manifest.json` is fully
+replaced**, not kept alongside this design; and **`set` gains a new `--resource <path>` targeting
+flag**, with the mechanics for creating/updating a layer's `resources` entries and patch files
+worked out in "Settled decisions" #6. See "Open items for implementation" for what's left —
+implementation planning, not further design.
 
 ## Origin and problem statement
 
@@ -183,34 +185,42 @@ Confirmed directly by the repo owner — treat these as fixed, not open to silen
    chains real Kustomize trees accumulate (a well-known, frequently-complained-about pain point,
    not a hypothetical one) — repo-root-relative gets full consistency *and* short paths, which is
    why it beat adopting Kustomize's own file-relative convention wholesale.
-
-## Open design questions (not yet decided)
-
-Still genuinely open — laid out with a recommendation each, but none should be read as final.
-
-### 1. Does `manifest.json`'s indirection (a project label decoupled from its real path) survive?
-
-This is a real, concrete regression worth naming plainly, not glossing over. Today,
-`.configtransform/<Project>/` is "a human-readable label only... that mapping is explicit in
-`manifest.json`" (`CONFIG_MANAGEMENT.md` §3) — if a project's directory moves, exactly one file's
-`directory` field changes. Under this design, `resources` entries reference a project's real path
-**directly**, in every layer directory that touches that project — moving a project means editing
-every `configtransform.json` that references it (mitigated by being a mechanical find-and-replace,
-but a real N-file edit where today it's a 1-file edit). This is the direct cost of the
-discoverability win ("one file shows the whole chain, no indirection to follow") and should be
-weighed consciously, not discovered later.
-
-### 2. What does `set` do under this design?
-
-Today, `set` (`docs/FIELD_AUTHORING_DESIGN.md`) resolves a target overlay file via
-`SetTargetResolver` and writes into it — the file's *existence* in the fixed `Environments/`/
-`Clients/` tree is enough. Under this design, writing a patch for a project that **isn't yet a
-resource** in the target layer means `set` would also need to add a `resources` entry (and
-possibly the `extends` field, for a layer's very first resource) to that layer's
-`configtransform.json`, not just write a patch file — a real increase in what `set` has to reason
-about (today it never edits the manifest, only overlay content). Needs its own pass once the rest
-of this design is settled; not blocking the composition-model decision above, but should be
-scoped explicitly before implementation, not discovered mid-build.
+5. **`manifest.json` is redundant — this design fully replaces it, not a coexistence/migration
+   period.** Directly confirmed by the repo owner: the directory-indirection `manifest.json`
+   provided (a project label decoupled from its real path, one file to edit if a project moves)
+   is accepted as a real, named loss, not worth preserving alongside the new tree. Consistent with
+   this repo's own SemVer policy (any breaking change is fine pre-1.0, `CONFIG_MANAGEMENT.md`
+   §10.8) and the fact that no real solution repo has adopted the current schema in production yet
+   (`docs/ROADMAP.md`'s pilot is synthetic) — there's no live user of `manifest.json` a dual-support
+   path would actually be protecting.
+6. **What `set` does under this design.** Today, `set` (`docs/FIELD_AUTHORING_DESIGN.md`) resolves
+   a target overlay file via `SetTargetResolver` and writes into it — the file's *existence* in the
+   fixed `Environments/`/`Clients/` tree is enough, and `--manifest`/`--file` (via `manifest.json`)
+   pick the one project in scope. Under this design, with `manifest.json` gone and one
+   `configtransform.json` spanning several projects, `set` needs real changes, confirmed as
+   follows:
+   - **New targeting flag**: `--resource <path>`, naming the project directly by its real
+     repo-root-relative path (the *same* addressing scheme `resources[].path` already uses
+     everywhere) — replacing `--manifest`/`--file`. `--client`/`--environment` keep their current
+     meaning; they now resolve to a `configtransform.json` path instead of a raw overlay file
+     (base file directly with neither; `.configtransform/Environments/<E>/configtransform.json`
+     with only `--environment`; `.configtransform/Clients/<C>/<E>/configtransform.json` with both).
+   - **Target layer file doesn't exist yet** → `set` creates it. For a Client-layer write, it also
+     sets `extends` to the matching Environment layer's path — even if that file doesn't exist on
+     disk yet either. New rule this requires, stated explicitly: an `extends` target that doesn't
+     exist resolves to "nothing to inherit," the same treatment a missing overlay already gets
+     today (`CONFIG_MANAGEMENT.md` §5.1) — not an error.
+   - **Target resource not yet in `resources`** → `set` appends `{"path": ..., "patch": <new
+     file>}` and authors the new patch file. **Listed but no `patch` yet** → adds the `patch`
+     field, authors the new file. **Listed with a `patch` already** → updates that existing patch
+     file in place — today's idempotent re-run behavior, unchanged.
+   - **Which engine (XML vs. JSON) handles a resource** is inferred from its `path`'s file
+     extension, not a declared field — consistent with this repo's existing stance that format is
+     the only real constraint, never redundantly declared (`CLAUDE.md`'s "Core concepts").
+   - **What does *not* change**: the actual patch-file *content* authoring —
+     `XmlFieldAuthor`/`JsonFieldAuthor`, the `--match`/`--set` model, `$elemMatch`, verified
+     defaults — none of it. This redesign is entirely about *finding or creating the right patch
+     file*, not writing into it.
 
 ## What this design does *not* change (confirmed, not open)
 
@@ -252,24 +262,21 @@ nice-to-have.
 | Patch-to-resource matching | Each `resources` entry pairs a `path` with its own optional `patch` field directly | Two separate `resources`/`patches` lists cross-referenced by filename convention (this document's own earlier proposal); Kustomize's apiVersion/kind/name matching; positional (array-index) pairing | Requested directly by the repo owner: a resource's patch should be unambiguous by construction, not inferred. Kustomize's matching mechanism assumes a structured identity XML/JSON config files don't have; positional pairing breaks as soon as one resource in a multi-resource layer has no patch at all (normal here); the filename-convention alternative still required parsing a naming pattern to recover a relationship that can just be stated directly. |
 | Cross-layer inheritance as its own `extends` field, separate from `resources` | `extends: <path>` (one per file, resolved first); `resources` entries always identify a project by its own real path, whether or not `extends` is set | A `resources` entry pointing directly at another `configtransform.json` (mixed with real-base-file entries in the same list) | Once each resource carries its own patch, a `resources` entry pointing at another (multi-project) `configtransform.json` has no unambiguous place to attach a single `patch` — which of that file's several projects would it target? Separating "where this layer starts from" from "what this layer itself adds" removes the ambiguity and keeps every patch on its own, real, unambiguous resource. |
 | Path convention | Repo-root-relative, uniformly, for `extends`, `path`, and `patch` — no exception for a same-directory `patch` file | Relative to the `configtransform.json` file's own directory (Kustomize's convention, for all three); the document's own first pass, which special-cased `patch` as an implicit same-directory filename and gave `extends` a different anchor than `path` | Two real inconsistencies caught by the repo owner, not left in on purpose. Predictability for whoever reads/writes the file outweighs the repetition saved by special-casing `patch`; repo-root-relative still avoids the long, fragile `../../../../` chains real Kustomize trees accumulate, so this gets both consistency and short paths, unlike adopting Kustomize's file-relative convention wholesale. |
+| `manifest.json`'s fate | Fully replaced — a clean break, no coexistence/migration period | Keep `manifest.json` alongside the new tree for some transition period, or preserve its directory-indirection some other way | Confirmed directly by the repo owner: the indirection is an accepted, named loss, not worth preserving. No real solution repo has adopted the current schema in production yet, so there's no live user a dual-support path would protect — consistent with this repo's SemVer policy allowing any breaking change pre-1.0. |
+| `set`'s new targeting flag | `--resource <path>`, naming the project by its real repo-root-relative path | Keep `--manifest`/`--file`; invent a new project-label indirection to replace `manifest.json`'s | `manifest.json` is gone (see the row above), so there's no project label left to target by — `path` is already how every resource is addressed everywhere else in this design, so reusing it for `set`'s own targeting needs no new vocabulary. |
 
 ## Open items for implementation
 
-Everything in "Open design questions" above must be resolved before implementation starts — none
-of it is a checkbox, each is a real fork with a different implementation shape on each side.
-Additionally, once those are settled:
+All six "Settled decisions" above are confirmed by the repo owner — this design has no remaining
+open questions. What's left is implementation, not more design:
 
 - The CLI-unification consequence of "Settled decisions" #2 (`ConfigTransform.Xml`/
   `ConfigTransform.Json` likely merging into one dispatcher) is its own, separately-scoped design
   and implementation pass — not a detail to fold into the rest of this work.
-- Whether this **replaces** `manifest.json`/the current `Environments/`/`Clients/` tree outright,
-  or the two coexist for some transition period. Given this repo's own SemVer policy allows any
-  breaking change pre-1.0 (`CONFIG_MANAGEMENT.md` §10.8) and no real solution repo has adopted the
-  current schema in production yet (`docs/ROADMAP.md`'s pilot is synthetic), a clean replacement
-  — rather than a dual-support migration path — is the likely right call, but not decided here.
 - `docs/MANIFEST_SCHEMA.md`, `docs/GETTING_STARTED.md`, `docs/ONBOARDING.md`, and
   `docs/CONFIG_MANAGEMENT.md` §3/§4/§9 all describe the current schema in detail and would need a
-  full rewrite, not just an addendum, once this design is finalized.
+  full rewrite, not just an addendum, once this design is finalized — `manifest.json` being fully
+  replaced (not kept alongside) means these can't just gain an addendum section either.
 - `ManifestLoader`/`ManifestDiscovery`/`ManifestEntrySelector`/`LayerResolution`/
   `SetTargetResolver` in `ConfigTransform.Core`, and each tool's `CliRunner`, are the concrete
   implementation surface — see their current form for what a `configtransform.json`-based
@@ -281,4 +288,4 @@ Additionally, once those are settled:
   self-describing overlays" reasoning this document responds to directly.
 - [`MANIFEST_SCHEMA.md`](MANIFEST_SCHEMA.md) — the schema this design proposes replacing.
 - [`FIELD_AUTHORING_DESIGN.md`](FIELD_AUTHORING_DESIGN.md) — the `set` command whose target
-  resolution ("Open design questions" §2 above) would need updating under this design.
+  resolution ("Settled decisions" #6 above) needs updating under this design.
