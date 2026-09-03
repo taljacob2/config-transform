@@ -102,8 +102,10 @@ See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the current plan (this is the doc r
 points at) and [`docs/CHANGELOG.md`](docs/CHANGELOG.md) for exactly what's implemented so far.
 Short version as of the last update here: `ConfigTransform.Xml` and `ConfigTransform.Json` are
 both fully implemented, tested, and released (`0.1.0-alpha`, published to GitHub Packages).
-`ConfigTransform.Xml` also now has a `set` command (docs/FIELD_AUTHORING_DESIGN.md) that
-authors an overlay field's `SetAttributes` operation mechanically — updating an existing
-key/attribute is implemented; creating a brand-new one (`Insert`) and JSON's `set` are not. See
+Both tools also now have a `set` command (docs/FIELD_AUTHORING_DESIGN.md): XML authors an
+overlay field's `SetAttributes` operation mechanically (updating an existing key/attribute;
+creating a brand-new one, `Insert`, is not implemented), JSON writes a nested key directly
+(covers both updating and creating, but not matching an item inside an array of objects — a
+real design gap for either format found during implementation, not just an unbuilt corner). See
 `docs/ROADMAP.md`'s "Next up" for what's actionable now versus what needs either a solution repo
 that doesn't exist yet or an owner decision.

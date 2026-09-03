@@ -124,12 +124,29 @@ base file, Environment overlay, and Client overlay targets; verified `key`/`valu
 ambiguous/not-found errors (the not-found path suggests the real attribute name when a bare
 `--match` guessed wrong); idempotent re-runs update the same overlay entry rather than
 duplicating it; a real write auto-prints the effective `--diff`. `Insert` (a genuinely brand-new
-element) and `ConfigTransform.Json`'s `set` are **not implemented** — see the design doc's "Open
-items" (updated in the same change) for exactly why `Insert` needs a real design decision
-(parent-location information `--match`/`--set` don't carry) rather than a quick add. 31 new
-tests (`XmlFieldAuthorTests`, `XmlSetCommandCliTests`, `CliOptionsParserTests` additions,
-`MatchSpecTests`) — see `docs/CHANGELOG.md`'s `[Unreleased]` section and `docs/USAGE.md`'s `set`
-section for the full reference.
+element) is **not implemented** — see the design doc's "Open items" for exactly why it needs a
+real design decision (parent-location information `--match`/`--set` don't carry) rather than a
+quick add. 31 new tests (`XmlFieldAuthorTests`, `XmlSetCommandCliTests`, `CliOptionsParserTests`
+additions, `MatchSpecTests`).
+
+**Implemented `set` for `ConfigTransform.Json`** — a single key path, `:`-separated
+(`--match key=Logging:LogLevel:Default`), covering both updating an existing key *and* creating
+a brand-new one: JSON has no `Insert`-style gap the way XML does, since any layer can already
+introduce a key with no special syntax, so `set` just writes it either way. A genuine
+nested-path-vs-literal-key collision (rare) refuses and offers `--match literal-key=...` instead.
+**Matching an item inside an array of objects is not implemented — a real design gap found
+during this implementation, not anticipated by the original design doc**: `Microsoft.Extensions.
+Configuration`'s JSON provider merges arrays by index, not by matching a field's value the way
+XDT's `Locator` does for XML, so the array-of-objects `--match name=Prod`-style disambiguation
+`docs/FIELD_AUTHORING_DESIGN.md` originally described can't actually be resolved that way against
+this repo's real merge engine — `set` rejects more than one `--match` rather than silently doing
+the wrong thing. Target-file resolution (base/Environment/Client) extracted to
+`ConfigTransform.Core`'s new `SetTargetResolver`, shared with XML (refactor-only, verified with
+XML's existing tests before adding JSON's). 33 new tests (`JsonFieldAuthorTests`,
+`JsonSetCommandCliTests`), including a regression test for a real bug caught during manual
+smoke-testing: a base-target write was dropping the rest of the document instead of updating it
+in place. See `docs/CHANGELOG.md`'s `[Unreleased]` section and `docs/USAGE.md`'s `set` section
+for the full reference on both.
 
 One operational note worth carrying forward: this session's GitHub credentials can push
 branches but not tags (a real `403`, confirmed via verbose tracing, not a bug) — cutting the
@@ -146,18 +163,22 @@ repo owner can make. Not a "next slice" in the same sense as the ones before thi
 from below (or something new) when ready, rather than assuming the next item in this list is the
 default next step.
 
-- **Finish `set`** — XML's "update an existing element" case shipped (see "Current state"
-  above); two pieces remain, both actionable now, neither needs a solution repo or an owner
+- **Finish `set`** — XML's "update an existing element" case and JSON's single-key-path case
+  both shipped (see "Current state" above); two gaps remain, both real design questions, not
+  just unimplemented happy paths, and both actionable now without a solution repo or an owner
   decision:
   1. **XML's `Insert` case** (a genuinely brand-new element) — needs an actual design decision
      first (how the parent location/tag name gets specified — a new flag, XPath, something
      else), not just an implementation pass. See `docs/FIELD_AUTHORING_DESIGN.md`'s "Open items"
      for why this is a real gap, not a checkbox.
-  2. **`ConfigTransform.Json`'s `set`** — the `--match key=...`/`literal-key=...` model and the
-     array-of-objects double-match case are designed but unimplemented; needs new fixtures
-     (`GenericJson`-style arbitrary schema, an array-of-objects case) the way XML's
-     implementation now has `XmlFieldAuthorTests`/`XmlSetCommandCliTests` as the pattern to
-     follow.
+  2. **Array-of-objects matching, for both formats** — XML's version was scoped out alongside
+     `Insert` above (same underlying reason: nothing to derive a brand-new array item's shape
+     from); JSON's is a distinct problem discovered while implementing JSON's `set`:
+     `Microsoft.Extensions.Configuration` merges JSON arrays by index, not by matching a field's
+     value, so `--match name=Prod`-style disambiguation needs its own design (e.g. resolving the
+     match to a real index against the actual document, then addressing the overlay by that
+     index) — not a port of XML's `Locator`-based approach. See `docs/FIELD_AUTHORING_DESIGN.md`'s
+     "Open items" for both.
 - **Solution-repo pilot, first round complete** — `config-transform-pilot` (synthetic, three
   projects at varying nesting depth, one per config format) validated the core design claims
   end to end and found/fixed one real bug (see "Current state" above and the pilot's
@@ -196,10 +217,12 @@ default next step.
      `docs/GETTING_STARTED.md`'s "One real difference between XML and JSON when the key is
      brand new"). JSON's version is simpler — any layer can introduce a new key with no special
      syntax — but the command still has to know which of the three XML cases it's in, which
-     needs the base document's real shape, not just a key/value pair. **This half is now partly
+     needs the base document's real shape, not just a key/value pair. **This half is now mostly
      built**: `SetAttributes` (update an existing key/attribute) is implemented for
-     `ConfigTransform.Xml`; `Insert` (the client-only-field case named above) and JSON's version
-     are not — see `docs/FIELD_AUTHORING_DESIGN.md` and this section's first "Next up" bullet.
+     `ConfigTransform.Xml`, and JSON's `set` covers both update and create for a single key path
+     (no `Insert`-style gap there). `Insert` (the client-only-field case named above, XML-specific
+     by nature) and array-of-objects matching for either format are not — see
+     `docs/FIELD_AUTHORING_DESIGN.md` and this section's first "Next up" bullet.
   2. Same validation gap that deferred `init`, more so: designing a UI's workflows now would be
      guessing at real usage patterns from one synthetic pilot, not real per-repo variation.
      `--diff`/`--dry-run` already cover "see the merged result easily" without either UI.

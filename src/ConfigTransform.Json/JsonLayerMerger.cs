@@ -71,7 +71,8 @@ public static class JsonLayerMerger
         return obj;
     }
 
-    private static JsonNode? ToJsonValue(string? value)
+    /// <summary>Internal, not private: reused by <see cref="JsonFieldAuthor"/> so a value <c>set</c> writes gets the exact same bool/integer/float/string type inference a merge would give it.</summary>
+    internal static JsonNode? ToJsonValue(string? value)
     {
         if (value is null)
             return null;

@@ -1,14 +1,17 @@
 # Field authoring (`set`) — design
 
-**Status: partially implemented.** `ConfigTransform.Xml`'s `set` command exists and covers the
-"update an existing element" case in full (base file, Environment overlay, Client overlay; the
-bare `--match`/`--set` defaults with verification; the ambiguous/not-found/"did you mean" error
-paths; the auto-`--diff`) — see `docs/USAGE.md`'s `set` section and `docs/CHANGELOG.md`'s
-`[Unreleased]` entry for exactly what's live and where. **Not yet implemented**: the `Insert`
-case (a genuinely brand-new element — see "Open items" below for why that's a real gap, not an
-oversight) and `ConfigTransform.Json`'s `set` entirely. This document otherwise still reflects
-the original completed design from a product-brainstorming session; treat any specific claim
-about *current* behavior as superseded by `docs/CHANGELOG.md` where the two differ.
+**Status: mostly implemented.** `ConfigTransform.Xml`'s `set` covers the "update an existing
+element" case in full (base file, Environment overlay, Client overlay; the bare `--match`/`--set`
+defaults with verification; the ambiguous/not-found/"did you mean" error paths; the
+auto-`--diff`). `ConfigTransform.Json`'s `set` covers a single key path — both updating an
+existing key *and* creating a brand-new one, since JSON has no `Insert`-style gap. See
+`docs/USAGE.md`'s `set` section and `docs/CHANGELOG.md`'s `[Unreleased]` entries for exactly
+what's live and where. **Not yet implemented**: XML's `Insert` case (a genuinely brand-new
+element), and matching an item inside an **array of objects for either format** — a real design
+gap discovered while implementing JSON's `set`, not anticipated by this document's original
+design (see "Open items" below for both). This document otherwise still reflects the original
+completed design from a product-brainstorming session; treat any specific claim about *current*
+behavior as superseded by `docs/CHANGELOG.md` where the two differ.
 
 ## Why this exists, and why now
 
@@ -123,6 +126,19 @@ attribute-matching problem, and needs two: one to reach the array, one to pick t
 set --match key=ConnectionStrings --match name=Prod --set connectionString="Data Source=new;..." --set providerName=System.Data.SqlClient
 ```
 
+**Correction, found while implementing JSON's `set` (not caught at design time)**: the example
+above assumes `--match name=Prod` can disambiguate an array item the way XDT's `Locator` does for
+XML. It can't, against this repo's actual JSON merge engine. `Microsoft.Extensions.Configuration`
+flattens a JSON array to **index-keyed** entries (`ConnectionStrings:0`, `ConnectionStrings:1`,
+...) — merging is purely positional (`docs/USAGE.md`'s "What 'merge' means"; `JsonLayerMerger`'s
+own doc comment), with no concept of "the item whose `name` equals X" at all. An overlay that
+wants to override the second `ConnectionStrings` entry has to say `ConnectionStrings:1:
+connectionString`, by position, not by matching a field. So array-of-objects `--match` as
+described here is **not implemented, and not a straightforward port of XML's approach** — it
+would need its own mechanism (e.g. resolve `--match name=Prod` to a real index by inspecting the
+document, the same "verify against reality" principle as everywhere else in this design, then
+address the overlay by that index) that this document never designed. See "Open items."
+
 YAML is not designed separately from JSON here: `docs/CONFIG_MANAGEMENT.md` §5.5 already
 confirmed YAML fits the existing design without a redesign (same tree-of-maps/lists/scalars
 data model, different serialization) — this command's model inherits that, once YAML support
@@ -184,7 +200,21 @@ Concretely, this rule is what resolves:
   vs. a real top-level key literally named that) — try the nested walk; if a literal flat key
   with that exact name also exists and independently resolves, that's the one pathological case
   that's genuinely ambiguous even with a document to check, and gets a hard error naming both
-  candidates, with `--match literal-key=...` (not `key=...`) as the explicit disambiguator.
+  candidates, with `--match literal-key=...` (not `key=...`) as the explicit disambiguator. One
+  refinement found during implementation: a **single-segment** key (no `:` at all, e.g. `ApiUrl`)
+  is never actually ambiguous this way — "nested" and "literal" are the same reading for it, not
+  two competing ones, since there's nothing to walk versus not-walk. Treating it as a collision
+  was a real bug caught by manual smoke-testing before it shipped (`ApiUrl` — the single most
+  common shape a JSON `set` will ever see — always resolving as "ambiguous" on its own is exactly
+  the kind of thing that would have made this feature unusable out of the gate); fixed to skip
+  the collision check entirely for single-segment values. Also worth knowing: this collision case
+  is close to unreachable in practice for Environment/Client-target writes specifically —
+  `Microsoft.Extensions.Configuration.Json` itself refuses to *load* a file shaped with a genuine
+  collision (duplicate flattened key), so any `set` that merges through it (which every
+  non-base-target write does) hits that load failure first. It's only reachable via a base-target
+  write reading the file directly (`File.ReadAllText`, no `IConfiguration` involved) — a narrow
+  but real window, e.g. right after such a file gets hand-edited, before any real merge would
+  have caught the problem.
 - **A bare `--match`/`--set` value containing a literal `=`** — turned out, on inspection, not to
   be a real ambiguity at all: `=` always splits on the *first* occurrence only
   (`--set connectionString=Data Source=prod;User=admin` needs no escaping — everything after the
@@ -230,6 +260,8 @@ No case needed a bespoke resolution; each was the same rule applied once more.
 | A literal `=` inside a bare match/set value | No new escaping syntax — fall back to the explicit `attr=value` form, which is already unambiguous (splits on the first `=` only) | A backslash-escape convention for a literal `=` | The explicit form already expresses this correctly with zero new syntax; inventing an escape mechanism would add a second thing to learn for a case with an existing, simpler answer. |
 | "Did you mean" suggestions vs. plain errors | Always show a real candidate command when the tool computed one while detecting the problem | Generic error text only | The candidates already exist internally by the time an ambiguity is detected — showing them is free, and turns a dead-end error into a copy-pasteable fix, which matters specifically for the time-pressured persona this was designed against. |
 | Downgrading unverifiable-guess refusals to warnings | Rejected — stays a hard stop | Warn but proceed with a default guess | A warning is exactly the kind of message a hurried operator scrolls past; downgrading the one case with zero evidence to check against would put this feature's entire safety property behind attentiveness it was designed not to require. |
+| JSON array-of-objects `--match` (found during implementation) | Not implemented; rejected outright with a message naming the reason | Port XML's `Locator`-style value-matching as designed above | `Microsoft.Extensions.Configuration` merges JSON arrays by index, not by matching a field's value — there's no mechanism to port. Silently misinterpreting `--match name=Prod` as "index 0" or similar would be exactly the silent-wrong-in-production failure this whole feature exists to prevent. |
+| Single-segment JSON key vs. the nested/literal collision check | Skip the collision check entirely when the key has no `:` at all | Apply the same nested-vs-literal check uniformly to every key length | A colon-free key (e.g. `ApiUrl`) has only one possible reading — "nested" and "literal" are the same thing for it. Applying the check anyway made the single most common shape a JSON `set` will see (`--match ApiUrl`) always report as ambiguous, a real bug caught by manual smoke-testing, not a design choice. |
 
 ## Open items for implementation
 
@@ -243,11 +275,21 @@ No case needed a bespoke resolution; each was the same rule applied once more.
   parent) or some other source of that information — not designed here, deliberately, rather than
   bolting on an under-thought flag under time pressure. Shipped behavior: `set` refuses with a
   clear "not yet supported" message (naming this document) instead of guessing a location.
-- **`ConfigTransform.Json`'s `set` doesn't exist.** `--match key=...`/`literal-key=...` (the
-  `:`-separated navigation, and its collision escape hatch) and the array-of-objects double-match
-  case are designed above but unimplemented — they'd need their own fixtures (`GenericJson`-style
-  arbitrary schema, an array-of-objects case) the way XML's implementation now has
-  `XmlFieldAuthorTests`/`XmlSetCommandCliTests` (`tests/ConfigTransform.Xml.Tests/`).
+- **Array-of-objects matching is not implemented, for either format, and for JSON it's a real,
+  previously-undesigned gap, not just an unbuilt happy path.** XML's version was scoped out
+  alongside `Insert` above (same reason: nothing to derive a brand-new item's shape from on
+  create — though *matching an existing* array item, unlike creating one, is mechanically
+  answerable the same way an XML element match is, so this could in principle be implemented
+  independently of `Insert`; not done here only for lack of time, not a design blocker). JSON's
+  is different: this document's original `--match key=ConnectionStrings --match name=Prod`
+  design assumed XDT-style value-matching, but `Microsoft.Extensions.Configuration` merges JSON
+  arrays purely by **index** (`ConnectionStrings:0`, `ConnectionStrings:1`, ...) — there is no
+  "find the item whose `name` equals X" mechanism to hook into at all. Closing this needs a real
+  design pass: resolve `--match name=Prod` to a real index by inspecting the actual document (the
+  same "verify against reality" principle as everywhere else here), then address the overlay by
+  that index — not a port of XML's `Locator`-based approach. See the "JSON / YAML" section above
+  for the specific example this broke. Shipped behavior: `set` for JSON rejects more than one
+  `--match` outright with a message pointing here, rather than silently misinterpreting it.
 - YAML and `.env` support don't exist in this tool at all yet (`docs/ROADMAP.md`: both "not
   needed yet") — this document's per-format sections for them are forward-looking, not
   something `set` can ship against today.

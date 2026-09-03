@@ -8,7 +8,28 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ### Added
 
-- **`set` command on `ConfigTransform.Xml`** (JSON not yet ported): authors an overlay field's
+- **`set` command on `ConfigTransform.Json`**: authors a nested key's value directly — no
+  XDT-style Transform/Locator concept for JSON, so both updating an existing key *and* creating a
+  brand-new one are the same operation (unlike XML's `Insert` gap below). `--match key=<path>`
+  (`:`-separated, matching `Microsoft.Extensions.Configuration`'s own flattening convention and
+  ASP.NET Core's command-line config override syntax — not `.`, since dots commonly appear
+  literally in real setting names) or `--match literal-key=<name>` for a key that itself contains
+  a literal `:`. **Matching an item inside an array of objects is not implemented** — discovered
+  during implementation, not part of the original design: `Microsoft.Extensions.Configuration`'s
+  JSON provider merges arrays purely by index, not by matching a field's value the way XDT's
+  `Locator` does for XML, so `--match name=Prod`-style disambiguation (as `docs/
+  FIELD_AUTHORING_DESIGN.md`'s original array-of-objects section describes) can't be resolved the
+  same way; `set` rejects more than one `--match` outright. A genuine nested-path-vs-literal-key
+  collision refuses and shows both `--match key=...`/`--match literal-key=...` forms — reachable
+  in practice only via a base-target write against a hand-edited file, since
+  `Microsoft.Extensions.Configuration.Json` itself already refuses to load a file shaped that way
+  for any Environment/Client-target write (which merges through it), making its own load failure
+  the actual defense there. Implemented in `src/ConfigTransform.Json/JsonFieldAuthor.cs`; target-
+  file resolution shared with XML via a new `src/ConfigTransform.Core/SetTargetResolver.cs`
+  (extracted from `XmlCliRunner`'s original inline version, refactor-only, no behavior change).
+  See `docs/USAGE.md`'s `set` section for the full reference and worked examples.
+
+- **`set` command on `ConfigTransform.Xml`**: authors an overlay field's
   `xdt:Transform="SetAttributes"` — or edits the base file directly — by checking the real,
   resolved document instead of it being hand-written, per `docs/FIELD_AUTHORING_DESIGN.md`.
   `--match <attr>=<value>` (repeatable, identifies the target; bare `<value>` defaults to
@@ -22,10 +43,9 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   `--match <realattr>=<value>` when a bare `--match` found the value under a different attribute
   instead of guessing wrong. A real write auto-prints the effective `--diff` afterward.
   Implemented in `src/ConfigTransform.Xml/XmlFieldAuthor.cs` (the matching/authoring logic) and
-  `src/ConfigTransform.Xml/XmlCliRunner.cs` (target-file resolution or orchestration); shared
-  `--match`/`--set` argument parsing (`MatchSpec`) lives in `ConfigTransform.Core` so JSON's
-  eventual `set` reuses it. See `docs/USAGE.md`'s `set` section for the full flag reference and
-  worked examples.
+  `src/ConfigTransform.Xml/XmlCliRunner.cs` (orchestration); shared `--match`/`--set` argument
+  parsing (`MatchSpec`) lives in `ConfigTransform.Core`, also reused by JSON's `set` above. See
+  `docs/USAGE.md`'s `set` section for the full flag reference and worked examples.
 
 - `docs/FIELD_AUTHORING_DESIGN.md`: a completed design (not yet implemented) for a `set` command
   that authors an overlay field's `SetAttributes`/`Insert`/base-edit operation mechanically
