@@ -160,4 +160,90 @@ public class CliOptionsParserTests
     {
         Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { "--manifest" }));
     }
+
+    [Fact]
+    public void Set_verb_needs_neither_client_nor_environment()
+    {
+        var options = CliOptionsParser.Parse(new[]
+        {
+            "set", "--manifest", "manifest.json", "--match", "key=ApiUrl", "--set", "value=X"
+        });
+
+        Assert.True(options.Set);
+        Assert.Null(options.Client);
+        Assert.Null(options.Environment);
+    }
+
+    [Fact]
+    public void Set_verb_collects_repeated_match_and_set_flags_in_order()
+    {
+        var options = CliOptionsParser.Parse(new[]
+        {
+            "set", "--manifest", "manifest.json",
+            "--match", "name=Prod", "--match", "env=Production",
+            "--set", "connectionString=X", "--set", "providerName=Y"
+        });
+
+        Assert.Equal(new[] { "name=Prod", "env=Production" }, options.Match);
+        Assert.Equal(new[] { "connectionString=X", "providerName=Y" }, options.SetFields);
+    }
+
+    [Fact]
+    public void Set_verb_requires_at_least_one_match()
+    {
+        Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
+        {
+            "set", "--manifest", "manifest.json", "--set", "value=X"
+        }));
+    }
+
+    [Fact]
+    public void Set_verb_requires_at_least_one_set_field()
+    {
+        Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
+        {
+            "set", "--manifest", "manifest.json", "--match", "key=ApiUrl"
+        }));
+    }
+
+    [Fact]
+    public void Set_verb_rejects_client_without_environment()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
+        {
+            "set", "--manifest", "manifest.json", "--client", "ClientA",
+            "--match", "key=ApiUrl", "--set", "value=X"
+        }));
+        Assert.Contains("--client requires --environment", ex.Message);
+    }
+
+    [Fact]
+    public void Set_verb_rejects_output()
+    {
+        Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
+        {
+            "set", "--manifest", "manifest.json", "--output", "out.config",
+            "--match", "key=ApiUrl", "--set", "value=X"
+        }));
+    }
+
+    [Fact]
+    public void Set_verb_and_list_together_is_an_error()
+    {
+        Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
+        {
+            "set", "--manifest", "manifest.json", "--list",
+            "--match", "key=ApiUrl", "--set", "value=X"
+        }));
+    }
+
+    [Fact]
+    public void The_set_verb_is_only_recognized_as_the_very_first_argument()
+    {
+        // A literal "set" elsewhere (e.g. as a --manifest value) is just a normal string, not
+        // the verb -- only args[0] is checked.
+        var options = CliOptionsParser.Parse(new[] { "--manifest", "set", "--list" });
+        Assert.False(options.Set);
+        Assert.Equal("set", options.ManifestPath);
+    }
 }

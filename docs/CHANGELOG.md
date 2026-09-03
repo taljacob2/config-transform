@@ -8,6 +8,25 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ### Added
 
+- **`set` command on `ConfigTransform.Xml`** (JSON not yet ported): authors an overlay field's
+  `xdt:Transform="SetAttributes"` — or edits the base file directly — by checking the real,
+  resolved document instead of it being hand-written, per `docs/FIELD_AUTHORING_DESIGN.md`.
+  `--match <attr>=<value>` (repeatable, identifies the target; bare `<value>` defaults to
+  `key=<value>`) and `--set <attr>=<value>` (repeatable, the field(s) written; bare `<value>`
+  defaults to `value=<value>`) — both defaults only ever applied after verifying against the
+  document, never guessed on brand-new content. Covers updating a field that already exists
+  anywhere in the resolved document (the common case — overriding an existing value for one
+  environment/client, or the shared default in the base file); creating a genuinely new element
+  (`Insert`) is **not yet implemented** — there's nothing in an empty document to derive its
+  parent location from, and `set` refuses rather than guessing, with a suggested
+  `--match <realattr>=<value>` when a bare `--match` found the value under a different attribute
+  instead of guessing wrong. A real write auto-prints the effective `--diff` afterward.
+  Implemented in `src/ConfigTransform.Xml/XmlFieldAuthor.cs` (the matching/authoring logic) and
+  `src/ConfigTransform.Xml/XmlCliRunner.cs` (target-file resolution or orchestration); shared
+  `--match`/`--set` argument parsing (`MatchSpec`) lives in `ConfigTransform.Core` so JSON's
+  eventual `set` reuses it. See `docs/USAGE.md`'s `set` section for the full flag reference and
+  worked examples.
+
 - `docs/FIELD_AUTHORING_DESIGN.md`: a completed design (not yet implemented) for a `set` command
   that authors an overlay field's `SetAttributes`/`Insert`/base-edit operation mechanically
   instead of by hand, removing the silent-failure risk of a hand-picked `Locator` matching

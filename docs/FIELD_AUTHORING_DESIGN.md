@@ -1,10 +1,14 @@
 # Field authoring (`set`) — design
 
-**Status: designed, not implemented.** No `set` command exists in `ConfigTransform.Xml` or
-`ConfigTransform.Json` yet — this document captures a completed design, from a
-product-brainstorming session, for the next session (or this one, later) to build against.
-Nothing below should be read as already-shipped behavior; check `docs/CHANGELOG.md` for what
-actually exists.
+**Status: partially implemented.** `ConfigTransform.Xml`'s `set` command exists and covers the
+"update an existing element" case in full (base file, Environment overlay, Client overlay; the
+bare `--match`/`--set` defaults with verification; the ambiguous/not-found/"did you mean" error
+paths; the auto-`--diff`) — see `docs/USAGE.md`'s `set` section and `docs/CHANGELOG.md`'s
+`[Unreleased]` entry for exactly what's live and where. **Not yet implemented**: the `Insert`
+case (a genuinely brand-new element — see "Open items" below for why that's a real gap, not an
+oversight) and `ConfigTransform.Json`'s `set` entirely. This document otherwise still reflects
+the original completed design from a product-brainstorming session; treat any specific claim
+about *current* behavior as superseded by `docs/CHANGELOG.md` where the two differ.
 
 ## Why this exists, and why now
 
@@ -145,9 +149,12 @@ This is **not** the same heuristic ruled out for XML's attribute name in general
 difference is *verification*:
 
 - **Updating something that exists**: the tool checks the real document. `--match Prod` against
-  a `connectionStrings` entry finds nothing under `key`, finds `name="Prod"` instead, and either
-  uses it (with a non-blocking informational note — see "Errors, warnings, and suggestions"
-  below) or asks, but it never blindly assumes `key` was right, because it can check.
+  a `connectionStrings` entry finds nothing under `key`, finds `name="Prod"` instead, and refuses
+  with the corrected `--match name=Prod` command shown rather than silently substituting it —
+  **implemented stricter than originally designed here**: this section's original text allowed
+  auto-using a verified alternate attribute; the shipped behavior always asks instead, never
+  silently changes which attribute a `--match` resolves to, even when confident. It never blindly
+  assumes `key` was right, because it can check.
 - **Creating something brand new**: there is nothing to check against, so a default here would
   be an unverifiable guess — writing `<add key="Prod" ...>` for what should have been
   `name="Prod"` is exactly the silent-wrong-in-production failure this feature exists to
@@ -202,11 +209,13 @@ No case needed a bespoke resolution; each was the same rule applied once more.
   where nothing can block on stdin (a constraint this CLI already holds throughout —
   `docs/USAGE.md`).
 - **Warnings (non-blocking) are only used where the tool has actually verified something, or
-  where the vocabulary is closed enough to be certain** — e.g. "used `name=` since that's what
-  matched" after checking the real document. **A hard stop, not a warning, is used wherever the
-  tool would otherwise be silently guessing on unverifiable, brand-new content** — downgrading
-  that case to a warning would put the entire safety property of this feature behind a message a
-  hurried person can scroll past.
+  where the vocabulary is closed enough to be certain.** As implemented, the XML `key=`/`value=`
+  verified-alternate-attribute case (above) doesn't actually use a warning-and-proceed either —
+  it refuses and shows the corrected command, same as the unverifiable case, just for a different
+  reason (confident but not what was asked for, vs. no evidence at all). **A hard stop is used
+  wherever the tool would otherwise be silently guessing on unverifiable, brand-new content** —
+  downgrading that case to a warning would put the entire safety property of this feature behind
+  a message a hurried person can scroll past.
 
 ## Decision log
 
@@ -224,18 +233,29 @@ No case needed a bespoke resolution; each was the same rule applied once more.
 
 ## Open items for implementation
 
-- Exact CLI parser changes needed in `ConfigTransform.Core`'s `CliOptionsParser`/`CliRunner` —
-  not designed here, this document covers behavior, not the C# implementation shape.
-- The `literal-key=` escape hatch and the "both interpretations resolve" hard-error path are
-  designed but not yet fixture-tested; per `docs/CONFIGTRANSFORM_TOOL_DESIGN.md` §3, any
-  merge-behavior change needs fixture-backed tests across every applicable scenario category,
-  not just the happy path.
-- Which format ships first: XML has real fixtures today (`DotNetFramework`, `IisWebConfig`,
-  `GenericXml`); JSON/YAML's array-of-objects case and the `:`-vs-literal-key collision path
-  would need new fixtures of their own.
+- **XML's `Insert` case (a genuinely brand-new element) is not implemented.** This isn't an
+  oversight or a missed corner — it's a real gap this design never fully closed: `--match`/`--set`
+  say which *attributes* to write, but not the new element's **tag name** or **where in the
+  document it belongs** (which parent element to nest it under). For an update, that information
+  comes for free — the tool finds the real element and reads its tag/ancestry directly. For an
+  Insert, there is nothing to find, so nothing to read it from. Closing this needs either a new
+  flag (e.g. an explicit parent path/XPath, or a `--tag <name>` alongside a way to name the
+  parent) or some other source of that information — not designed here, deliberately, rather than
+  bolting on an under-thought flag under time pressure. Shipped behavior: `set` refuses with a
+  clear "not yet supported" message (naming this document) instead of guessing a location.
+- **`ConfigTransform.Json`'s `set` doesn't exist.** `--match key=...`/`literal-key=...` (the
+  `:`-separated navigation, and its collision escape hatch) and the array-of-objects double-match
+  case are designed above but unimplemented — they'd need their own fixtures (`GenericJson`-style
+  arbitrary schema, an array-of-objects case) the way XML's implementation now has
+  `XmlFieldAuthorTests`/`XmlSetCommandCliTests` (`tests/ConfigTransform.Xml.Tests/`).
 - YAML and `.env` support don't exist in this tool at all yet (`docs/ROADMAP.md`: both "not
   needed yet") — this document's per-format sections for them are forward-looking, not
   something `set` can ship against today.
+- One deliberate deviation from the design above, decided during implementation: the verified
+  "found a different real attribute" case (XML's `key`/`value` defaults section, and "Errors,
+  warnings, and suggestions") always refuses and shows the corrected command now, rather than
+  ever silently substituting the verified attribute and proceeding — stricter than what this
+  document originally described, not a bug. See the inline notes on those two sections.
 
 ## Related reading
 

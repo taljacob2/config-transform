@@ -111,14 +111,25 @@ declined for `0.5.0` in the conversation that produced this section), not an acc
 casually undo. Left for the owner to reconcile: either backfill a `## [0.4.1]` CHANGELOG.md
 section for consistency, or explain the intent here so a future session doesn't re-trip on it.
 
-**Added `docs/FIELD_AUTHORING_DESIGN.md`**: a completed design (not yet implemented) for a `set`
-command that authors an overlay field's `SetAttributes`/`Insert`/base-edit operation
-mechanically instead of by hand — see that document for the full `--match`/`--set` model and
-the "verify against the real document, refuse only when creating something brand new with
-nothing to check against" rule that resolves every ambiguity case it hit. This is a deliberate,
-named exception to the validation gate the `init`/TUI/GUI entries below are held to — see the
-design doc's own "Why this exists, and why now" section for the reasoning, rather than repeating
-it here. Not implemented; see that document's "Open items" for what implementing it needs.
+**Added `docs/FIELD_AUTHORING_DESIGN.md`**: a completed design for a `set` command that authors
+an overlay field's `SetAttributes`/`Insert`/base-edit operation mechanically instead of by hand
+— see that document for the full `--match`/`--set` model and the "verify against the real
+document, refuse only when creating something brand new with nothing to check against" rule that
+resolves every ambiguity case it hit. This is a deliberate, named exception to the validation
+gate the `init`/TUI/GUI entries below are held to — see the design doc's own "Why this exists,
+and why now" section for the reasoning, rather than repeating it here.
+
+**Implemented `set` for `ConfigTransform.Xml`** — the "update an existing element" case in full:
+base file, Environment overlay, and Client overlay targets; verified `key`/`value` defaults;
+ambiguous/not-found errors (the not-found path suggests the real attribute name when a bare
+`--match` guessed wrong); idempotent re-runs update the same overlay entry rather than
+duplicating it; a real write auto-prints the effective `--diff`. `Insert` (a genuinely brand-new
+element) and `ConfigTransform.Json`'s `set` are **not implemented** — see the design doc's "Open
+items" (updated in the same change) for exactly why `Insert` needs a real design decision
+(parent-location information `--match`/`--set` don't carry) rather than a quick add. 31 new
+tests (`XmlFieldAuthorTests`, `XmlSetCommandCliTests`, `CliOptionsParserTests` additions,
+`MatchSpecTests`) — see `docs/CHANGELOG.md`'s `[Unreleased]` section and `docs/USAGE.md`'s `set`
+section for the full reference.
 
 One operational note worth carrying forward: this session's GitHub credentials can push
 branches but not tags (a real `403`, confirmed via verbose tracing, not a bug) — cutting the
@@ -135,12 +146,18 @@ repo owner can make. Not a "next slice" in the same sense as the ones before thi
 from below (or something new) when ready, rather than assuming the next item in this list is the
 default next step.
 
-- **Implement `set` per `docs/FIELD_AUTHORING_DESIGN.md`** — the design is complete; building it
-  is actionable now, doesn't need a solution repo or an owner decision. XML first is the natural
-  order (real fixtures already exist — `DotNetFramework`, `IisWebConfig`, `GenericXml`; JSON's
-  array-of-objects and `:`-collision paths need new fixtures of their own). Needs fixture-backed
-  tests per `docs/CONFIGTRANSFORM_TOOL_DESIGN.md` §3, not just the happy path — the design doc's
-  "Open items" section has the specifics.
+- **Finish `set`** — XML's "update an existing element" case shipped (see "Current state"
+  above); two pieces remain, both actionable now, neither needs a solution repo or an owner
+  decision:
+  1. **XML's `Insert` case** (a genuinely brand-new element) — needs an actual design decision
+     first (how the parent location/tag name gets specified — a new flag, XPath, something
+     else), not just an implementation pass. See `docs/FIELD_AUTHORING_DESIGN.md`'s "Open items"
+     for why this is a real gap, not a checkbox.
+  2. **`ConfigTransform.Json`'s `set`** — the `--match key=...`/`literal-key=...` model and the
+     array-of-objects double-match case are designed but unimplemented; needs new fixtures
+     (`GenericJson`-style arbitrary schema, an array-of-objects case) the way XML's
+     implementation now has `XmlFieldAuthorTests`/`XmlSetCommandCliTests` as the pattern to
+     follow.
 - **Solution-repo pilot, first round complete** — `config-transform-pilot` (synthetic, three
   projects at varying nesting depth, one per config format) validated the core design claims
   end to end and found/fixed one real bug (see "Current state" above and the pilot's
@@ -179,9 +196,10 @@ default next step.
      `docs/GETTING_STARTED.md`'s "One real difference between XML and JSON when the key is
      brand new"). JSON's version is simpler — any layer can introduce a new key with no special
      syntax — but the command still has to know which of the three XML cases it's in, which
-     needs the base document's real shape, not just a key/value pair. **This half is now
-     designed** — see `docs/FIELD_AUTHORING_DESIGN.md` and this section's first "Next up" bullet
-     — just not implemented yet.
+     needs the base document's real shape, not just a key/value pair. **This half is now partly
+     built**: `SetAttributes` (update an existing key/attribute) is implemented for
+     `ConfigTransform.Xml`; `Insert` (the client-only-field case named above) and JSON's version
+     are not — see `docs/FIELD_AUTHORING_DESIGN.md` and this section's first "Next up" bullet.
   2. Same validation gap that deferred `init`, more so: designing a UI's workflows now would be
      guessing at real usage patterns from one synthetic pilot, not real per-repo variation.
      `--diff`/`--dry-run` already cover "see the merged result easily" without either UI.
