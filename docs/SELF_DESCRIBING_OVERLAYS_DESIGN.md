@@ -11,10 +11,14 @@ resource carries its own patch directly, as a field on the same entry**, not two
 cross-referenced by convention; **every path in the file — `extends`, `path`, and `patch`
 alike — is repo-root-relative**, with no exception for a patch file that happens to live in the
 same directory as the `configtransform.json` referencing it; **`manifest.json` is fully
-replaced**, not kept alongside this design; and **`set` gains a new `--resource <path>` targeting
+replaced**, not kept alongside this design; **`set` gains a new `--resource <path>` targeting
 flag**, with the mechanics for creating/updating a layer's `resources` entries and patch files
-worked out in "Settled decisions" #6. See "Open items for implementation" for what's left —
-implementation planning, not further design.
+worked out in "Settled decisions" #6; and **every other command (`--dry-run`, `--diff`, `--list`,
+a real run) gets the same `--resource` flag, with omitting it meaning "every project this layer
+touches, in one call"** — a real behavior change for a real run's `--output` (becomes a directory)
+and a new reverse-lookup mode for `--list`, worked out with full CLI examples in "Settled
+decisions" #7. See "Open items for implementation" for what's left — implementation planning, not
+further design.
 
 ## Origin and problem statement
 
@@ -221,6 +225,117 @@ Confirmed directly by the repo owner — treat these as fixed, not open to silen
      `XmlFieldAuthor`/`JsonFieldAuthor`, the `--match`/`--set` model, `$elemMatch`, verified
      defaults — none of it. This redesign is entirely about *finding or creating the right patch
      file*, not writing into it.
+7. **The rest of the CLI — `--dry-run`, `--diff`, `--list`, and a real run — beyond `set`.**
+   `set`'s redesign above covers one command; every other command needs the same `--resource`
+   flag and a real behavior decision about what happens without it.
+   - **Manifest/root discovery mostly disappears.** `ManifestDiscovery` exists today to
+     disambiguate between multiple `manifest.json` candidates under `.configtransform/*/
+     manifest.json`. With `manifest.json` gone, there's nothing to disambiguate — given
+     `--client`/`--environment` (or neither), the target `configtransform.json` path is fully
+     determined. No `--manifest` flag anywhere anymore. (The `.configtransform/` root folder's
+     *name* is still configurable per `CONFIG_MANAGEMENT.md` §10.5, so a small discovery step for
+     *that* survives — just not the old ambiguity.)
+   - **`--resource <path>` is a tool-wide flag**, not `set`-specific — the same addressing
+     scheme, used identically by `--dry-run`, `--diff`, a real run, and `--list`.
+   - **Omitting `--resource` processes every project the resolved layer touches, in one
+     invocation** — not an error, and not limited to one project per call the way every command
+     is today. `--dry-run`/`--diff` print each resource's result labeled by its own `path`. A
+     real run requires `--output <dir>` in this case (a single `--output <file>` only makes sense
+     paired with `--resource`) and writes one file per resource, each resource's own path mirrored
+     under that directory — this is the one genuine behavior change here, not just a reshuffled
+     flag, and is what actually delivers "one file, whole picture" as a real capability rather
+     than just a readable manifest.
+   - **`--list` gets a new meaning, and a new mode that closes a real gap this design creates.**
+     There's no `files[]` array to list anymore. Given `--client`/`--environment`, `--list` shows
+     that layer's `resources` (each with its `patch`, if any, and what `extends` contributes).
+     Given `--resource <path>` instead, `--list` becomes a **reverse lookup** — every layer in the
+     tree that patches this one project. This mode isn't a nice-to-have: today, "every overlay for
+     App.config" is one directory listing (`.configtransform/<Project>/App.config/`); under this
+     design, the same question means searching every `configtransform.json` in the tree for a
+     matching `resources[].path` — a real ergonomic loss (the flip side of "one file, whole
+     picture") that `--list --resource` exists specifically to answer.
+   - **`--diff` is conceptually unchanged** — still "unpatched vs. fully resolved" — it just walks
+     `extends` plus the layer's own patch instead of the old fixed base→env→client chain. No new
+     flag, only the same new resolution logic `set` and `--dry-run` already need.
+   - **Confirms, tool-wide, what "Settled decisions" #2 flagged for `set` alone**: since dispatch
+     is per-resource by file extension, `ConfigTransform.Xml`/`ConfigTransform.Json` unifying into
+     one CLI entry point isn't a `set`-specific consequence — every command needs it, since a
+     single multi-resource invocation can span both formats at once.
+
+   Worked example — same tree as "Proposed shape" above, `OrderProcessor.Framework/App.config`
+   (XML) patched at both layers, `BillingApi.Core/appsettings.json` (JSON) patched only at
+   Environment:
+
+   ```
+   $ configtransform --client Acme --environment Production --resource OrderProcessor.Framework/App.config --dry-run
+   ```
+   ```xml
+   <configuration>
+     <appSettings>
+       <add key="ApiUrl" value="https://acme.example.com" />
+     </appSettings>
+   </configuration>
+   ```
+
+   Omitting `--resource` — both projects this layer touches, one call:
+   ```
+   $ configtransform --client Acme --environment Production --dry-run
+   ```
+   ```
+   === OrderProcessor.Framework/App.config ===
+   <configuration>
+     <appSettings>
+       <add key="ApiUrl" value="https://acme.example.com" />
+     </appSettings>
+   </configuration>
+
+   === BillingApi.Core/appsettings.json ===
+   {
+     "ApiUrl": "https://prod.example.com",
+     "RetryCount": 3
+   }
+   ```
+   `BillingApi.Core` shows Environment's value — Acme's `configtransform.json` never lists it, so
+   it passes through `extends` untouched, same "missing overlay ≠ error" rule as always.
+
+   A real run, same scope, `--output` as a directory:
+   ```
+   $ configtransform --client Acme --environment Production --output publish/
+   ```
+   ```
+   Wrote 'publish/OrderProcessor.Framework/App.config'.
+   Wrote 'publish/BillingApi.Core/appsettings.json'.
+   ```
+
+   `--list` for one layer:
+   ```
+   $ configtransform --list --client Acme --environment Production
+   ```
+   ```
+   Clients/Acme/Production/configtransform.json
+     extends: Environments/Production/configtransform.json
+
+     OrderProcessor.Framework/App.config
+       patched here: patch-OrderProcessor.Framework-App.config.xml
+       also patched in: Environments/Production/configtransform.json
+
+     BillingApi.Core/appsettings.json
+       not patched here — inherited from Environments/Production/configtransform.json
+   ```
+
+   `--list --resource` — the reverse lookup:
+   ```
+   $ configtransform --list --resource OrderProcessor.Framework/App.config
+   ```
+   ```
+   OrderProcessor.Framework/App.config is patched in:
+     Environments/Production/configtransform.json  (patch-OrderProcessor.Framework-App.config.xml)
+     Clients/Acme/Production/configtransform.json   (patch-OrderProcessor.Framework-App.config.xml, extends Environments/Production)
+   ```
+
+   `configtransform` above is a placeholder invocation name — "Settled decisions" #2's CLI
+   unification is confirmed as a consequence, but no specific binary/project name has been chosen;
+   see "Open items for implementation".
 
 ## What this design does *not* change (confirmed, not open)
 
