@@ -126,19 +126,103 @@ public class JsonSetCommandCliTests
     }
 
     [Fact]
-    public void Array_of_objects_matching_fails_clearly_rather_than_silently_misbehaving()
+    public void Set_element_match_writes_the_elemMatch_overlay_and_diff_shows_the_resolved_value()
     {
         using var workspace = new TempCliWorkspace();
-        var stderr = new StringWriter();
+        var basePath = Path.Combine(workspace.RootPath, "Project", "appsettings.json");
+        File.WriteAllText(basePath, """
+            { "ApiUrl": "https://dev.example.com",
+              "Rules": [ { "role": "Admin", "enabled": false } ] }
+            """);
+
+        var stdout = new StringWriter();
         var exitCode = JsonCliRunner.Run(new[]
         {
             "set", "--manifest", workspace.ManifestPath,
             "--client", "Globex", "--environment", "Production",
-            "--match", "key=ConnectionStrings", "--match", "name=Prod", "--set", "value=X"
-        }, new StringWriter(), stderr);
+            "--match", "key=Rules", "--match", "role=Admin", "--set", "enabled=true"
+        }, stdout, new StringWriter());
 
-        Assert.Equal(1, exitCode);
-        Assert.Contains("array of objects", stderr.ToString());
+        Assert.Equal(0, exitCode);
+        var overlayPath = Path.Combine(workspace.RootPath, ".configtransform", "ProjectA", "appsettings.json",
+            "Clients", "Globex", "Production.json");
+        var overlayContent = File.ReadAllText(overlayPath);
+        Assert.Contains("$elemMatch", overlayContent);
+
+        // The auto-diff reflects the real, resolved value -- not the raw $elemMatch overlay text.
+        var diff = stdout.ToString();
+        Assert.DoesNotContain("$elemMatch", diff);
+        Assert.Contains("true", diff);
+    }
+
+    [Fact]
+    public void Set_element_match_second_call_appends_a_second_patch_to_the_same_overlay()
+    {
+        using var workspace = new TempCliWorkspace();
+        var basePath = Path.Combine(workspace.RootPath, "Project", "appsettings.json");
+        File.WriteAllText(basePath, """
+            { "Rules": [
+              { "role": "Admin", "enabled": false },
+              { "role": "Viewer", "enabled": false }
+            ] }
+            """);
+
+        foreach (var role in new[] { "Admin", "Viewer" })
+        {
+            var exitCode = JsonCliRunner.Run(new[]
+            {
+                "set", "--manifest", workspace.ManifestPath,
+                "--client", "Globex", "--environment", "Production",
+                "--match", "key=Rules", "--match", $"role={role}", "--set", "enabled=true"
+            }, new StringWriter(), new StringWriter());
+            Assert.Equal(0, exitCode);
+        }
+
+        var overlayPath = Path.Combine(workspace.RootPath, ".configtransform", "ProjectA", "appsettings.json",
+            "Clients", "Globex", "Production.json");
+        var overlayContent = File.ReadAllText(overlayPath);
+        Assert.Contains("\"role\": \"Admin\"", overlayContent);
+        Assert.Contains("\"role\": \"Viewer\"", overlayContent);
+    }
+
+    [Fact]
+    public void Set_element_match_dry_run_prints_the_patch_list_without_writing()
+    {
+        using var workspace = new TempCliWorkspace();
+        var basePath = Path.Combine(workspace.RootPath, "Project", "appsettings.json");
+        File.WriteAllText(basePath, """{ "Rules": [ { "role": "Admin", "enabled": false } ] }""");
+        var before = Snapshot(workspace.RootPath);
+
+        var stdout = new StringWriter();
+        var exitCode = JsonCliRunner.Run(new[]
+        {
+            "set", "--manifest", workspace.ManifestPath,
+            "--client", "Globex", "--environment", "Production",
+            "--match", "key=Rules", "--match", "role=Admin", "--set", "enabled=true", "--dry-run"
+        }, stdout, new StringWriter());
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("$elemMatch", stdout.ToString());
+        Assert.Equal(before, Snapshot(workspace.RootPath));
+    }
+
+    [Fact]
+    public void Set_element_match_base_target_writes_directly_into_the_base_files_real_array()
+    {
+        using var workspace = new TempCliWorkspace();
+        var basePath = Path.Combine(workspace.RootPath, "Project", "appsettings.json");
+        File.WriteAllText(basePath, """{ "Rules": [ { "role": "Admin", "enabled": false } ] }""");
+
+        var exitCode = JsonCliRunner.Run(new[]
+        {
+            "set", "--manifest", workspace.ManifestPath,
+            "--match", "key=Rules", "--match", "role=Admin", "--set", "enabled=true"
+        }, new StringWriter(), new StringWriter());
+
+        Assert.Equal(0, exitCode);
+        var baseContent = File.ReadAllText(basePath);
+        Assert.DoesNotContain("$elemMatch", baseContent);
+        Assert.Contains("\"enabled\": true", baseContent);
     }
 
     [Fact]

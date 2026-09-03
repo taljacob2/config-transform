@@ -8,26 +8,57 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ### Added
 
+- **`set` support for JSON array-of-objects matching, via a `$elemMatch` overlay syntax** —
+  closes the gap flagged below as "not implemented". `--match key=<array>` locates the array, one
+  or more further `--match <field>=<value>` (any attribute other than `key`/`literal-key`) become
+  match conditions; no match found creates a new item instead of erroring (an upsert, combining
+  the conditions themselves with whatever `--set` wrote as the new item's fields); more than one
+  match is a hard error listing every candidate, same posture as XML's ambiguous-element case.
+  The persisted overlay never contains an array index anywhere, including in the file itself — a
+  named, deliberate requirement — expressed instead as a **list** of `$elemMatch` patches under
+  the array's key (a list even for one condition set, so a second `set` call against the same
+  array in the same overlay file, different conditions, appends a second patch rather than
+  colliding with the first; the same conditions re-run updates that patch in place). Because
+  nothing in the file names a position, resolving one has to happen fresh at real merge time, not
+  only when `set` writes the file — a hand-written `$elemMatch` overlay must merge correctly too,
+  and layering is progressive (an Environment-layer patch resolves against the base array; a
+  Client-layer patch against the base+Environment-*merged* array, mirroring how `XmlLayerMerger`
+  applies the Client transform to the already-Environment-transformed document). New
+  `src/ConfigTransform.Json/JsonElemMatchResolver.cs` implements the shared resolution logic (used
+  by both `set`'s eager, non-authoritative set-time check and `JsonLayerMerger`'s authoritative
+  merge-time resolution); `JsonLayerMerger.Merge` gained a pre-processing pass that rewrites
+  `$elemMatch` patches into a real position (a `JsonObject` keyed by numeric-string index, proven
+  to flatten identically to a real array element at that index — not a `JsonArray` literal, which
+  can't address one index without placeholder nulls at the others that would themselves clobber
+  base-layer values) before a layer reaches `Microsoft.Extensions.Configuration`, and falls back
+  to the original, unmodified merge implementation whenever neither overlay layer uses
+  `$elemMatch` at all. 41 new tests (`JsonElemMatchResolverTests`,
+  `JsonLayerMergerElemMatchTests`/`JsonLayerMergerGenericJsonElemMatchTests`, and additions to
+  `JsonFieldAuthorTests`/`JsonSetCommandCliTests`). See `docs/FIELD_AUTHORING_DESIGN.md`'s "JSON /
+  YAML" section and decision log for the full design, and `docs/USAGE.md`'s `set` section for
+  worked examples.
+
 - **`set` command on `ConfigTransform.Json`**: authors a nested key's value directly — no
   XDT-style Transform/Locator concept for JSON, so both updating an existing key *and* creating a
   brand-new one are the same operation (unlike XML's `Insert` gap below). `--match key=<path>`
   (`:`-separated, matching `Microsoft.Extensions.Configuration`'s own flattening convention and
   ASP.NET Core's command-line config override syntax — not `.`, since dots commonly appear
   literally in real setting names) or `--match literal-key=<name>` for a key that itself contains
-  a literal `:`. **Matching an item inside an array of objects is not implemented** — discovered
-  during implementation, not part of the original design: `Microsoft.Extensions.Configuration`'s
-  JSON provider merges arrays purely by index, not by matching a field's value the way XDT's
-  `Locator` does for XML, so `--match name=Prod`-style disambiguation (as `docs/
-  FIELD_AUTHORING_DESIGN.md`'s original array-of-objects section describes) can't be resolved the
-  same way; `set` rejects more than one `--match` outright. A genuine nested-path-vs-literal-key
-  collision refuses and shows both `--match key=...`/`--match literal-key=...` forms — reachable
-  in practice only via a base-target write against a hand-edited file, since
-  `Microsoft.Extensions.Configuration.Json` itself already refuses to load a file shaped that way
-  for any Environment/Client-target write (which merges through it), making its own load failure
-  the actual defense there. Implemented in `src/ConfigTransform.Json/JsonFieldAuthor.cs`; target-
-  file resolution shared with XML via a new `src/ConfigTransform.Core/SetTargetResolver.cs`
-  (extracted from `XmlCliRunner`'s original inline version, refactor-only, no behavior change).
-  See `docs/USAGE.md`'s `set` section for the full reference and worked examples.
+  a literal `:`. **Matching an item inside an array of objects** was not implemented at the time
+  this entry was first written — discovered during implementation, not part of the original
+  design: `Microsoft.Extensions.Configuration`'s JSON provider merges arrays purely by index, not
+  by matching a field's value the way XDT's `Locator` does for XML, so `--match name=Prod`-style
+  disambiguation (as `docs/FIELD_AUTHORING_DESIGN.md`'s original array-of-objects section
+  describes) couldn't be resolved the same way. **Now closed** — see the entry above. A genuine
+  nested-path-vs-literal-key collision refuses and shows both `--match key=...`/
+  `--match literal-key=...` forms — reachable in practice only via a base-target write against a
+  hand-edited file, since `Microsoft.Extensions.Configuration.Json` itself already refuses to load
+  a file shaped that way for any Environment/Client-target write (which merges through it), making
+  its own load failure the actual defense there. Implemented in
+  `src/ConfigTransform.Json/JsonFieldAuthor.cs`; target-file resolution shared with XML via a new
+  `src/ConfigTransform.Core/SetTargetResolver.cs` (extracted from `XmlCliRunner`'s original inline
+  version, refactor-only, no behavior change). See `docs/USAGE.md`'s `set` section for the full
+  reference and worked examples.
 
 - **`set` command on `ConfigTransform.Xml`**: authors an overlay field's
   `xdt:Transform="SetAttributes"` — or edits the base file directly — by checking the real,

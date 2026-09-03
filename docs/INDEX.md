@@ -10,7 +10,7 @@ agents alike. This index is the map for everything beyond that.
 | [`GETTING_STARTED.md`](GETTING_STARTED.md) | **Setting `config-transform` up in a new project, or want the day-to-day usage?** The layering diagram, setting up a project from scratch, and tasks like adding a field. Assumes local setup (`ONBOARDING.md`/`SECRETS_AND_LOCAL_SETUP.md`) is already done. |
 | [`CONFIG_MANAGEMENT.md`](CONFIG_MANAGEMENT.md) | The overall architecture this tool is one piece of: multi-client/multi-environment config resolution, git-crypt encryption, CI/CD, deployment. Read this for *why this tool exists and what problem it solves*. |
 | [`CONFIGTRANSFORM_TOOL_DESIGN.md`](CONFIGTRANSFORM_TOOL_DESIGN.md) | This repo's own structure and full test plan. |
-| [`FIELD_AUTHORING_DESIGN.md`](FIELD_AUTHORING_DESIGN.md) | Design (not yet implemented) for a `set` command that authors overlay fields without hand-writing XDT/JSON — the `--match`/`--set` model, per-format behavior, and the safety rules behind it. |
+| [`FIELD_AUTHORING_DESIGN.md`](FIELD_AUTHORING_DESIGN.md) | Design for the `set` command (mostly implemented — see its status line) that authors overlay fields without hand-writing XDT/JSON — the `--match`/`--set` model, per-format behavior, and the safety rules behind it. |
 | [`MANIFEST_SCHEMA.md`](MANIFEST_SCHEMA.md) | The `manifest.json` input contract this tool consumes. |
 | [`USAGE.md`](USAGE.md) | CLI reference. |
 | [`SECRETS_AND_LOCAL_SETUP.md`](SECRETS_AND_LOCAL_SETUP.md) | What a *consuming* repo needs configured — GitHub Packages feed auth and (if it uses git-crypt) the encryption key — in CI and locally, on every platform. |

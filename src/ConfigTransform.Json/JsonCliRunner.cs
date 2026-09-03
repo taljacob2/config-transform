@@ -70,7 +70,7 @@ public static class JsonCliRunner
                 ? precedingJson
                 : File.Exists(targetPath) ? File.ReadAllText(targetPath) : null;
 
-            var newContent = JsonFieldAuthor.Author(precedingJson, existingTargetJson, matches, setFields);
+            var newContent = JsonFieldAuthor.Author(precedingJson, existingTargetJson, isBaseTarget, matches, setFields);
 
             if (options.DryRun)
             {

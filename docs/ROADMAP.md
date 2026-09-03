@@ -148,6 +148,26 @@ smoke-testing: a base-target write was dropping the rest of the document instead
 in place. See `docs/CHANGELOG.md`'s `[Unreleased]` section and `docs/USAGE.md`'s `set` section
 for the full reference on both.
 
+**Closed JSON's array-of-objects gap**, the one flagged as a real, previously-undesigned problem
+above: `set` now matches or creates an item inside a JSON array of objects via a `$elemMatch`
+overlay syntax (MongoDB's own operator name, a known convention rather than an invented one).
+`--match key=<array>` locates the array, as many further `--match <field>=<value>` as needed
+become the match conditions, an upsert creates a new item when nothing matches. The persisted
+overlay never contains an array index anywhere — a hard requirement from the design conversation
+— which means resolution has to happen fresh at real merge time, progressively per layer
+(Environment resolves against base; Client resolves against base+Environment-merged), not just
+once when `set` writes the file: `JsonLayerMerger.Merge` gained a pre-processing pass
+(`JsonElemMatchResolver`, new) that rewrites `$elemMatch` patches into a real position before
+handing a layer to `Microsoft.Extensions.Configuration`, and falls back to the original,
+unmodified merge code path whenever neither overlay layer uses `$elemMatch` at all — every
+previously-shipped merge behavior is unchanged. See `docs/FIELD_AUTHORING_DESIGN.md`'s "JSON /
+YAML" section and decision log for the full mechanism and the alternatives it ruled out
+(index/position addressing, a bare-object-only overlay shape), and `docs/USAGE.md`'s `set`
+section for worked examples. 41 new tests: `JsonElemMatchResolverTests` (new, 17), fixture-backed
+`JsonLayerMergerElemMatchTests`/`JsonLayerMergerGenericJsonElemMatchTests` (new, 13 combined), and
+additions to `JsonFieldAuthorTests`/`JsonSetCommandCliTests` (11 combined, net of two tests that
+pinned the old "rejected outright" behavior and were rewritten to match the new one).
+
 One operational note worth carrying forward: this session's GitHub credentials can push
 branches but not tags (a real `403`, confirmed via verbose tracing, not a bug) — cutting the
 `0.1.0-alpha`, `0.1.0-alpha2`, `0.2.0-alpha`, `0.3.0-alpha`, `0.4.0-alpha`, and `0.5.0-alpha`
@@ -163,22 +183,19 @@ repo owner can make. Not a "next slice" in the same sense as the ones before thi
 from below (or something new) when ready, rather than assuming the next item in this list is the
 default next step.
 
-- **Finish `set`** — XML's "update an existing element" case and JSON's single-key-path case
-  both shipped (see "Current state" above); two gaps remain, both real design questions, not
-  just unimplemented happy paths, and both actionable now without a solution repo or an owner
-  decision:
+- **Finish `set`** — XML's "update an existing element" case, JSON's single-key-path case, and
+  JSON's array-of-objects matching (`$elemMatch`) all shipped (see "Current state" above); two
+  gaps remain, both scoped to XML, both real design questions rather than unimplemented happy
+  paths, and both actionable now without a solution repo or an owner decision:
   1. **XML's `Insert` case** (a genuinely brand-new element) — needs an actual design decision
      first (how the parent location/tag name gets specified — a new flag, XPath, something
      else), not just an implementation pass. See `docs/FIELD_AUTHORING_DESIGN.md`'s "Open items"
      for why this is a real gap, not a checkbox.
-  2. **Array-of-objects matching, for both formats** — XML's version was scoped out alongside
-     `Insert` above (same underlying reason: nothing to derive a brand-new array item's shape
-     from); JSON's is a distinct problem discovered while implementing JSON's `set`:
-     `Microsoft.Extensions.Configuration` merges JSON arrays by index, not by matching a field's
-     value, so `--match name=Prod`-style disambiguation needs its own design (e.g. resolving the
-     match to a real index against the actual document, then addressing the overlay by that
-     index) — not a port of XML's `Locator`-based approach. See `docs/FIELD_AUTHORING_DESIGN.md`'s
-     "Open items" for both.
+  2. **XML's array-of-objects matching** — scoped out alongside `Insert` above (same underlying
+     reason: nothing to derive a brand-new array item's shape from on create); *matching an
+     existing* array item is mechanically answerable the same way an XML element match already
+     is, so this could in principle be implemented independently of `Insert` — not done only for
+     lack of time, not a design blocker. See `docs/FIELD_AUTHORING_DESIGN.md`'s "Open items".
 - **Solution-repo pilot, first round complete** — `config-transform-pilot` (synthetic, three
   projects at varying nesting depth, one per config format) validated the core design claims
   end to end and found/fixed one real bug (see "Current state" above and the pilot's
@@ -219,9 +236,9 @@ default next step.
      syntax — but the command still has to know which of the three XML cases it's in, which
      needs the base document's real shape, not just a key/value pair. **This half is now mostly
      built**: `SetAttributes` (update an existing key/attribute) is implemented for
-     `ConfigTransform.Xml`, and JSON's `set` covers both update and create for a single key path
-     (no `Insert`-style gap there). `Insert` (the client-only-field case named above, XML-specific
-     by nature) and array-of-objects matching for either format are not — see
+     `ConfigTransform.Xml`, and JSON's `set` covers update, create, and array-of-objects matching
+     (`$elemMatch`) — see "Current state" above. `Insert` (the client-only-field case named above,
+     XML-specific by nature) and XML's own array-of-objects matching are not — see
      `docs/FIELD_AUTHORING_DESIGN.md` and this section's first "Next up" bullet.
   2. Same validation gap that deferred `init`, more so: designing a UI's workflows now would be
      guessing at real usage patterns from one synthetic pilot, not real per-repo variation.
