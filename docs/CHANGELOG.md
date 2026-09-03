@@ -15,12 +15,16 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   dependency for a config file this tool doesn't merge), scope (one file spans every
   project/format a client×environment touches, not just one project — accepting
   `ConfigTransform.Xml`/`ConfigTransform.Json` likely unifying into one CLI dispatcher as a
-  first-class consequence), and patch-to-resource matching (each `resources` entry pairs its own
+  first-class consequence), patch-to-resource matching (each `resources` entry pairs its own
   `path` with an optional `patch` field directly, requested by the repo owner over the document's
   own earlier filename-convention proposal — needed a new `extends` field to keep that unambiguous
-  when a layer inherits from another multi-project layer) are now decided by the repo owner. Still
-  left explicitly open: path convention, whether losing `manifest.json`'s directory-indirection is
-  worth it, and what `set` needs to do differently. See `docs/ROADMAP.md`'s "Next up" for status.
+  when a layer inherits from another multi-project layer), and path convention (`extends`, `path`,
+  and `patch` are all repo-root-relative, uniformly — the document's first pass special-cased
+  `patch` as a same-directory filename and gave `extends` a different anchor than `path`, both
+  real inconsistencies caught and corrected, prioritizing one predictable rule over the repetition
+  it costs) are now decided by the repo owner. Still left explicitly open: whether losing
+  `manifest.json`'s directory-indirection is worth it, and what `set` needs to do differently. See
+  `docs/ROADMAP.md`'s "Next up" for status.
 
 - **`set` support for JSON array-of-objects matching, via a `$elemMatch` overlay syntax** —
   closes the gap flagged below as "not implemented". `--match key=<array>` locates the array, one

@@ -2,14 +2,17 @@
 
 **Status: proposed, not implemented, partially decided.** This document exists to get the open
 questions on the table before any code changes, the same way `FIELD_AUTHORING_DESIGN.md` did for
-`set`. Three of the questions below are now settled by the repo owner — **file format is JSON**
+`set`. Four of the questions below are now settled by the repo owner — **file format is JSON**
 (`configtransform.json`, not `.yaml`); **scope is one file per client×environment, spanning
 every project/format that client+environment touches** (meaning `ConfigTransform.Xml`/
 `ConfigTransform.Json` unifying into one CLI dispatcher is an accepted, first-class consequence,
-not a side effect to avoid); and **each resource carries its own patch directly, as a field on
-the same entry**, not two separate lists cross-referenced by convention. The remaining questions
-below are still open — this is not a completed design waiting on an implementation pass yet. Do
-not implement against this document until every open decision below is resolved.
+not a side effect to avoid); **each resource carries its own patch directly, as a field on
+the same entry**, not two separate lists cross-referenced by convention; and **every path in the
+file — `extends`, `path`, and `patch` alike — is repo-root-relative, with no exception for a
+patch file that happens to live in the same directory as the `configtransform.json` referencing
+it**. The remaining questions below are still open — this is not a completed design waiting on an
+implementation pass yet. Do not implement against this document until every open decision below
+is resolved.
 
 ## Origin and problem statement
 
@@ -44,9 +47,9 @@ entry pairing a resource with its own patch directly. Two fields, deliberately s
 
 ```json
 {
-  "extends": "../../../Environments/Production/configtransform.json",
+  "extends": ".configtransform/Environments/Production/configtransform.json",
   "resources": [
-    { "path": "OrderProcessor.Framework/App.config", "patch": "patch-OrderProcessor.Framework-App.config.xml" }
+    { "path": "OrderProcessor.Framework/App.config", "patch": ".configtransform/Clients/Acme/Production/patch-OrderProcessor.Framework-App.config.xml" }
   ]
 }
 ```
@@ -70,7 +73,10 @@ entry pairing a resource with its own patch directly. Two fields, deliberately s
   today.
 - `patch` (optional, per resource entry): the overlay file that overrides this specific resource
   at this layer — a real overlay file, same format/semantics as today's `Environments/`/
-  `Clients/` files (XDT transform for XML, plain or `$elemMatch`-bearing JSON for JSON). Omitted
+  `Clients/` files (XDT transform for XML, plain or `$elemMatch`-bearing JSON for JSON), addressed
+  by the **same repo-root-relative convention as `extends`/`path`** — even though, in practice, it
+  almost always lives in the same directory as the `configtransform.json` referencing it. See
+  "Path convention" below for why that repetition is deliberate, not an oversight. Omitted
   entirely for a resource this layer doesn't touch — it just passes through untouched (from
   `extends`, or from the raw base file if there's no `extends`).
 
@@ -102,21 +108,21 @@ Full worked example — same two-project, one-client scenario as `docs/MANIFEST_
 ```
 
 ```json
-// Environments/Production/configtransform.json
+// .configtransform/Environments/Production/configtransform.json
 {
   "resources": [
-    { "path": "OrderProcessor.Framework/App.config", "patch": "patch-OrderProcessor.Framework-App.config.xml" },
-    { "path": "BillingApi.Core/appsettings.json", "patch": "patch-BillingApi.Core-appsettings.json.json" }
+    { "path": "OrderProcessor.Framework/App.config", "patch": ".configtransform/Environments/Production/patch-OrderProcessor.Framework-App.config.xml" },
+    { "path": "BillingApi.Core/appsettings.json", "patch": ".configtransform/Environments/Production/patch-BillingApi.Core-appsettings.json.json" }
   ]
 }
 ```
 
 ```json
-// Clients/Acme/Production/configtransform.json
+// .configtransform/Clients/Acme/Production/configtransform.json
 {
-  "extends": "../../../Environments/Production/configtransform.json",
+  "extends": ".configtransform/Environments/Production/configtransform.json",
   "resources": [
-    { "path": "OrderProcessor.Framework/App.config", "patch": "patch-OrderProcessor.Framework-App.config.xml" }
+    { "path": "OrderProcessor.Framework/App.config", "patch": ".configtransform/Clients/Acme/Production/patch-OrderProcessor.Framework-App.config.xml" }
   ]
 }
 ```
@@ -162,26 +168,27 @@ Confirmed directly by the repo owner — treat these as fixed, not open to silen
    (array-index) pairing were both considered for the matching problem itself and rejected: the
    former assumes a structured identity XML/JSON config files don't have, the latter breaks as
    soon as one resource in a multi-resource layer has no patch at all (a normal, expected case).
+4. **Path convention: every path in the file — `extends`, `path`, and `patch` alike — is
+   repo-root-relative. No exception for `patch`, even though it almost always names a file sitting
+   in the very same directory as the `configtransform.json` referencing it.** This document's
+   first pass treated `patch` as an implicit same-directory filename (no prefix needed) and gave
+   `extends` a *different* anchor (`.configtransform/`-root) than `path` (repo-root) — both were
+   real inconsistencies, caught by the repo owner, not oversights left in on purpose. The
+   temptation to special-case `patch` was to avoid repeating a directory path the file is already
+   sitting in (`{"patch": ".configtransform/Clients/Acme/Production/patch-...xml"}` instead of
+   just `{"patch": "patch-...xml"}`) — rejected: predictability for whoever is reading or writing
+   the file matters more than saving that repetition, and "some fields work one way, others work
+   another" is a real cognitive tax regardless of how principled the internal reason for the split
+   is. One rule, everywhere, no exceptions. This still avoids the long, fragile `../../../../`
+   chains real Kustomize trees accumulate (a well-known, frequently-complained-about pain point,
+   not a hypothetical one) — repo-root-relative gets full consistency *and* short paths, which is
+   why it beat adopting Kustomize's own file-relative convention wholesale.
 
 ## Open design questions (not yet decided)
 
 Still genuinely open — laid out with a recommendation each, but none should be read as final.
 
-### 1. Path convention: repo-root-relative, or relative to the `configtransform.json` file?
-
-Real Kustomize trees accumulate long `../../../../` chains exactly like the repo owner's own
-example did — a well-known, frequently-complained-about Kustomize pain point, not a hypothetical
-one. **Recommendation: repo-root-relative** (`OrderProcessor.Framework/App.config`, not
-`../../../../OrderProcessor.Framework/App.config`) for a resource pointing at a real base file —
-consistent with how `manifest.json`'s own `directory` field already resolves today (repo-relative,
-against the CLI's working directory — `docs/MANIFEST_SCHEMA.md`'s "Pointing `directory` at the
-repo root itself"). An `extends` value (Client layer inheriting from an Environment layer) still
-needs a real relative or root-relative path since there's no separate "root" concept for layer
-directories the way there is for project source — root-relative is still recommended there too
-for the same fragility reason, resolved against the `.configtransform/` root rather than the repo
-root.
-
-### 2. Does `manifest.json`'s indirection (a project label decoupled from its real path) survive?
+### 1. Does `manifest.json`'s indirection (a project label decoupled from its real path) survive?
 
 This is a real, concrete regression worth naming plainly, not glossing over. Today,
 `.configtransform/<Project>/` is "a human-readable label only... that mapping is explicit in
@@ -193,7 +200,7 @@ but a real N-file edit where today it's a 1-file edit). This is the direct cost 
 discoverability win ("one file shows the whole chain, no indirection to follow") and should be
 weighed consciously, not discovered later.
 
-### 3. What does `set` do under this design?
+### 2. What does `set` do under this design?
 
 Today, `set` (`docs/FIELD_AUTHORING_DESIGN.md`) resolves a target overlay file via
 `SetTargetResolver` and writes into it — the file's *existence* in the fixed `Environments/`/
@@ -244,7 +251,7 @@ nice-to-have.
 | Scope of one `configtransform.json` | One file per client×environment, spanning every project and format it touches | One file per project (mirrors `manifest.json`'s current per-project scope) | Confirmed directly by the repo owner — matches the original worked example and delivers the actual "one file, whole picture" benefit. Accepted consequence: `ConfigTransform.Xml`/`ConfigTransform.Json` likely unify into one CLI dispatcher, since a single file can now mix formats. |
 | Patch-to-resource matching | Each `resources` entry pairs a `path` with its own optional `patch` field directly | Two separate `resources`/`patches` lists cross-referenced by filename convention (this document's own earlier proposal); Kustomize's apiVersion/kind/name matching; positional (array-index) pairing | Requested directly by the repo owner: a resource's patch should be unambiguous by construction, not inferred. Kustomize's matching mechanism assumes a structured identity XML/JSON config files don't have; positional pairing breaks as soon as one resource in a multi-resource layer has no patch at all (normal here); the filename-convention alternative still required parsing a naming pattern to recover a relationship that can just be stated directly. |
 | Cross-layer inheritance as its own `extends` field, separate from `resources` | `extends: <path>` (one per file, resolved first); `resources` entries always identify a project by its own real path, whether or not `extends` is set | A `resources` entry pointing directly at another `configtransform.json` (mixed with real-base-file entries in the same list) | Once each resource carries its own patch, a `resources` entry pointing at another (multi-project) `configtransform.json` has no unambiguous place to attach a single `patch` — which of that file's several projects would it target? Separating "where this layer starts from" from "what this layer itself adds" removes the ambiguity and keeps every patch on its own, real, unambiguous resource. |
-| Path convention for `resources`/`extends` | Repo-root-relative (or `.configtransform`-root-relative for `extends`) | Relative to the `configtransform.json` file's own directory (Kustomize's convention) | Avoids the long, fragile `../../../../` chains that are a known, common complaint about real Kustomize trees — consistent with how `manifest.json`'s `directory` already resolves repo-relatively today. |
+| Path convention | Repo-root-relative, uniformly, for `extends`, `path`, and `patch` — no exception for a same-directory `patch` file | Relative to the `configtransform.json` file's own directory (Kustomize's convention, for all three); the document's own first pass, which special-cased `patch` as an implicit same-directory filename and gave `extends` a different anchor than `path` | Two real inconsistencies caught by the repo owner, not left in on purpose. Predictability for whoever reads/writes the file outweighs the repetition saved by special-casing `patch`; repo-root-relative still avoids the long, fragile `../../../../` chains real Kustomize trees accumulate, so this gets both consistency and short paths, unlike adopting Kustomize's file-relative convention wholesale. |
 
 ## Open items for implementation
 
@@ -274,4 +281,4 @@ Additionally, once those are settled:
   self-describing overlays" reasoning this document responds to directly.
 - [`MANIFEST_SCHEMA.md`](MANIFEST_SCHEMA.md) — the schema this design proposes replacing.
 - [`FIELD_AUTHORING_DESIGN.md`](FIELD_AUTHORING_DESIGN.md) — the `set` command whose target
-  resolution ("Open design questions" §3 above) would need updating under this design.
+  resolution ("Open design questions" §2 above) would need updating under this design.

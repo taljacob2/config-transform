@@ -173,16 +173,20 @@ pinned the old "rejected outright" behavior and were rewritten to match the new 
 base→Environments→Clients rule (`CONFIG_MANAGEMENT.md` §9) with a Kustomize-style self-describing
 `configtransform.json` per layer directory, declaring `resources` (each pairing a project's real
 path with its own optional `patch` directly) plus an optional `extends` naming the layer to
-inherit from. Raised directly by the repo owner. Three of the document's original open questions
+inherit from. Raised directly by the repo owner. Four of the document's original open questions
 are now settled by the repo owner: file format is JSON, not YAML (no new dependency for a config
 file this tool doesn't merge); one file spans every project/format a client×environment touches,
 not just one project, accepting that `ConfigTransform.Xml`/`ConfigTransform.Json` likely unify
-into one CLI dispatcher as a first-class, separately-scoped consequence; and each resource carries
+into one CLI dispatcher as a first-class, separately-scoped consequence; each resource carries
 its own patch directly rather than two lists cross-referenced by convention — which needed the new
 `extends` field, introduced (and flagged as new, not silently folded in) to keep that patch
-unambiguous when one layer inherits from another that itself spans multiple projects. Still open:
-path convention, whether `manifest.json`'s directory-indirection is worth losing, and what `set`
-needs to do differently — see "Next up" below.
+unambiguous when one layer inherits from another that itself spans multiple projects; and every
+path in the file (`extends`, `path`, `patch` alike) is repo-root-relative, uniformly, with no
+same-directory exception for `patch` — an inconsistency in the document's first pass (two
+different anchors for `extends` vs. `path`, plus an implicit-filename special case for `patch`)
+caught by the repo owner and corrected in favor of one predictable rule over saving a little
+repetition. Still open: whether `manifest.json`'s directory-indirection is worth losing, and what
+`set` needs to do differently — see "Next up" below.
 
 One operational note worth carrying forward: this session's GitHub credentials can push
 branches but not tags (a real `403`, confirmed via verbose tracing, not a bug) — cutting the
@@ -217,10 +221,12 @@ default next step.
   and the fixed base→Environments→Clients rule with a Kustomize-style self-describing manifest per
   layer directory. File format (JSON), scope (one file spans every project/format a
   client×environment touches, meaning `ConfigTransform.Xml`/`ConfigTransform.Json` likely unify
-  into one CLI entry point), and patch-to-resource matching (each resource pairs its own `path`
+  into one CLI entry point), patch-to-resource matching (each resource pairs its own `path`
   with an optional `patch` directly, via a new `extends` field that separates layer inheritance
-  from what one layer itself adds) are now decided; still open: path convention, whether losing
-  `manifest.json`'s directory-indirection is worth it, and what `set` needs to do differently.
+  from what one layer itself adds), and path convention (`extends`/`path`/`patch` all
+  repo-root-relative, uniformly, no same-directory exception for `patch`) are now decided; still
+  open: whether losing `manifest.json`'s directory-indirection is worth it, and what `set` needs
+  to do differently.
   This is a bigger, more foundational change than `set`'s remaining gaps above — it touches
   `Manifest`/`ManifestLoader`/`ManifestDiscovery`/`ManifestEntrySelector`/`LayerResolution`/
   `SetTargetResolver` and both tools' `CliRunner`, not one command, plus the CLI-unification
