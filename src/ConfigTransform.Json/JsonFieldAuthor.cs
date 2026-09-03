@@ -5,67 +5,222 @@ using ConfigTransform.Core;
 namespace ConfigTransform.Json;
 
 /// <summary>
-/// Implements the plain-field half of the <c>set</c> command (docs/FIELD_AUTHORING_DESIGN.md)
-/// for JSON: writes a nested key's value directly, with no XDT-style Transform/Locator concept
-/// (JSON overlays are just plain JSON — any layer can introduce or override a key). Unlike XML,
-/// there is no "update vs. insert" distinction to make here — both are the same write.
-/// Matching an item inside an array of objects is deliberately not implemented: see
-/// <see cref="Author"/>'s remarks.
+/// Implements the <c>set</c> command (docs/FIELD_AUTHORING_DESIGN.md) for JSON: a plain-field
+/// half (writes a nested key's value directly, with no XDT-style Transform/Locator concept —
+/// JSON overlays are just plain JSON, any layer can introduce or override a key; no "update vs.
+/// insert" distinction to make, unlike XML) and an element-match half (matching/creating an item
+/// inside an array of objects — see <see cref="JsonElemMatchResolver"/> for the mechanism).
 /// </summary>
 public static class JsonFieldAuthor
 {
+    private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true };
+
     /// <param name="precedingJson">
     /// The document that exists immediately before this write's own layer would apply — same
-    /// meaning as in <c>XmlFieldAuthor.Author</c> — used only to verify a bare/defaulted --match
-    /// against the real document (docs/FIELD_AUTHORING_DESIGN.md's "Defaults") and to resolve
-    /// the nested-path-vs-literal-key collision case.
+    /// meaning as in <c>XmlFieldAuthor.Author</c> — used to verify a bare/defaulted --match
+    /// against the real document (docs/FIELD_AUTHORING_DESIGN.md's "Defaults"), to resolve the
+    /// nested-path-vs-literal-key collision case, and (for an element-match write) as the eager,
+    /// non-authoritative document <see cref="JsonElemMatchResolver.Probe"/> checks against.
     /// </param>
     /// <param name="existingTargetJson">
     /// Current content of the file being written, if it already exists. Null for an overlay
     /// that doesn't exist yet — the base file always exists, so is never null there.
     /// </param>
+    /// <param name="isBaseTarget">
+    /// True when writing directly to the base file. For an element-match write this matters: a
+    /// base-file write mutates a real array item directly (the base file is a real document, it
+    /// never gains <c>$elemMatch</c> syntax — <see cref="JsonLayerMerger"/> never rewrites the
+    /// base layer), where an overlay-file write authors an <c>$elemMatch</c> patch instead.
+    /// </param>
     /// <exception cref="InvalidOperationException">
-    /// More than one --match, or a --match attribute other than "key"/"literal-key" — matching
-    /// an item inside an array of objects (docs/FIELD_AUTHORING_DESIGN.md's array-of-objects
-    /// section) is not implemented: <c>Microsoft.Extensions.Configuration</c>'s JSON provider
-    /// merges arrays by index, not by matching a field's value the way XDT's Locator does for
-    /// XML, so "which array item" can't be resolved the same way — see
-    /// docs/FIELD_AUTHORING_DESIGN.md's "Open items". Also thrown for a genuine nested-path/
-    /// literal-key collision, or an ambiguous/not-found literal key.
+    /// The first --match isn't "key"/"literal-key"; a genuine nested-path/literal-key collision
+    /// or an ambiguous/not-found literal key; an element-match condition or --set field using the
+    /// bare/defaulted shorthand (only the first --match, the array's location, may default); the
+    /// located path exists but isn't a JSON array; more than one array item matches a patch's
+    /// conditions; two patches in one write resolve to the same item; or (overlay-target only) the
+    /// key already holds overlay content that isn't an element-match patch list.
     /// </exception>
     public static string Author(
         string precedingJson,
         string? existingTargetJson,
+        bool isBaseTarget,
         IReadOnlyList<MatchSpec> matches,
         IReadOnlyList<MatchSpec> setFields)
     {
-        if (matches.Count != 1)
+        var locationMatch = matches[0];
+        if (locationMatch.Attribute is not ("key" or "literal-key"))
             throw new InvalidOperationException(
-                "'set' for JSON supports exactly one --match today: a single key path. Matching " +
-                "an item inside an array of objects is not yet implemented -- " +
-                "docs/FIELD_AUTHORING_DESIGN.md's 'Open items' explains why (Microsoft.Extensions." +
-                "Configuration merges JSON arrays by index, not by matching a field the way XDT " +
-                "does for XML).");
-
-        var matchSpec = matches[0];
-        if (matchSpec.Attribute is not ("key" or "literal-key"))
-            throw new InvalidOperationException(
-                $"'{matchSpec.Attribute}' is not a valid --match for JSON. Use key=<path> " +
+                $"'{locationMatch.Attribute}' is not a valid --match for JSON. Use key=<path> " +
                 "(':'-separated, e.g. Logging:LogLevel:Default) or literal-key=<exact key name> " +
                 "for a key that itself contains a literal ':'.");
 
-        if (setFields.Count != 1 || setFields[0].Attribute != "value")
-            throw new InvalidOperationException(
-                "'set' for JSON writes a single scalar value -- use --set value=<new value>, " +
-                "or the bare form (--set <value>), which defaults to it.");
-
         var preceding = ParseObject(precedingJson, "preceding document");
-        var segments = ResolveSegments(preceding, matchSpec);
+        var segments = ResolveSegments(preceding, locationMatch);
+        var elementConditions = matches.Skip(1).ToList();
 
-        var target = existingTargetJson is null ? new JsonObject() : ParseObject(existingTargetJson, "existing overlay");
-        SetAtPath(target, segments, setFields[0].Value);
+        if (elementConditions.Count == 0)
+        {
+            if (setFields.Count != 1 || setFields[0].Attribute != "value")
+                throw new InvalidOperationException(
+                    "'set' for JSON writes a single scalar value -- use --set value=<new value>, " +
+                    "or the bare form (--set <value>), which defaults to it.");
 
-        return target.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+            var target = existingTargetJson is null ? new JsonObject() : ParseObject(existingTargetJson, "existing overlay");
+            SetAtPath(target, segments, setFields[0].Value);
+            return target.ToJsonString(Indented);
+        }
+
+        foreach (var condition in elementConditions)
+            if (condition.WasDefaulted)
+                throw new InvalidOperationException(
+                    "Element-match conditions need an explicit field=value -- the bare/default " +
+                    "shorthand only applies to the first --match (the array's location).");
+
+        if (setFields.Count == 0 || setFields.Any(f => f.WasDefaulted))
+            throw new InvalidOperationException(
+                "An element-match write needs at least one explicit --set field=value -- the " +
+                "bare/default shorthand ('value=') only applies to a plain-field 'set'.");
+
+        if (isBaseTarget)
+        {
+            var baseDoc = existingTargetJson is null ? new JsonObject() : ParseObject(existingTargetJson, "existing overlay");
+            MutateRealArrayItem(baseDoc, segments, elementConditions, setFields);
+            return baseDoc.ToJsonString(Indented);
+        }
+
+        JsonElemMatchResolver.Probe(preceding, segments, elementConditions);
+
+        var overlay = existingTargetJson is null ? new JsonObject() : ParseObject(existingTargetJson, "existing overlay");
+        SetElemMatchAtPath(overlay, segments, elementConditions, setFields);
+        return overlay.ToJsonString(Indented);
+    }
+
+    /// <summary>Base-target element-match write: walks to the real array and writes into it
+    /// directly -- no <c>$elemMatch</c> syntax, since the base file isn't an overlay.</summary>
+    private static void MutateRealArrayItem(
+        JsonObject baseDoc,
+        IReadOnlyList<string> segments,
+        IReadOnlyList<MatchSpec> elementConditions,
+        IReadOnlyList<MatchSpec> setFields)
+    {
+        var current = baseDoc;
+        for (var i = 0; i < segments.Count - 1; i++)
+        {
+            if (current[segments[i]] is not JsonObject child)
+            {
+                child = new JsonObject();
+                current[segments[i]] = child;
+            }
+            current = child;
+        }
+
+        var arrayKey = segments[^1];
+        if (current[arrayKey] is JsonArray existing)
+        {
+            MutateArray(existing, elementConditions, setFields, string.Join(":", segments));
+            return;
+        }
+
+        if (current[arrayKey] is not null)
+            throw new InvalidOperationException($"\"{string.Join(":", segments)}\" already exists but is not a JSON array.");
+
+        var array = new JsonArray();
+        current[arrayKey] = array;
+        MutateArray(array, elementConditions, setFields, string.Join(":", segments));
+    }
+
+    private static void MutateArray(
+        JsonArray array,
+        IReadOnlyList<MatchSpec> elementConditions,
+        IReadOnlyList<MatchSpec> setFields,
+        string pathDescription)
+    {
+        var conditions = JsonElemMatchResolver.ToConditions(elementConditions);
+        var index = JsonElemMatchResolver.ResolveIndexOrAppend(array, conditions, pathDescription);
+
+        if (index == array.Count)
+        {
+            var newItem = new JsonObject();
+            foreach (var condition in conditions)
+                newItem[condition.Field] = condition.Value?.DeepClone();
+            array.Add(newItem);
+        }
+
+        var item = (JsonObject)array[index]!;
+        foreach (var field in setFields)
+            item[field.Attribute] = JsonLayerMerger.ToJsonValue(field.Value);
+    }
+
+    /// <summary>Overlay-target element-match write: authors/updates one entry in the
+    /// <c>$elemMatch</c> patch list at the array's key (docs/FIELD_AUTHORING_DESIGN.md). A patch
+    /// with the exact same conditions already present is updated in place (re-run case); a
+    /// different condition set appends a second patch, so more than one item in the same array
+    /// can be overridden from the same overlay file.</summary>
+    private static void SetElemMatchAtPath(
+        JsonObject target,
+        IReadOnlyList<string> segments,
+        IReadOnlyList<MatchSpec> elementConditions,
+        IReadOnlyList<MatchSpec> setFields)
+    {
+        var current = target;
+        for (var i = 0; i < segments.Count - 1; i++)
+        {
+            if (current[segments[i]] is not JsonObject child)
+            {
+                child = new JsonObject();
+                current[segments[i]] = child;
+            }
+            current = child;
+        }
+
+        var arrayKey = segments[^1];
+        var pathDescription = string.Join(":", segments);
+
+        JsonArray patchList;
+        if (current[arrayKey] is JsonArray existingList && (existingList.Count == 0 || JsonElemMatchResolver.IsPatchList(existingList)))
+        {
+            patchList = existingList;
+        }
+        else if (current[arrayKey] is null)
+        {
+            patchList = new JsonArray();
+            current[arrayKey] = patchList;
+        }
+        else
+        {
+            throw new InvalidOperationException(
+                $"\"{pathDescription}\" in this overlay already has content that isn't an element-match " +
+                "patch list -- cannot add an element-match write here.");
+        }
+
+        var existingPatch = patchList
+            .OfType<JsonObject>()
+            .FirstOrDefault(p => p["$elemMatch"] is JsonObject em && SameConditions(em, elementConditions));
+
+        if (existingPatch is not null)
+        {
+            foreach (var field in setFields)
+                existingPatch[field.Attribute] = JsonLayerMerger.ToJsonValue(field.Value);
+            return;
+        }
+
+        var patch = new JsonObject();
+        var elemMatch = new JsonObject();
+        foreach (var condition in elementConditions)
+            elemMatch[condition.Attribute] = JsonLayerMerger.ToJsonValue(condition.Value);
+        patch["$elemMatch"] = elemMatch;
+        foreach (var field in setFields)
+            patch[field.Attribute] = JsonLayerMerger.ToJsonValue(field.Value);
+        patchList.Add(patch);
+    }
+
+    private static bool SameConditions(JsonObject elemMatch, IReadOnlyList<MatchSpec> conditions)
+    {
+        if (elemMatch.Count != conditions.Count)
+            return false;
+        return conditions.All(c =>
+            elemMatch.TryGetPropertyValue(c.Attribute, out var value) &&
+            JsonNode.DeepEquals(value, JsonLayerMerger.ToJsonValue(c.Value)));
     }
 
     private static JsonObject ParseObject(string json, string description) =>

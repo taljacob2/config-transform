@@ -122,12 +122,12 @@ full reasoning behind each:
   derive them from for a true insert, so `set` refuses rather than guessing.
 - **`ConfigTransform.Json`**: covers a single key path (nested or top-level) — both updating an
   existing key *and* creating a brand-new one, since JSON has no XDT-style Transform/Locator
-  distinction to make (any layer can introduce a key; `set` just writes it). Matching an item
-  inside an **array of objects is not implemented**: `Microsoft.Extensions.Configuration`'s JSON
-  provider merges arrays by index, not by matching a field's value the way XDT's `Locator` does
-  for XML, so "which array item" can't be resolved the same way `--match name=Prod` resolves an
-  XML element — `set` rejects more than one `--match` outright rather than silently doing the
-  wrong thing.
+  distinction to make (any layer can introduce a key; `set` just writes it) — **and matching or
+  creating an item inside an array of objects**, via a `$elemMatch`-style overlay (below).
+  `Microsoft.Extensions.Configuration`'s JSON provider merges arrays purely by index, with no
+  native concept of matching a field's value the way XDT's `Locator` does for XML, so this isn't a
+  direct port of XML's mechanism — see `docs/FIELD_AUTHORING_DESIGN.md`'s "JSON / YAML" section
+  and decision log for the full reasoning.
 
 ```bash
 # XML, appSettings — the simple case: one identity attribute, one value attribute.
@@ -165,18 +165,48 @@ dotnet run --project src/ConfigTransform.Json -- set \
 dotnet run --project src/ConfigTransform.Json -- set \
   --manifest .configtransform/ProjectB.Core/manifest.json \
   --match literal-key=Logging:LogLevel:Default --set value=Warning
+
+# JSON — array of objects: --match key=<array> locates the array, any further --match
+# <field>=<value> (not key=/literal-key=) becomes an $elemMatch condition on the item.
+dotnet run --project src/ConfigTransform.Json -- set \
+  --manifest .configtransform/ProjectB.Core/manifest.json \
+  --client ClientA --environment Production \
+  --match key=ConnectionStrings --match name=Prod --set connectionString="Data Source=new;..."
+
+# JSON — compound conditions (more than one field needed to identify the item uniquely).
+dotnet run --project src/ConfigTransform.Json -- set \
+  --manifest .configtransform/ProjectB.Core/manifest.json \
+  --client ClientA --environment Production \
+  --match key=Rules --match role=Admin --match env=Production --set enabled=true
+
+# JSON — a second call against the same array, different conditions, same overlay file: appends
+# a second $elemMatch patch rather than colliding with the first (see FIELD_AUTHORING_DESIGN.md).
+dotnet run --project src/ConfigTransform.Json -- set \
+  --manifest .configtransform/ProjectB.Core/manifest.json \
+  --client ClientA --environment Production \
+  --match key=Rules --match role=Viewer --set enabled=true
+
+# JSON — no match found: creates a new item instead of erroring (an upsert, Mongo's own term for
+# the same idea) -- the new item's identity comes from the --match conditions themselves.
+dotnet run --project src/ConfigTransform.Json -- set \
+  --manifest .configtransform/ProjectB.Core/manifest.json \
+  --client ClientA --environment Production \
+  --match key=Rules --match role=Auditor --set enabled=true
 ```
 
 Zero matching fields fails rather than guessing: for XML, with a suggested
 `--match <realattr>=<value>` when a bare `--match` found the value under a different attribute
-name instead; for JSON, a brand-new key just gets created (see above) — there's no "not found"
-case for JSON's plain-field path *unless* it's a genuine nested-path-vs-literal-key collision
+name instead; for JSON's plain-field path, a brand-new key just gets created (see above) —
+there's no "not found" case there *unless* it's a genuine nested-path-vs-literal-key collision
 (`--match key=Logging:LogLevel:Default` when the document has both a nested `Logging.LogLevel.
 Default` *and* a literal top-level key spelled exactly `"Logging:LogLevel:Default"`), in which
 case `set` refuses and shows both `--match key=...`/`--match literal-key=...` forms rather than
-guessing. More than one matching XML element fails and lists every candidate, asking for another
-`--match` to narrow it down. Implemented in `src/ConfigTransform.Xml/XmlFieldAuthor.cs` and
-`src/ConfigTransform.Json/JsonFieldAuthor.cs`; shared target-file resolution in
+guessing. More than one matching XML element, or more than one JSON array item matching an
+`$elemMatch` patch's conditions, fails and lists every candidate, asking for another `--match` to
+narrow it down. Implemented in `src/ConfigTransform.Xml/XmlFieldAuthor.cs`,
+`src/ConfigTransform.Json/JsonFieldAuthor.cs`, and (JSON array-of-objects resolution specifically,
+shared between `set`'s eager check and `JsonLayerMerger`'s authoritative merge-time resolution)
+`src/ConfigTransform.Json/JsonElemMatchResolver.cs`; shared target-file resolution in
 `src/ConfigTransform.Core/SetTargetResolver.cs`; orchestration in each tool's own `CliRunner.cs`.
 
 ## What "merge" means
@@ -193,6 +223,11 @@ documented in full in `src/ConfigTransform.Json/JsonLayerMerger.cs`:
   base-layer indices beyond what the overlay specifies survive untouched.
 - Types (bool/number/string) are inferred from the flattened value to avoid turning
   `"enabled": false` into `"enabled": "false"`.
+- An overlay layer containing a `set`-written (or hand-written) `$elemMatch` array-of-objects
+  patch (see the `set` section above) is resolved to a real position and rewritten *before* it
+  reaches `Microsoft.Extensions.Configuration` — a pre-processing pass
+  (`JsonElemMatchResolver.Rewrite`) that only runs on a layer actually containing one; every other
+  merge takes the original, unmodified code path.
 
 For `--diff` in both tools, the same base file is also rendered with *no* overlays applied
 (through the identical merge code path, to avoid spurious serialization-only differences) and

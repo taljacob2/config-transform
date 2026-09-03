@@ -4,12 +4,13 @@
 element" case in full (base file, Environment overlay, Client overlay; the bare `--match`/`--set`
 defaults with verification; the ambiguous/not-found/"did you mean" error paths; the
 auto-`--diff`). `ConfigTransform.Json`'s `set` covers a single key path — both updating an
-existing key *and* creating a brand-new one, since JSON has no `Insert`-style gap. See
-`docs/USAGE.md`'s `set` section and `docs/CHANGELOG.md`'s `[Unreleased]` entries for exactly
-what's live and where. **Not yet implemented**: XML's `Insert` case (a genuinely brand-new
-element), and matching an item inside an **array of objects for either format** — a real design
-gap discovered while implementing JSON's `set`, not anticipated by this document's original
-design (see "Open items" below for both). This document otherwise still reflects the original
+existing key *and* creating a brand-new one, since JSON has no `Insert`-style gap — **and now also
+covers matching/creating an item inside an array of objects**, via a `$elemMatch`-style overlay
+syntax (see "JSON / YAML" below). See `docs/USAGE.md`'s `set` section and `docs/CHANGELOG.md`'s
+`[Unreleased]` entries for exactly what's live and where. **Not yet implemented**: XML's `Insert`
+case (a genuinely brand-new element), and XML's array-of-objects matching (see "Open items" below
+for both — JSON's version of the array-of-objects gap, once a real, previously-undesigned problem
+found during implementation, is now closed). This document otherwise still reflects the original
 completed design from a product-brainstorming session; treat any specific claim about *current*
 behavior as superseded by `docs/CHANGELOG.md` where the two differ.
 
@@ -112,7 +113,9 @@ set --match key=Logging:LogLevel:Default --set value=Warning
 
 A plain nested field needs only one `--match` — the path itself is the full identity, no
 disambiguation needed. An **array of objects** is the JSON/YAML analogue of XML's
-attribute-matching problem, and needs two: one to reach the array, one to pick the item.
+attribute-matching problem, and needs two: one to reach the array (`--match key=...`, as above),
+one or more to pick the item (any further `--match <field>=<value>`, using a field name that
+isn't `key`/`literal-key`).
 
 ```json
 {
@@ -127,17 +130,66 @@ set --match key=ConnectionStrings --match name=Prod --set connectionString="Data
 ```
 
 **Correction, found while implementing JSON's `set` (not caught at design time)**: the example
-above assumes `--match name=Prod` can disambiguate an array item the way XDT's `Locator` does for
-XML. It can't, against this repo's actual JSON merge engine. `Microsoft.Extensions.Configuration`
-flattens a JSON array to **index-keyed** entries (`ConnectionStrings:0`, `ConnectionStrings:1`,
-...) — merging is purely positional (`docs/USAGE.md`'s "What 'merge' means"; `JsonLayerMerger`'s
-own doc comment), with no concept of "the item whose `name` equals X" at all. An overlay that
-wants to override the second `ConnectionStrings` entry has to say `ConnectionStrings:1:
-connectionString`, by position, not by matching a field. So array-of-objects `--match` as
-described here is **not implemented, and not a straightforward port of XML's approach** — it
-would need its own mechanism (e.g. resolve `--match name=Prod` to a real index by inspecting the
-document, the same "verify against reality" principle as everywhere else in this design, then
-address the overlay by that index) that this document never designed. See "Open items."
+above originally assumed `--match name=Prod` could disambiguate an array item the way XDT's
+`Locator` does for XML — directly, with the persisted overlay addressing the item by position.
+It can't: `Microsoft.Extensions.Configuration` flattens a JSON array to **index-keyed** entries
+(`ConnectionStrings:0`, `ConnectionStrings:1`, ...) — merging is purely positional (`docs/USAGE.md`'s
+"What 'merge' means"; `JsonLayerMerger`'s own doc comment), with no native concept of "the item
+whose `name` equals X" for `set` to hook into or delegate to.
+
+**What ships instead**: a `$elemMatch` overlay shape — named after MongoDB's own operator for
+"match an array element by field conditions," a known convention rather than an invented one
+(see decision log) — that never writes a position anywhere, including in the persisted overlay
+file itself (a hard requirement: an operator reading an overlay file should never need to know or
+reconstruct which index a change landed on). The command above is unchanged; what changed is what
+gets written and how it gets resolved:
+
+```json
+{ "ConnectionStrings": [
+  { "$elemMatch": { "name": "Prod" }, "connectionString": "Data Source=new;...", "providerName": "System.Data.SqlClient" }
+] }
+```
+
+The value under the array's key is always a **list** of these patches — even for a single
+condition set — rather than a single bare object, so there is exactly one shape to parse, and so
+a second `set` call against the same array in the same overlay file (different conditions) has
+somewhere to go: it appends a second patch rather than colliding with the first. Re-running `set`
+with the *same* conditions (order-independent) updates that patch in place instead, the same
+"idempotent re-run" behavior every other `set` path already has.
+
+No match found for a patch's conditions is not an error — it's an **upsert** (Mongo's own term for
+the same idea): a new item is created, combining the `$elemMatch` condition fields themselves (as
+the new item's identity — `"name": "Prod"` in the example above) with whatever `--set` wrote. The
+overlay file's shape is identical whether a given patch ends up updating or creating; that
+decision is made by resolving against the real document, every time the document is merged, never
+baked into the file. More than one array item matching one patch's conditions is still a hard
+error, exactly like XML's ambiguous-element case, listing every candidate.
+
+**Resolving `$elemMatch` has to happen at real merge time, not only when `set` writes the file** —
+this is the direct consequence of the "no index anywhere in the persisted file" requirement. A
+hand-written `$elemMatch` overlay (never touched by `set` at all) has to merge correctly too, and
+layering is progressive: an Environment-layer patch must resolve against the base array, but a
+Client-layer patch must resolve against the base **+ Environment-merged** array — mirroring how
+`XmlLayerMerger` already applies the Client transform to the already-Environment-transformed
+document, not to the base alone. Since `Microsoft.Extensions.Configuration` has no native concept
+of resolving this at all (unlike XDT's `Locator`, a real feature of the library XML's merge
+already runs on), `JsonLayerMerger.Merge` gained a pre-processing pass
+(`JsonElemMatchResolver.Rewrite`): before a layer reaches `Microsoft.Extensions.Configuration`, any
+`$elemMatch` patches in it are resolved against the document as merged through the *prior* layer
+only, and rewritten into a real position — expressed as a `JsonObject` keyed by numeric-string
+index (`{"1": {...}}`), not a `JsonArray` literal, because a real array can't say "leave every
+other index alone, touch only this one" without emitting placeholder nulls for the skipped
+indices, and those nulls would themselves flatten to real `IConfiguration` keys and clobber the
+base layer's actual values there. A numeric-string object key has no such constraint, and is
+proven (empirically, for both `AddJsonFile` and `AddJsonStream` input) to flatten to the exact
+same `IConfiguration` path as a real array element at that index. Every merge with no `$elemMatch`
+anywhere in either overlay layer takes the original, unmodified code path (`JsonLayerMerger`'s
+`LegacyMerge`) — this is what keeps every previously-shipped merge behavior unchanged.
+
+See `src/ConfigTransform.Json/JsonElemMatchResolver.cs` for the resolver itself (shared between
+`set`'s eager, set-time-only UX check and `JsonLayerMerger`'s authoritative merge-time
+resolution), and `docs/USAGE.md`'s `set` section for more worked examples (compound conditions,
+a second patch in the same overlay, progressive layering across Environment/Client).
 
 YAML is not designed separately from JSON here: `docs/CONFIG_MANAGEMENT.md` §5.5 already
 confirmed YAML fits the existing design without a redesign (same tree-of-maps/lists/scalars
@@ -260,8 +312,13 @@ No case needed a bespoke resolution; each was the same rule applied once more.
 | A literal `=` inside a bare match/set value | No new escaping syntax — fall back to the explicit `attr=value` form, which is already unambiguous (splits on the first `=` only) | A backslash-escape convention for a literal `=` | The explicit form already expresses this correctly with zero new syntax; inventing an escape mechanism would add a second thing to learn for a case with an existing, simpler answer. |
 | "Did you mean" suggestions vs. plain errors | Always show a real candidate command when the tool computed one while detecting the problem | Generic error text only | The candidates already exist internally by the time an ambiguity is detected — showing them is free, and turns a dead-end error into a copy-pasteable fix, which matters specifically for the time-pressured persona this was designed against. |
 | Downgrading unverifiable-guess refusals to warnings | Rejected — stays a hard stop | Warn but proceed with a default guess | A warning is exactly the kind of message a hurried operator scrolls past; downgrading the one case with zero evidence to check against would put this feature's entire safety property behind attentiveness it was designed not to require. |
-| JSON array-of-objects `--match` (found during implementation) | Not implemented; rejected outright with a message naming the reason | Port XML's `Locator`-style value-matching as designed above | `Microsoft.Extensions.Configuration` merges JSON arrays by index, not by matching a field's value — there's no mechanism to port. Silently misinterpreting `--match name=Prod` as "index 0" or similar would be exactly the silent-wrong-in-production failure this whole feature exists to prevent. |
+| JSON array-of-objects `--match` (found during implementation) | Initially: not implemented, rejected outright with a message naming the reason | Port XML's `Locator`-style value-matching as designed above | `Microsoft.Extensions.Configuration` merges JSON arrays by index, not by matching a field's value — there's no mechanism to port directly. Silently misinterpreting `--match name=Prod` as "index 0" or similar would be exactly the silent-wrong-in-production failure this whole feature exists to prevent. Superseded by the next two rows once a real design existed. |
 | Single-segment JSON key vs. the nested/literal collision check | Skip the collision check entirely when the key has no `:` at all | Apply the same nested-vs-literal check uniformly to every key length | A colon-free key (e.g. `ApiUrl`) has only one possible reading — "nested" and "literal" are the same thing for it. Applying the check anyway made the single most common shape a JSON `set` will see (`--match ApiUrl`) always report as ambiguous, a real bug caught by manual smoke-testing, not a design choice. |
+| JSON array-of-objects overlay syntax (closing the row above) | `$elemMatch` — MongoDB's own operator name for "match an array element by field conditions" | Inventing a new name (e.g. `$match`); padding an overlay array with `{}` placeholders up to the target index; addressing the item by a plain numeric index in the overlay file | The user explicitly required that no array index ever be visible anywhere, including in the persisted overlay file — ruling out index-based and padding-based approaches outright. `$elemMatch` is a real, already-known convention (this project's own "prefer a known convention over inventing one" principle, same reasoning as `:` over `.` above) — closer in spirit to XDT's `Locator` than any index-shaped alternative. |
+| Canonical shape for the `$elemMatch` overlay: always a list of patches, even for one condition set | A list under the array's key (`{"Rules": [{"$elemMatch": {...}, ...}]}`), never a bare single object | A bare `{"$elemMatch": {...}, ...}` object for the single-condition-set case, promoted to a list only when a second patch is added | One shape to parse everywhere (set-authoring, merge-time rewrite, hand-editing) beats two; a bare-object shape has nowhere to put a second `set` call against the same array in the same overlay file (different conditions) without either colliding or silently changing shape between the first and second write. |
+| Where `$elemMatch` conditions resolve to a real position | At real merge time (`JsonLayerMerger.Merge`, via a new pre-processing pass), re-run on every merge, progressively per layer (Environment resolves against base; Client resolves against base+Environment-merged) | Resolve once, at `set`-authoring time only, and bake the resolved position into the overlay file | The "no index in the persisted file" requirement rules out baking anything in. A hand-written overlay (never touched by `set`) still needs to resolve correctly, and a later merge can see a different array shape than the one `set` saw when it wrote the file (e.g. another layer inserted an item first) — only a fresh, real merge-time resolution is correct in general. `set` still does the same resolution eagerly too, for immediate UX (ambiguous/not-found errors surface right away) — but that check is advisory, not authoritative. |
+| Rewritten-position representation inside `Merge`'s pre-processing pass | A `JsonObject` keyed by numeric-string index (`{"1": {...}}`), fed to `Microsoft.Extensions.Configuration` via `AddJsonStream` | A `JsonArray` literal with placeholder entries for skipped indices | A real array can't express "touch only index 1, leave 0 and 2+ alone" without placeholder nulls at the skipped positions, and those nulls would themselves flatten to real `IConfiguration` keys and clobber the base layer's actual values there — the same hazard `JsonLayerMerger`'s own doc comment already warns about for plain overlay arrays. A numeric-string object key has no such constraint, and empirically flattens to the identical `IConfiguration` path as a real array index (verified for both `AddJsonFile` and, since this design switches overlay layers to in-memory streams, `AddJsonStream` specifically — not just inferred from the file case). |
+| No match for a patch's conditions | Upsert: create a new item, combining the `$elemMatch` condition fields as its identity plus whatever `--set` wrote | Treat "no match" as an error, requiring a separate insert-only command or flag | Mirrors MongoDB's own upsert semantics for the same shape (a filter document plus an update document) — a known convention again, not an invented one. Keeps the overlay file's shape identical regardless of whether a given patch will update or create, which is the whole point: that decision is made at resolution time, not authoring time. |
 
 ## Open items for implementation
 
@@ -275,21 +332,15 @@ No case needed a bespoke resolution; each was the same rule applied once more.
   parent) or some other source of that information — not designed here, deliberately, rather than
   bolting on an under-thought flag under time pressure. Shipped behavior: `set` refuses with a
   clear "not yet supported" message (naming this document) instead of guessing a location.
-- **Array-of-objects matching is not implemented, for either format, and for JSON it's a real,
-  previously-undesigned gap, not just an unbuilt happy path.** XML's version was scoped out
-  alongside `Insert` above (same reason: nothing to derive a brand-new item's shape from on
-  create — though *matching an existing* array item, unlike creating one, is mechanically
-  answerable the same way an XML element match is, so this could in principle be implemented
-  independently of `Insert`; not done here only for lack of time, not a design blocker). JSON's
-  is different: this document's original `--match key=ConnectionStrings --match name=Prod`
-  design assumed XDT-style value-matching, but `Microsoft.Extensions.Configuration` merges JSON
-  arrays purely by **index** (`ConnectionStrings:0`, `ConnectionStrings:1`, ...) — there is no
-  "find the item whose `name` equals X" mechanism to hook into at all. Closing this needs a real
-  design pass: resolve `--match name=Prod` to a real index by inspecting the actual document (the
-  same "verify against reality" principle as everywhere else here), then address the overlay by
-  that index — not a port of XML's `Locator`-based approach. See the "JSON / YAML" section above
-  for the specific example this broke. Shipped behavior: `set` for JSON rejects more than one
-  `--match` outright with a message pointing here, rather than silently misinterpreting it.
+- **XML's array-of-objects matching is not implemented.** Scoped out alongside `Insert` above
+  (same underlying reason: nothing to derive a brand-new item's shape from on create) — though
+  *matching an existing* array item, unlike creating one, is mechanically answerable the same way
+  an XML element match already is, so this could in principle be implemented independently of
+  `Insert`; not done here only for lack of time, not a design blocker. (JSON's equivalent gap —
+  once a real, previously-undesigned problem found during implementation, since
+  `Microsoft.Extensions.Configuration` merges arrays purely by index with no native
+  value-matching to port from XDT — is now closed; see the "JSON / YAML" section above for the
+  `$elemMatch` mechanism that closed it, and the decision log for why.)
 - YAML and `.env` support don't exist in this tool at all yet (`docs/ROADMAP.md`: both "not
   needed yet") — this document's per-format sections for them are forward-looking, not
   something `set` can ship against today.

@@ -1,0 +1,7 @@
+{
+  "Rules": [
+    { "$elemMatch": { "role": "Admin" }, "enabled": true },
+    { "$elemMatch": { "role": "Auditor" }, "enabled": false }
+  ],
+  "AllowedOrigins": [ "https://prod.example.com" ]
+}

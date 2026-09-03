@@ -1,0 +1,6 @@
+{
+  "Rules": [
+    { "$elemMatch": { "role": "Viewer" }, "enabled": true },
+    { "$elemMatch": { "role": "Auditor" }, "enabled": true, "env": "Production" }
+  ]
+}

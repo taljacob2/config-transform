@@ -146,8 +146,21 @@ an overlay "overriding" an array can produce a surprising result if not understo
 known gotcha worth an explicit, documented test asserting the actual (if unintuitive) behavior,
 rather than discovering it by surprise against a real project later.
 
+A separate **`ElemMatch` fixture subtree** (`Fixtures/DotNetCore/ElemMatch/`) covers `set`'s
+array-of-objects matching (`docs/FIELD_AUTHORING_DESIGN.md`'s `$elemMatch` mechanism) — a
+different scenario from the plain array-value gotcha above, since it exercises real merge-time
+resolution rather than the flatten-by-index behavior. Deliberately built as an Environment/Client
+overlay pair where the Client layer's patch targets an item the Environment layer itself just
+created, so the fixture pins the progressive-layering requirement (Client resolves against
+base+Environment-*merged*, not the base alone) rather than just the simple single-layer case; it
+also carries a sibling plain positional-array overlay in the same file, to prove the new
+merge-time rewrite pass leaves ordinary array-value merging (the gotcha above) untouched.
+
 **GenericJson fixtures** — same purpose as GenericXml: an arbitrary schema, proving no
-hardcoded assumptions.
+hardcoded assumptions. Mirrored by its own `ElemMatch` subtree
+(`Fixtures/GenericJson/ElemMatch/`), re-running the same array-of-objects scenarios against
+made-up field names one level deeper in the tree than the DotNetCore fixture's top-level array —
+proving `JsonElemMatchResolver` has no hardcoded key names or assumed nesting depth either.
 
 ### 3.3 Cross-cutting, run against every fixture set
 
