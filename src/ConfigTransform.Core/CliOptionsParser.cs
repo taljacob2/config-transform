@@ -10,11 +10,18 @@ namespace ConfigTransform.Core;
 /// error at parse time — <see cref="CliRunner"/> auto-discovers it (<see cref="ManifestDiscovery"/>)
 /// when it's null, since that needs filesystem/working-directory access this pure parser
 /// deliberately doesn't have.
+/// A leading bare "set" (no dashes) is a different verb, not a flag — see
+/// docs/FIELD_AUTHORING_DESIGN.md. It switches on --match/--set (each repeatable) and relaxes
+/// --client/--environment to optional (they choose *which* file set writes, rather than being
+/// required inputs to a resolve).
 /// </summary>
 public static class CliOptionsParser
 {
     public static CliOptions Parse(string[] args)
     {
+        var set = args.Length > 0 && args[0] == "set";
+        var rest = set ? args[1..] : args;
+
         string? manifest = null;
         string? file = null;
         string? client = null;
@@ -23,30 +30,32 @@ public static class CliOptionsParser
         var dryRun = false;
         var diff = false;
         var list = false;
+        var match = new List<string>();
+        var setFields = new List<string>();
 
-        for (var i = 0; i < args.Length; i++)
+        for (var i = 0; i < rest.Length; i++)
         {
-            switch (args[i])
+            switch (rest[i])
             {
                 case "--manifest":
                 case "-m":
-                    manifest = RequireValue(args, ref i, args[i]);
+                    manifest = RequireValue(rest, ref i, rest[i]);
                     break;
                 case "--file":
                 case "-f":
-                    file = RequireValue(args, ref i, args[i]);
+                    file = RequireValue(rest, ref i, rest[i]);
                     break;
                 case "--client":
                 case "-c":
-                    client = RequireValue(args, ref i, args[i]);
+                    client = RequireValue(rest, ref i, rest[i]);
                     break;
                 case "--environment":
                 case "-e":
-                    environment = RequireValue(args, ref i, args[i]);
+                    environment = RequireValue(rest, ref i, rest[i]);
                     break;
                 case "--output":
                 case "-o":
-                    output = RequireValue(args, ref i, args[i]);
+                    output = RequireValue(rest, ref i, rest[i]);
                     break;
                 case "--dry-run":
                     dryRun = true;
@@ -57,14 +66,33 @@ public static class CliOptionsParser
                 case "--list":
                     list = true;
                     break;
+                case "--match":
+                    match.Add(RequireValue(rest, ref i, rest[i]));
+                    break;
+                case "--set":
+                    setFields.Add(RequireValue(rest, ref i, rest[i]));
+                    break;
                 default:
-                    throw new ArgumentException($"Unrecognized argument: '{args[i]}'.");
+                    throw new ArgumentException($"Unrecognized argument: '{rest[i]}'.");
             }
         }
 
+        if (set)
+        {
+            if (list)
+                throw new ArgumentException("--list and 'set' are different modes; use one or the other.");
+            if (output is not null)
+                throw new ArgumentException("--output has no effect with 'set' — it writes to the file --client/--environment select, not an arbitrary path.");
+            if (client is not null && environment is null)
+                throw new ArgumentException("--client requires --environment with 'set' (there is no client-only overlay layer).");
+            if (match.Count == 0)
+                throw new ArgumentException("'set' requires at least one --match.");
+            if (setFields.Count == 0)
+                throw new ArgumentException("'set' requires at least one --set.");
+        }
         // --list is pure introspection (what files/clients/environments does this manifest
         // have), not a resolve -- it needs none of --client/--environment/--output.
-        if (!list)
+        else if (!list)
         {
             if (client is null)
                 throw new ArgumentException("--client is required.");
@@ -74,7 +102,7 @@ public static class CliOptionsParser
                 throw new ArgumentException("--output is required for a real run (omit only with --dry-run or --diff).");
         }
 
-        return new CliOptions(manifest, file, client, environment, output, dryRun, diff, list);
+        return new CliOptions(manifest, file, client, environment, output, dryRun, diff, list, set, match, setFields);
     }
 
     private static string RequireValue(string[] args, ref int i, string flag)
