@@ -11,7 +11,8 @@ agents alike. This index is the map for everything beyond that.
 | [`CONFIG_MANAGEMENT.md`](CONFIG_MANAGEMENT.md) | The overall architecture this tool is one piece of: multi-client/multi-environment config resolution, git-crypt encryption, CI/CD, deployment. Read this for *why this tool exists and what problem it solves*. |
 | [`CONFIGTRANSFORM_TOOL_DESIGN.md`](CONFIGTRANSFORM_TOOL_DESIGN.md) | This repo's own structure and full test plan. |
 | [`FIELD_AUTHORING_DESIGN.md`](FIELD_AUTHORING_DESIGN.md) | Design for the `set` command (mostly implemented — see its status line) that authors overlay fields without hand-writing XDT/JSON — the `--match`/`--set` model, per-format behavior, and the safety rules behind it. |
-| [`MANIFEST_SCHEMA.md`](MANIFEST_SCHEMA.md) | The `manifest.json` input contract this tool consumes. |
+| [`MANIFEST_SCHEMA.md`](MANIFEST_SCHEMA.md) | The `manifest.json` input contract this tool consumes today — see `SELF_DESCRIBING_OVERLAYS_DESIGN.md` for a proposed replacement, not yet decided. |
+| [`SELF_DESCRIBING_OVERLAYS_DESIGN.md`](SELF_DESCRIBING_OVERLAYS_DESIGN.md) | **Proposed, some decisions still open.** A Kustomize-style self-describing `configtransform.json` per layer directory, replacing the fixed base→Environments→Clients rule and `manifest.json`. |
 | [`USAGE.md`](USAGE.md) | CLI reference. |
 | [`SECRETS_AND_LOCAL_SETUP.md`](SECRETS_AND_LOCAL_SETUP.md) | What a *consuming* repo needs configured — GitHub Packages feed auth and (if it uses git-crypt) the encryption key — in CI and locally, on every platform. |
 | [`CHANGELOG.md`](CHANGELOG.md) | Version history, at a glance — what's *done*, complementing `ROADMAP.md`'s what's *next*. Each version's section also doubles as that release's GitHub Release notes — see `RELEASING.md`. |

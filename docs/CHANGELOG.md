@@ -8,6 +8,18 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ### Added
 
+- `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`: a proposal (not a completed design, unlike
+  `FIELD_AUTHORING_DESIGN.md` at the equivalent stage) to replace `manifest.json` and the fixed
+  base→Environments→Clients rule with a Kustomize-style self-describing `configtransform.json`
+  per layer directory, raised directly by the repo owner. File format (JSON, not YAML — no new
+  dependency for a config file this tool doesn't merge) and scope (one file spans every
+  project/format a client×environment touches, not just one project — accepting
+  `ConfigTransform.Xml`/`ConfigTransform.Json` likely unifying into one CLI dispatcher as a
+  first-class consequence) are now decided by the repo owner. Still left explicitly open:
+  patch-to-resource matching, path convention, whether losing `manifest.json`'s
+  directory-indirection is worth it, and what `set` needs to do differently. See
+  `docs/ROADMAP.md`'s "Next up" for status.
+
 - **`set` support for JSON array-of-objects matching, via a `$elemMatch` overlay syntax** —
   closes the gap flagged below as "not implemented". `--match key=<array>` locates the array, one
   or more further `--match <field>=<value>` (any attribute other than `key`/`literal-key`) become

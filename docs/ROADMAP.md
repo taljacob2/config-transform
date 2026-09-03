@@ -168,6 +168,18 @@ section for worked examples. 41 new tests: `JsonElemMatchResolverTests` (new, 17
 additions to `JsonFieldAuthorTests`/`JsonSetCommandCliTests` (11 combined, net of two tests that
 pinned the old "rejected outright" behavior and were rewritten to match the new one).
 
+**Added `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`** — a proposal, not a completed design (unlike
+`FIELD_AUTHORING_DESIGN.md` at this same stage): replace `manifest.json` and the fixed
+base→Environments→Clients rule (`CONFIG_MANAGEMENT.md` §9) with a Kustomize-style self-describing
+`configtransform.json` per layer directory, declaring its own `resources`/`patches`. Raised
+directly by the repo owner. Two of the document's original open questions are now settled by the
+repo owner — file format is JSON, not YAML (no new dependency for a config file this tool doesn't
+merge); one file spans every project/format a client×environment touches, not just one project,
+accepting that `ConfigTransform.Xml`/`ConfigTransform.Json` likely unify into one CLI dispatcher
+as a first-class, separately-scoped consequence. Still open: patch-to-resource matching, path
+convention, whether `manifest.json`'s directory-indirection is worth losing, and what `set` needs
+to do differently — see "Next up" below.
+
 One operational note worth carrying forward: this session's GitHub credentials can push
 branches but not tags (a real `403`, confirmed via verbose tracing, not a bug) — cutting the
 `0.1.0-alpha`, `0.1.0-alpha2`, `0.2.0-alpha`, `0.3.0-alpha`, `0.4.0-alpha`, and `0.5.0-alpha`
@@ -196,6 +208,19 @@ default next step.
      existing* array item is mechanically answerable the same way an XML element match already
      is, so this could in principle be implemented independently of `Insert` — not done only for
      lack of time, not a design blocker. See `docs/FIELD_AUTHORING_DESIGN.md`'s "Open items".
+- **Self-describing overlays (`configtransform.json`)** — needs further repo-owner decisions, not
+  a solution repo: `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md` lays out replacing `manifest.json`
+  and the fixed base→Environments→Clients rule with a Kustomize-style self-describing manifest per
+  layer directory. File format (JSON) and scope (one file spans every project/format a
+  client×environment touches, meaning `ConfigTransform.Xml`/`ConfigTransform.Json` likely unify
+  into one CLI entry point) are now decided; still open: how a patch is matched to the resource it
+  targets, path convention, whether losing `manifest.json`'s directory-indirection is worth it,
+  and what `set` needs to do differently. This is a bigger, more foundational change than `set`'s
+  remaining gaps above — it touches `Manifest`/`ManifestLoader`/`ManifestDiscovery`/
+  `ManifestEntrySelector`/`LayerResolution`/`SetTargetResolver` and both tools' `CliRunner`, not
+  one command, plus the CLI-unification consequence as its own separately-scoped piece of work.
+  Resolve the remaining open questions in the design doc first; do not start implementation
+  against it as written.
 - **Solution-repo pilot, first round complete** — `config-transform-pilot` (synthetic, three
   projects at varying nesting depth, one per config format) validated the core design claims
   end to end and found/fixed one real bug (see "Current state" above and the pilot's
