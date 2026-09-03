@@ -48,46 +48,19 @@ public static class XmlCliRunner
             var overlayRoot = Path.Combine(manifestDir, entry.OverlayFolderName);
             var directory = Path.GetFullPath(manifest.Directory, workDir);
             var basePath = FileResolver.ResolveCaseInsensitiveRequired(directory, entry.RelativeToDirectory);
-            var extension = Path.GetExtension(entry.RelativeToDirectory);
 
             var matches = options.Match.Select(m => MatchSpec.Parse(m, "key")).ToList();
             var setFields = options.SetFields.Select(m => MatchSpec.Parse(m, "value")).ToList();
 
-            // Resolve the environment overlay once -- reused both to compute what "precedes"
-            // a client-layer write and, after writing, to compute the effective merged result
-            // for the auto-diff, so it's never resolved inconsistently between the two.
-            string? environmentOverlayPath = options.Environment is null
-                ? null
-                : FileResolver.TryResolveCaseInsensitive(
-                    Path.Combine(overlayRoot, "Environments"), $"{options.Environment}{extension}");
+            var target = SetTargetResolver.Resolve(
+                overlayRoot, entry.RelativeToDirectory, basePath, options.Client, options.Environment);
+            var targetPath = target.TargetPath;
+            var isBaseTarget = target.IsBaseTarget;
+            var environmentOverlayPath = target.EnvironmentOverlayPath;
 
-            string targetPath;
-            bool isBaseTarget;
-            string precedingXml;
-
-            if (options.Client is null && options.Environment is null)
-            {
-                targetPath = basePath;
-                isBaseTarget = true;
-                precedingXml = File.ReadAllText(basePath);
-            }
-            else if (options.Client is null)
-            {
-                var environmentDir = Path.Combine(overlayRoot, "Environments");
-                var fileName = $"{options.Environment}{extension}";
-                targetPath = environmentOverlayPath ?? Path.Combine(environmentDir, fileName);
-                isBaseTarget = false;
-                precedingXml = XmlLayerMerger.Merge(basePath, null, null);
-            }
-            else
-            {
-                var clientDir = Path.Combine(overlayRoot, "Clients", options.Client);
-                var fileName = $"{options.Environment}{extension}";
-                targetPath = FileResolver.TryResolveCaseInsensitive(clientDir, fileName)
-                    ?? Path.Combine(clientDir, fileName);
-                isBaseTarget = false;
-                precedingXml = XmlLayerMerger.Merge(basePath, environmentOverlayPath, null);
-            }
+            var precedingXml = isBaseTarget
+                ? File.ReadAllText(basePath)
+                : XmlLayerMerger.Merge(basePath, options.Client is null ? null : environmentOverlayPath, null);
 
             var existingTargetXml = !isBaseTarget && File.Exists(targetPath) ? File.ReadAllText(targetPath) : null;
 
