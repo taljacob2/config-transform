@@ -318,8 +318,18 @@ demo resource's `message` names its own layer at every override — immediately 
 `stdin`/`interactiveAllowed` parameters (mirroring how `stdout`/`stderr` are already injected) so
 the whole wizard is testable with no real terminal. Along the way, fixed a real, previously-silent
 patch-filename stutter in `SetTargetResolver`'s naming rule (`PatchFileNaming`, shared by `set`
-and `init --template`) — see `docs/CHANGELOG.md`'s `[Unreleased]` entry for both. 259 tests
-passing solution-wide (39 new). Not yet tagged/released — see `docs/RELEASING.md`.
+and `init --template`) — see `docs/CHANGELOG.md`'s `[Unreleased]` entry for both.
+
+**`--client` no longer required for a plain resolve** — `CliOptionsParser`'s default branch used
+to demand both `--client`/`--environment` unconditionally, stricter than `--list`/`set` (both
+already allowed `--environment` alone or neither) and stricter than the underlying engine needed.
+`init`'s own design doc smoke-tested this exact gap and worked around it by documenting a
+correction instead of fixing it; a real user then hit the identical error against the published
+tool (`--environment ... --resource ...` with no `--client`) and asked why. Fixed properly:
+`--client` now requires `--environment` (no client-only layer), nothing else does — uniform
+across every mode. `docs/INIT_COMMAND_DESIGN.md`'s original three-invocation demo (base-only,
+Environment-only, full chain) is restored, no correction needed anymore. 264 tests passing
+solution-wide. Not yet tagged/released — see `docs/RELEASING.md`.
 
 ## Next up
 

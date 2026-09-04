@@ -172,10 +172,8 @@ public static class CliOptionsParser
         }
         else
         {
-            if (client is null)
-                throw new ArgumentException("--client is required.");
-            if (environment is null)
-                throw new ArgumentException("--environment is required.");
+            if (client is not null && environment is null)
+                throw new ArgumentException("--client requires --environment (there is no client-only layer).");
             if (output is null && !dryRun && !diff)
                 throw new ArgumentException("--output is required for a real run (omit only with --dry-run or --diff).");
         }

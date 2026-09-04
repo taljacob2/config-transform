@@ -5,12 +5,19 @@ entry and `docs/ROADMAP.md`'s "Current state" have exactly what shipped and wher
 `InitPlanner`/`InitTemplate`/`InitRunner` in `ConfigTransform.Core`, `PatchFileNaming` shared with
 `SetTargetResolver`). Treat this document as the design rationale and decision log behind current
 behavior, not a plan still to be executed; if a specific claim here ever reads as aspirational,
-`CHANGELOG.md`/the code are the source of truth. One correction versus the original text below:
-the "Immediately runnable" demo under "Template mode" originally assumed a resolve/`--dry-run`/
-`--diff` invocation could omit `--client`/`--environment` (base-only or Environment-only) the way
-`set`/`--list` can — it can't (`docs/USAGE.md`'s flag reference: both are always required for a
-resolve), so that demo now varies client and environment together instead of progressively
-dropping one. Caught by the manual smoke test during implementation, not assumed correct.
+`CHANGELOG.md`/the code are the source of truth.
+
+**One real gap this design surfaced, since fixed**: the "Immediately runnable" demo below assumes
+a resolve/`--dry-run`/`--diff` invocation can omit `--client`/`--environment` (base-only or
+Environment-only), the same way `set`/`--list` always could. At the time `init` first shipped,
+`CliOptionsParser`'s default (real-run) branch didn't actually allow that — it required both
+unconditionally, a stricter rule than `--list`/`set` ever had, and stricter than the underlying
+engine (`LayerPathResolver`/`LayerChain`) needed. That mismatch was caught by this design's own
+manual smoke test (the demo below didn't work as written), documented as a correction rather than
+fixed at the time, then reported independently by a real user hitting the exact same error against
+the published tool and fixed properly in a follow-up change — `--client` now requires
+`--environment` (no client-only layer) but neither is otherwise required, uniformly across every
+mode. The demo below is the original, correct design; no correction needed anymore.
 
 ## Why this exists, and why now
 
@@ -192,20 +199,17 @@ shape" below); a template's whole point is to be immediately runnable, so it alw
 override to show at every layer.
 
 **Immediately runnable, and that's the demo**, three invocations against the exact same
-`--resource configtransform-template.json`, no other setup. `--client`/`--environment` are both
-always required for a resolve/dry-run/diff (`docs/USAGE.md`'s flag reference — unlike `set`/
-`--list`, which allow a base-only or Environment-only target, the plain resolve path doesn't), so
-the demo varies client and environment together rather than progressively dropping one:
+`--resource configtransform-template.json`, no other setup:
 
 ```
+configtransform --resource configtransform-template.json --dry-run
+  → { "message": "Hello, world! (from base config)" }               # no --client/--environment: base file alone
+
+configtransform --environment Production --resource configtransform-template.json --dry-run
+  → { "message": "Hello, world! (from Production config)" }         # Environment layer only, no client
+
 configtransform --client Client-A --environment Production --resource configtransform-template.json --dry-run
-  → { "message": "Hello, world! (from Client-A Production config)" }
-
-configtransform --client Client-A --environment Test --resource configtransform-template.json --dry-run
-  → { "message": "Hello, world! (from Client-A Test config)" }
-
-configtransform --client Client-B --environment Production --resource configtransform-template.json --dry-run
-  → { "message": "Hello, world! (from Client-B Production config)" }
+  → { "message": "Hello, world! (from Client-A Production config)" } # full chain: base → Production → Client-A
 ```
 
 `--diff` against any of the above shows exactly one line changing (`message`), which is the point

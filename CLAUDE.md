@@ -142,6 +142,9 @@ command (`docs/INIT_COMMAND_DESIGN.md`) scaffolds a `.configtransform/` tree dir
 interactive form (no TUI), a flag-driven quiet mode safe for CI, and a bare `init --template`
 starter tree that's immediately runnable (every layer's demo resource names itself in its
 override). Along the way, fixed a real patch-filename stutter shared with `set`
-(`PatchFileNaming`). Not yet released — still in `[Unreleased]`. See `docs/ROADMAP.md`'s "Next
-up" for what's actionable now versus what needs either a solution repo that doesn't exist yet or
-an owner decision.
+(`PatchFileNaming`), and — reported independently by a real user against the published tool —
+fixed `--client`/`--environment` to be optional everywhere, uniformly (`--client` requires
+`--environment`; neither is otherwise required), matching what `--list`/`set` already allowed and
+what the underlying engine already supported. Not yet released — still in `[Unreleased]`. See
+`docs/ROADMAP.md`'s "Next up" for what's actionable now versus what needs either a solution repo
+that doesn't exist yet or an owner decision.

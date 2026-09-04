@@ -20,7 +20,7 @@ public static class HelpPrinter
             now: {{engines.SupportedExtensions}}.
 
             USAGE
-              configtransform [--resource <path>] --client <C> --environment <E> [--dry-run | --diff | --output <path>]
+              configtransform [--resource <path>] [--client <C>] [--environment <E>] [--dry-run | --diff | --output <path>]
               configtransform --list [--client <C> --environment <E> | --resource <path>]
               configtransform set --resource <path> [--client <C> --environment <E>] --match <k>=<v> [--match ...] --set <k>=<v> [--set ...]
               configtransform init [--environment <E> ...] [--client <C> ...] [--resource <path> ...] [--yes] [--dry-run]

@@ -32,6 +32,20 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   patches that don't exist yet; an already-recorded `patch` path in an existing
   `configtransform.json` is never touched.
 
+### Fixed
+
+- **`--client` no longer required for a plain resolve/`--dry-run`/`--diff`/real-run.**
+  `CliOptionsParser`'s default branch demanded both `--client` and `--environment`
+  unconditionally — stricter than `--list`/`set` ever were (both already allowed
+  `--environment` alone, or neither, targeting the base file directly) and stricter than the
+  underlying engine needed (`LayerPathResolver`/`LayerChain` already resolve an Environment-only
+  or base-only target correctly). Reported against the published tool:
+  `configtransform --environment Production --resource <path>` (no `--client`) failed with
+  `Error: --client is required.` The rule is now uniform across every mode: `--client` requires
+  `--environment` (there's no client-only layer), but neither is otherwise required — omitting
+  both resolves the base file with nothing applied, `--environment` alone resolves that
+  Environment layer with no client override.
+
 ## [0.8.0-alpha] - 2026-09-04
 
 Breaking, following this repo's own precedent for a pre-1.0 breaking change (`0.2.0-alpha`'s

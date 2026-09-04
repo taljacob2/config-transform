@@ -7,12 +7,15 @@ namespace ConfigTransform.Core;
 /// old <c>--manifest</c>/<c>--file</c> pair. Null means "every resource the resolved layer
 /// touches" for a resolve/dry-run/diff/real-run, or "list this whole layer" for <c>--list</c>;
 /// it's required for <c>set</c>, which always targets exactly one resource.
+/// <see cref="Client"/>/<see cref="Environment"/> are both optional for every mode — neither given
+/// targets the base file directly, <see cref="Environment"/> alone targets that Environment layer,
+/// both together target the matching Client layer; <see cref="Client"/> without
+/// <see cref="Environment"/> is always an error (there is no client-only layer). This is uniform
+/// across a resolve/dry-run/diff/real-run, <c>--list</c>, and <c>set</c> — no mode requires more
+/// than the layer it actually needs.
 /// <see cref="Set"/> is the "set" verb (docs/FIELD_AUTHORING_DESIGN.md) — a different mode from
-/// the resolve/list flow the other flags govern; when true, <see cref="Client"/>/
-/// <see cref="Environment"/> are optional (they choose which layer --set writes: the base file,
-/// the Environment layer, or the Client layer) rather than required, and <see cref="Match"/>/
-/// <see cref="SetFields"/> carry the raw, not-yet-parsed --match/--set argument strings (see
-/// <see cref="MatchSpec"/>).
+/// the resolve/list flow the other flags govern; <see cref="Match"/>/<see cref="SetFields"/> carry
+/// the raw, not-yet-parsed --match/--set argument strings (see <see cref="MatchSpec"/>).
 /// <see cref="Help"/> is set by no arguments at all, a leading bare <c>help</c>, or <c>--help</c>/
 /// <c>-h</c> anywhere in the arguments — it always wins over every other flag (no other
 /// validation runs), and is the default when the tool is invoked with nothing else to go on.
