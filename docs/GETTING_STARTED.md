@@ -156,22 +156,14 @@ Same idea, one layer deeper — override in the Client layer's own patch file
 
 ## Should there be an `init` command?
 
-Not yet — here's the reasoning, not just the answer:
+**Designed, not implemented yet** — full design at `docs/INIT_COMMAND_DESIGN.md`. This section
+originally said "not yet," reasoning that `set` already covers the common case, no real solution
+repo had validated a "typical" tree shape, and it would mean real added CLI scope. All three are
+still true, and the design doc doesn't pretend otherwise — it's a deliberate, named exception to
+that gate (the same kind of exception this file's own `FIELD_AUTHORING_DESIGN.md` already made
+for `set`), made by the repo owner with the original reasoning fully in view rather than by
+waiting for the trigger condition below to fire on its own. See the design doc's "Why this
+exists, and why now" for the full argument.
 
-- `set` already covers the friction an `init` command would have targeted: it creates a missing
-  `configtransform.json` (with the right `extends`) and authors the patch file in one step, for
-  the actual common case of "I need to override one field."
-- No real solution repo has gone through this setup against real content yet (see
-  `ROADMAP.md`'s "first real solution-repo pilot"). That pilot is worth doing *before* deciding
-  what an `init` command should actually generate — building one now risks baking in
-  assumptions (default folder names, file-type detection, what a "typical" tree looks like)
-  that might need to change once real usage is observed.
-- It would also mean extending the CLI's argument model with a new mode alongside
-  real-run/`--dry-run`/`--diff`/`set`/`--list` — real added scope, not a small addition.
-
-Revisit this once a few solution repos have gone through the manual steps above. If the exact
-same steps get repeated identically every time with no real per-repo variation, that repetition
-is the signal that automating it would actually earn its complexity. Premature right now.
-
-Tracked as a future investigation, not just a passing note here — see `ROADMAP.md`'s "Later /
-not yet scheduled" for the tracked item and its trigger condition.
+Tracked in `ROADMAP.md`'s "Next up" — implementation is the next actionable step, not a further
+design pass.
