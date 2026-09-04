@@ -242,6 +242,19 @@ and that gate hasn't moved — confirmed directly with the repo owner rather tha
 this same change (`docs/RELEASING.md` step 1) — the owner still needs to tag and push it
 (`git push origin 0.7.0-alpha`) once this PR merges to `main`, same as every prior release.
 
+**`0.7.0-alpha`'s own release shipped with a broken release-verification gate, corrected as
+`0.7.0-alpha2`** — a real gap in the sweep above: every doc and the CLI itself moved off
+`--manifest`, but `scripts/smoke-test-published-tool.sh` was missed. `publish.yml` pushes
+packages to GitHub Packages *before* running that script and gates GitHub Release creation on it
+passing, so `0.7.0-alpha`'s packages went live but its smoke-test step failed
+(`Error: Unrecognized argument: '--manifest'.`) and no GitHub Release was created for it. Per
+`docs/RELEASING.md`'s own documented recovery policy (packages already pushed can never be
+un-published or overwritten; re-attempt as a new tag, precedent `0.1.0-alpha`→`0.1.0-alpha2`),
+fixed by rewriting the script around `configtransform.json`/`--resource` (now asserting the
+merged value in the output, not just exit code 0 — verified locally against real builds of both
+tools before tagging) and cutting `0.7.0-alpha2`, a release-process-only correction with no
+`src/` changes. See `docs/CHANGELOG.md`'s `[0.7.0-alpha2]` entry.
+
 ## Next up
 
 One item below is now actionable purely within this repo (see the first bullet); every other
@@ -288,11 +301,12 @@ default next step.
   rotation, per-client key splitting, YAML/`.env` formats. A pilot against the *actual*
   employer-owned multi-client repo this design targets still needs a separate session in that
   organization's own Claude Code environment — this repo's own conversations can't touch that
-  repo directly. **Needs migrating off `manifest.json` once `0.7.0-alpha` is tagged**: its
-  `.config/dotnet-tools.json` is pinned to `0.5.0-alpha`, and its `.configtransform/` trees still
-  use the old `manifest.json`+`Environments/`/`Clients/` shape this release removes entirely —
-  `MANIFEST_SCHEMA.md` has the new schema and worked example to migrate against. Not done in this
-  change: separate repo, separate session.
+  repo directly. **Migration off `manifest.json` in progress as of `0.7.0-alpha2`**: contrary to
+  the earlier assumption above, a session with access to both repos can drive this directly (git
+  mv preserves a git-crypt-encrypted patch file's ciphertext unchanged across a rename, since the
+  filter only runs at checkout/smudge time — the tree relocation needs no decryption; only the new
+  `configtransform.json` layer files, which carry no secrets, need authoring from scratch). See
+  `config-transform-pilot`'s own `FINDINGS.md` for the worked migration and what it found.
 - **Deployment transport mechanism** (self-hosted runner vs. WinRM vs. Octopus Deploy) — not
   this repo's concern directly, but blocks the consuming architecture's
   `build-transformed.yml`. `CONFIG_MANAGEMENT.md` §8.3.
