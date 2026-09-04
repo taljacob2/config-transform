@@ -2,17 +2,15 @@ namespace ConfigTransform.Core;
 
 /// <summary>
 /// Parses the CLI shape shared by ConfigTransform.Xml and ConfigTransform.Json (docs/USAGE.md).
-/// --dry-run and --diff parse successfully here even though neither front-end implements them
-/// yet (see docs/ROADMAP.md) — a user passing them gets a specific "not yet implemented"
-/// message from the front-end, not a generic "unrecognized argument" error from this parser.
-/// --manifest/--file/--client/--environment/--output each also accept a short alias
-/// (-m/-f/-c/-e/-o) for interactive use. --manifest/-m is optional here: omitting it is not an
-/// error at parse time — <see cref="CliRunner"/> auto-discovers it (<see cref="ManifestDiscovery"/>)
-/// when it's null, since that needs filesystem/working-directory access this pure parser
-/// deliberately doesn't have.
+/// --resource/--client/--environment/--output each also accept a short alias (-r/-c/-e/-o) for
+/// interactive use. --resource/-r names one project directly by its repo-root-relative path
+/// (docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md "Settled decisions" #6/#7) — it's optional for a
+/// resolve/dry-run/diff/real-run (omitting it means "every resource this layer touches") and for
+/// --list (omitting it lists the whole target layer instead of a reverse lookup), but always
+/// required for 'set', which can only ever target one resource at a time.
 /// A leading bare "set" (no dashes) is a different verb, not a flag — see
 /// docs/FIELD_AUTHORING_DESIGN.md. It switches on --match/--set (each repeatable) and relaxes
-/// --client/--environment to optional (they choose *which* file set writes, rather than being
+/// --client/--environment to optional (they choose *which* layer set writes, rather than being
 /// required inputs to a resolve).
 /// </summary>
 public static class CliOptionsParser
@@ -22,8 +20,7 @@ public static class CliOptionsParser
         var set = args.Length > 0 && args[0] == "set";
         var rest = set ? args[1..] : args;
 
-        string? manifest = null;
-        string? file = null;
+        string? resource = null;
         string? client = null;
         string? environment = null;
         string? output = null;
@@ -37,13 +34,9 @@ public static class CliOptionsParser
         {
             switch (rest[i])
             {
-                case "--manifest":
-                case "-m":
-                    manifest = RequireValue(rest, ref i, rest[i]);
-                    break;
-                case "--file":
-                case "-f":
-                    file = RequireValue(rest, ref i, rest[i]);
+                case "--resource":
+                case "-r":
+                    resource = RequireValue(rest, ref i, rest[i]);
                     break;
                 case "--client":
                 case "-c":
@@ -84,15 +77,24 @@ public static class CliOptionsParser
             if (output is not null)
                 throw new ArgumentException("--output has no effect with 'set' — it writes to the file --client/--environment select, not an arbitrary path.");
             if (client is not null && environment is null)
-                throw new ArgumentException("--client requires --environment with 'set' (there is no client-only overlay layer).");
+                throw new ArgumentException("--client requires --environment with 'set' (there is no client-only layer).");
+            if (resource is null)
+                throw new ArgumentException("'set' requires --resource.");
             if (match.Count == 0)
                 throw new ArgumentException("'set' requires at least one --match.");
             if (setFields.Count == 0)
                 throw new ArgumentException("'set' requires at least one --set.");
         }
-        // --list is pure introspection (what files/clients/environments does this manifest
-        // have), not a resolve -- it needs none of --client/--environment/--output.
-        else if (!list)
+        else if (list)
+        {
+            if (resource is null && environment is null)
+                throw new ArgumentException("--list requires --resource, or --environment (optionally with --client).");
+            if (resource is not null && (client is not null || environment is not null))
+                throw new ArgumentException("--list --resource is a tree-wide reverse lookup; it doesn't take --client/--environment.");
+            if (client is not null && environment is null)
+                throw new ArgumentException("--client requires --environment with --list (there is no client-only layer).");
+        }
+        else
         {
             if (client is null)
                 throw new ArgumentException("--client is required.");
@@ -102,7 +104,7 @@ public static class CliOptionsParser
                 throw new ArgumentException("--output is required for a real run (omit only with --dry-run or --diff).");
         }
 
-        return new CliOptions(manifest, file, client, environment, output, dryRun, diff, list, set, match, setFields);
+        return new CliOptions(resource, client, environment, output, dryRun, diff, list, set, match, setFields);
     }
 
     private static string RequireValue(string[] args, ref int i, string flag)

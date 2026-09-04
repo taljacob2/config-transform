@@ -29,7 +29,7 @@ public class XmlLayerMergerGenericXmlTests
         Assert.EndsWith("Production.xml", resolution.EnvironmentOverlayPath);
         Assert.EndsWith("Production.xml", resolution.ClientOverlayPath);
 
-        var merged = XmlLayerMerger.Merge(resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
+        var merged = Merge(resolution);
         var doc = XDocument.Parse(merged);
 
         var endpoint = doc.Root!.Element("Endpoints")!.Element("Endpoint")!;
@@ -49,7 +49,7 @@ public class XmlLayerMergerGenericXmlTests
         var resolution = LayerResolution.Resolve(projectDir, "settings.custom.xml", overlayRoot, "ClientB", "Production");
         Assert.Null(resolution.ClientOverlayPath);
 
-        var merged = XmlLayerMerger.Merge(resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
+        var merged = Merge(resolution);
         var doc = XDocument.Parse(merged);
 
         var endpoint = doc.Root!.Element("Endpoints")!.Element("Endpoint")!;
@@ -59,4 +59,9 @@ public class XmlLayerMergerGenericXmlTests
         var flag = doc.Root!.Element("FeatureFlags")!.Element("Flag")!;
         Assert.Equal("false", flag.Attribute("enabled")!.Value); // untouched base value
     }
+
+    /// <summary>Adapts a fixed-slot LayerResolutionResult to XmlLayerMerger's arbitrary-length chain signature.</summary>
+    private static string Merge(LayerResolutionResult resolution) =>
+        XmlLayerMerger.Merge(resolution.BasePath, new[] { resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath }
+            .Where(p => p is not null).Select(p => p!).ToList());
 }

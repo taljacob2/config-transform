@@ -27,7 +27,7 @@ public class JsonLayerMergerGenericJsonElemMatchTests
     public void Environment_layer_elemMatch_resolves_against_the_base_array()
     {
         var (basePath, envPath, _) = Resolve("ClientA", "Production");
-        var merged = JsonLayerMerger.Merge(basePath, envPath, null);
+        var merged = Merge(basePath, envPath, null);
 
         using var doc = JsonDocument.Parse(merged);
         var routes = doc.RootElement.GetProperty("endpoints").GetProperty("routes");
@@ -42,7 +42,7 @@ public class JsonLayerMergerGenericJsonElemMatchTests
     public void Client_layer_elemMatch_resolves_against_base_plus_environment_merged_not_base_alone()
     {
         var (basePath, envPath, clientPath) = Resolve("ClientA", "Production");
-        var merged = JsonLayerMerger.Merge(basePath, envPath, clientPath);
+        var merged = Merge(basePath, envPath, clientPath);
 
         using var doc = JsonDocument.Parse(merged);
         var routes = doc.RootElement.GetProperty("endpoints").GetProperty("routes");
@@ -64,7 +64,7 @@ public class JsonLayerMergerGenericJsonElemMatchTests
     public void Sibling_plain_array_at_a_different_key_is_unaffected()
     {
         var (basePath, envPath, clientPath) = Resolve("ClientA", "Production");
-        var merged = JsonLayerMerger.Merge(basePath, envPath, clientPath);
+        var merged = Merge(basePath, envPath, clientPath);
 
         using var doc = JsonDocument.Parse(merged);
         var tags = doc.RootElement.GetProperty("tags");
@@ -73,4 +73,8 @@ public class JsonLayerMergerGenericJsonElemMatchTests
         Assert.Equal("gamma", tags[0].GetString());
         Assert.Equal("beta", tags[1].GetString());
     }
+
+    /// <summary>Adapts fixed-slot (env, client) arguments to JsonLayerMerger's arbitrary-length chain signature.</summary>
+    private static string Merge(string basePath, params string?[] patches) =>
+        JsonLayerMerger.Merge(basePath, patches.Where(p => p is not null).Select(p => p!).ToList());
 }

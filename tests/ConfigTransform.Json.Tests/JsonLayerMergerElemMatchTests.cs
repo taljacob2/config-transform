@@ -30,7 +30,7 @@ public class JsonLayerMergerElemMatchTests
     public void Environment_layer_elemMatch_resolves_against_base_only()
     {
         var (basePath, envPath, _) = Resolve("ClientA", "Production");
-        var merged = JsonLayerMerger.Merge(basePath, envPath, null);
+        var merged = Merge(basePath, envPath, null);
 
         using var doc = JsonDocument.Parse(merged);
         var rules = doc.RootElement.GetProperty("Rules");
@@ -50,7 +50,7 @@ public class JsonLayerMergerElemMatchTests
     public void Client_layer_elemMatch_resolves_against_the_base_plus_environment_merged_array_not_base_alone()
     {
         var (basePath, envPath, clientPath) = Resolve("ClientA", "Production");
-        var merged = JsonLayerMerger.Merge(basePath, envPath, clientPath);
+        var merged = Merge(basePath, envPath, clientPath);
 
         using var doc = JsonDocument.Parse(merged);
         var rules = doc.RootElement.GetProperty("Rules");
@@ -83,7 +83,7 @@ public class JsonLayerMergerElemMatchTests
     public void ElemMatch_array_and_a_sibling_plain_positional_array_overlay_in_the_same_file_both_resolve_correctly()
     {
         var (basePath, envPath, clientPath) = Resolve("ClientA", "Production");
-        var merged = JsonLayerMerger.Merge(basePath, envPath, clientPath);
+        var merged = Merge(basePath, envPath, clientPath);
 
         using var doc = JsonDocument.Parse(merged);
         var origins = doc.RootElement.GetProperty("AllowedOrigins");
@@ -104,7 +104,7 @@ public class JsonLayerMergerElemMatchTests
         // fast-path guard in JsonLayerMerger.Merge doesn't accidentally engage for ordinary
         // content.
         var (basePath, _, _) = Resolve("ClientA", "Production");
-        var merged = JsonLayerMerger.Merge(basePath, null, null);
+        var merged = Merge(basePath, null, null);
 
         using var doc = JsonDocument.Parse(merged);
         var rules = doc.RootElement.GetProperty("Rules");
@@ -129,7 +129,7 @@ public class JsonLayerMergerElemMatchTests
         var overlayPath = WriteTempJson("""{ "Items": [ { "$elemMatch": { "id": "b" }, "value": "new" } ] }""");
         try
         {
-            var merged = JsonLayerMerger.Merge(basePath, overlayPath, null);
+            var merged = Merge(basePath, overlayPath, null);
             using var doc = JsonDocument.Parse(merged);
             var items = doc.RootElement.GetProperty("Items");
 
@@ -156,7 +156,7 @@ public class JsonLayerMergerElemMatchTests
             """);
         try
         {
-            var merged = JsonLayerMerger.Merge(basePath, overlayPath, null);
+            var merged = Merge(basePath, overlayPath, null);
             using var doc = JsonDocument.Parse(merged);
             var items = doc.RootElement.GetProperty("Items");
 
@@ -180,7 +180,7 @@ public class JsonLayerMergerElemMatchTests
         var overlayPath = WriteTempJson("""{ "Items": [ { "$elemMatch": { "id": "a" }, "value": "x" } ] }""");
         try
         {
-            var ex = Assert.Throws<InvalidOperationException>(() => JsonLayerMerger.Merge(basePath, overlayPath, null));
+            var ex = Assert.Throws<InvalidOperationException>(() => Merge(basePath, overlayPath, null));
             Assert.Contains("More than one item", ex.Message);
         }
         finally
@@ -202,7 +202,7 @@ public class JsonLayerMergerElemMatchTests
             """);
         try
         {
-            var ex = Assert.Throws<InvalidOperationException>(() => JsonLayerMerger.Merge(basePath, overlayPath, null));
+            var ex = Assert.Throws<InvalidOperationException>(() => Merge(basePath, overlayPath, null));
             Assert.Contains("both resolve to the same item", ex.Message);
         }
         finally
@@ -223,7 +223,7 @@ public class JsonLayerMergerElemMatchTests
         var overlayPath = WriteTempJson("""{ "Items": [ { "$elemMatch": { "id": "a" }, "enabled": true } ] }""");
         try
         {
-            var merged = JsonLayerMerger.Merge(basePath, overlayPath, null);
+            var merged = Merge(basePath, overlayPath, null);
             using var doc = JsonDocument.Parse(merged);
             Assert.True(doc.RootElement.GetProperty("Items")[0].GetProperty("enabled").GetBoolean());
         }
@@ -241,7 +241,7 @@ public class JsonLayerMergerElemMatchTests
         var overlayPath = WriteTempJson("""{ "Items": [ { "$elemMatch": { "id": "a" }, "value": "x" } ] }""");
         try
         {
-            var ex = Assert.Throws<InvalidOperationException>(() => JsonLayerMerger.Merge(basePath, overlayPath, null));
+            var ex = Assert.Throws<InvalidOperationException>(() => Merge(basePath, overlayPath, null));
             Assert.Contains("not a JSON array", ex.Message);
         }
         finally
@@ -250,4 +250,8 @@ public class JsonLayerMergerElemMatchTests
             File.Delete(overlayPath);
         }
     }
+
+    /// <summary>Adapts fixed-slot (env, client) arguments to JsonLayerMerger's arbitrary-length chain signature.</summary>
+    private static string Merge(string basePath, params string?[] patches) =>
+        JsonLayerMerger.Merge(basePath, patches.Where(p => p is not null).Select(p => p!).ToList());
 }

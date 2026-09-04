@@ -7,11 +7,12 @@ using Microsoft.Extensions.Configuration;
 namespace ConfigTransform.Json;
 
 /// <summary>
-/// Applies the base -&gt; Environments -&gt; Clients layering (CONFIG_MANAGEMENT.md §5.1) to a
-/// JSON config file using Microsoft.Extensions.Configuration's own ConfigurationBuilder as the
-/// merge engine (base → env → client via AddJsonFile, in order), then flattens the resulting
-/// configuration back out to a single JSON document. Format-generic by design: no
-/// appsettings.json-specific logic here (see CLAUDE.md).
+/// Applies an arbitrary-length chain of JSON overlays, in order, to a JSON config file using
+/// Microsoft.Extensions.Configuration's own ConfigurationBuilder as the merge engine (base then
+/// each patch in turn via AddJsonFile), then flattens the resulting configuration back out to a
+/// single JSON document. Under docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md a chain's length varies
+/// with how deep its `extends` nesting goes (no longer a fixed two-slot base→Environment→Client
+/// rule). Format-generic by design: no appsettings.json-specific logic here (see CLAUDE.md).
 ///
 /// Two things worth knowing, both inherent to IConfiguration's flat string-keyed model, not
 /// specific to this tool:
@@ -26,50 +27,51 @@ namespace ConfigTransform.Json;
 /// - An originally-empty JSON object ({}) or array ([]) produces no flattened keys at all, so
 ///   it round-trips as null rather than as an empty object/array.
 ///
-/// A layer containing <c>$elemMatch</c>-shaped array-of-objects overlays
+/// A patch containing <c>$elemMatch</c>-shaped array-of-objects overlays
 /// (docs/FIELD_AUTHORING_DESIGN.md; <see cref="JsonElemMatchResolver"/>) needs a pre-processing
 /// pass -- resolving each patch to a real position by inspecting the actual document -- before
 /// its content can be handed to Microsoft.Extensions.Configuration at all, since that library
 /// has no concept of matching an array element by a field's value, only by index. That
-/// resolution has to be progressive: an Environment-layer patch resolves against the base array,
-/// a Client-layer patch against the base+Environment-*merged* array (mirroring how
-/// <c>XmlLayerMerger</c> already applies the Client transform to the already-Environment-
-/// transformed document, not to the base alone). <see cref="LegacyMerge"/> is the original,
-/// untouched implementation, kept verbatim as the fast path for the overwhelming common case (no
-/// layer uses <c>$elemMatch</c> at all) -- every existing merge behavior keeps running through
-/// the exact code that was already tested, unchanged.
+/// resolution is progressive across the whole chain: each patch resolves its own `$elemMatch`
+/// entries against the *accumulated* merge of every prior patch in the chain, not against the
+/// base alone (mirroring how <c>XmlLayerMerger</c> applies each transform to the
+/// already-previously-transformed document, in order). <see cref="LegacyMerge"/> is the
+/// original, untouched two-slot implementation, kept verbatim as the fast path for the
+/// overwhelming common case (no patch in the chain uses <c>$elemMatch</c> at all) -- every
+/// existing merge behavior keeps running through the exact code that was already tested,
+/// unchanged.
 /// </summary>
 public static class JsonLayerMerger
 {
-    public static string Merge(string basePath, string? environmentOverlayPath, string? clientOverlayPath)
+    public static string Merge(string basePath, IReadOnlyList<string> patchPathsInOrder)
     {
-        var envTree = ReadIfExists(environmentOverlayPath);
-        var clientTree = ReadIfExists(clientOverlayPath);
-        var envNeedsRewrite = envTree is not null && JsonElemMatchResolver.ContainsElemMatch(envTree);
-        var clientNeedsRewrite = clientTree is not null && JsonElemMatchResolver.ContainsElemMatch(clientTree);
+        var trees = patchPathsInOrder.Select(ReadIfExists).ToList();
+        var anyNeedsRewrite = trees.Any(t => t is not null && JsonElemMatchResolver.ContainsElemMatch(t));
 
-        if (!envNeedsRewrite && !clientNeedsRewrite)
-            return LegacyMerge(basePath, environmentOverlayPath, clientOverlayPath);
+        if (!anyNeedsRewrite)
+            return LegacyMerge(basePath, patchPathsInOrder);
 
-        var baseTree = JsonNode.Parse(File.ReadAllText(basePath));
+        var accumulated = JsonNode.Parse(File.ReadAllText(basePath));
+        var layers = new List<LayerInput>();
 
-        var envLayer = envNeedsRewrite
-            ? LayerInput.FromNode(JsonElemMatchResolver.Rewrite(envTree, baseTree))
-            : LayerInput.FromPath(environmentOverlayPath);
+        for (var i = 0; i < patchPathsInOrder.Count; i++)
+        {
+            var tree = trees[i];
+            var needsRewrite = tree is not null && JsonElemMatchResolver.ContainsElemMatch(tree);
 
-        // Only worth computing the real base+Environment-merged state when the Client layer
-        // actually needs to resolve $elemMatch patches against it -- otherwise the Client layer
-        // (a plain path, or absent) merges normally on the final pass below with no pre-pass
-        // needed.
-        JsonNode? afterEnvTree = null;
-        if (clientNeedsRewrite)
-            afterEnvTree = JsonNode.Parse(BuildMerge(basePath, envLayer, LayerInput.FromPath(null)));
+            var layer = needsRewrite
+                ? LayerInput.FromNode(JsonElemMatchResolver.Rewrite(tree, accumulated))
+                : LayerInput.FromPath(patchPathsInOrder[i]);
+            layers.Add(layer);
 
-        var clientLayer = clientNeedsRewrite
-            ? LayerInput.FromNode(JsonElemMatchResolver.Rewrite(clientTree, afterEnvTree))
-            : LayerInput.FromPath(clientOverlayPath);
+            // Only worth recomputing the accumulated state when a later patch might actually
+            // need to resolve $elemMatch entries against it -- otherwise every remaining layer
+            // in this chain merges normally on the final pass below with no pre-pass needed.
+            if (i < patchPathsInOrder.Count - 1 && trees.Skip(i + 1).Any(t => t is not null && JsonElemMatchResolver.ContainsElemMatch(t)))
+                accumulated = JsonNode.Parse(BuildMerge(basePath, layers));
+        }
 
-        return BuildMerge(basePath, envLayer, clientLayer);
+        return BuildMerge(basePath, layers);
     }
 
     private static JsonNode? ReadIfExists(string? path) =>
@@ -81,11 +83,11 @@ public static class JsonLayerMerger
         public static LayerInput FromNode(JsonNode? node) => new(null, node);
     }
 
-    private static string BuildMerge(string basePath, LayerInput env, LayerInput client)
+    private static string BuildMerge(string basePath, IReadOnlyList<LayerInput> layers)
     {
         var builder = new ConfigurationBuilder().AddJsonFile(basePath, optional: false);
-        AddLayer(builder, env);
-        AddLayer(builder, client);
+        foreach (var layer in layers)
+            AddLayer(builder, layer);
 
         var configuration = builder.Build();
 
@@ -104,17 +106,14 @@ public static class JsonLayerMerger
             builder.AddJsonFile(layer.Path, optional: true);
     }
 
-    /// <summary>The original implementation, kept verbatim as the fast path used whenever
-    /// neither overlay layer contains <c>$elemMatch</c> anywhere -- see the class remarks.</summary>
-    private static string LegacyMerge(string basePath, string? environmentOverlayPath, string? clientOverlayPath)
+    /// <summary>The original implementation, kept verbatim as the fast path used whenever no
+    /// patch in the chain contains <c>$elemMatch</c> anywhere -- see the class remarks.</summary>
+    private static string LegacyMerge(string basePath, IReadOnlyList<string> patchPathsInOrder)
     {
         var builder = new ConfigurationBuilder().AddJsonFile(basePath, optional: false);
 
-        if (environmentOverlayPath is not null)
-            builder.AddJsonFile(environmentOverlayPath, optional: true);
-
-        if (clientOverlayPath is not null)
-            builder.AddJsonFile(clientOverlayPath, optional: true);
+        foreach (var patchPath in patchPathsInOrder)
+            builder.AddJsonFile(patchPath, optional: true);
 
         var configuration = builder.Build();
 

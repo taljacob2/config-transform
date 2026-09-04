@@ -22,7 +22,12 @@ public sealed record ReverseLookupEntry(string LayerPath, string? Patch, string?
 /// number of layers. A missing configtransform.json anywhere in the chain (including the very
 /// first one asked for) is never fatal — it just means "nothing configured from here on", the
 /// same tolerance a missing overlay always had (CONFIG_MANAGEMENT.md §5.1); only a cycle in
-/// `extends` is an error, since it can never resolve.
+/// `extends` is an error, since it can never resolve. A resource simply not being listed in a
+/// layer's `resources`, or listed with no `patch`, is likewise not an error — the same
+/// tolerance. A `patch` that *is* declared but whose file doesn't exist on disk is different: an
+/// explicit, broken reference, not an omission — that's always an error, the same way a missing
+/// base file is (unlike the old convention-based `Environments/`/`Clients/` overlay lookup,
+/// where "does a file exist here" and "should one exist here" were the same question).
 /// </summary>
 public static class LayerChain
 {
@@ -91,6 +96,10 @@ public static class LayerChain
             }
 
             var patchPath = Path.GetFullPath(entry.Patch, root);
+            if (!File.Exists(patchPath))
+                throw new FileNotFoundException(
+                    $"{label} declares patch '{entry.Patch}' for '{resourcePath}', but no file exists at '{patchPath}'.");
+
             report.Add($"{label}: '{resourcePath}' patched, applying ('{patchPath}')");
             patches.Add(patchPath);
         }
@@ -133,7 +142,7 @@ public static class LayerChain
     /// <c>LayerResolution</c>'s case-insensitivity, which likewise only ever covered the base
     /// file's own name within its declared directory — see <see cref="FileResolver"/>).
     /// </summary>
-    private static string ResolveResourceBasePath(string root, string resourcePath)
+    internal static string ResolveResourceBasePath(string root, string resourcePath)
     {
         var fullPath = Path.GetFullPath(resourcePath, root);
         var parentDir = Path.GetDirectoryName(fullPath)
@@ -142,9 +151,9 @@ public static class LayerChain
         return FileResolver.ResolveCaseInsensitiveRequired(parentDir, Path.GetFileName(fullPath));
     }
 
-    private static bool PathsEqual(string root, string a, string b) =>
+    internal static bool PathsEqual(string root, string a, string b) =>
         string.Equals(Path.GetFullPath(a, root), Path.GetFullPath(b, root), StringComparison.OrdinalIgnoreCase);
 
-    private static string ToRepoRelative(string root, string fullPath) =>
+    internal static string ToRepoRelative(string root, string fullPath) =>
         Path.GetRelativePath(root, fullPath).Replace(Path.DirectorySeparatorChar, '/');
 }

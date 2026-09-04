@@ -15,7 +15,7 @@ public class JsonLayerMergerTests
         var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
 
         var resolution = LayerResolution.Resolve(projectDir, "appsettings.json", overlayRoot, "ClientA", "Production");
-        var merged = JsonLayerMerger.Merge(resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
+        var merged = Merge(resolution);
 
         using var doc = JsonDocument.Parse(merged);
         var root = doc.RootElement;
@@ -35,7 +35,7 @@ public class JsonLayerMergerTests
         var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
 
         var resolution = LayerResolution.Resolve(projectDir, "appsettings.json", overlayRoot, "ClientA", "Production");
-        var merged = JsonLayerMerger.Merge(resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
+        var merged = Merge(resolution);
 
         using var doc = JsonDocument.Parse(merged);
         var root = doc.RootElement;
@@ -58,7 +58,7 @@ public class JsonLayerMergerTests
         var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
 
         var resolution = LayerResolution.Resolve(projectDir, "appsettings.json", overlayRoot, "ClientA", "Production");
-        var merged = JsonLayerMerger.Merge(resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
+        var merged = Merge(resolution);
 
         using var doc = JsonDocument.Parse(merged);
         var origins = doc.RootElement.GetProperty("AllowedOrigins");
@@ -76,7 +76,7 @@ public class JsonLayerMergerTests
         var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
 
         var resolution = LayerResolution.Resolve(projectDir, "appsettings.json", overlayRoot, "ClientB", "Staging");
-        var merged = JsonLayerMerger.Merge(resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
+        var merged = Merge(resolution);
 
         Assert.Null(resolution.EnvironmentOverlayPath);
         Assert.Null(resolution.ClientOverlayPath);
@@ -88,4 +88,9 @@ public class JsonLayerMergerTests
         Assert.Equal(3, root.GetProperty("RetryCount").GetInt32());
         Assert.Equal("Information", root.GetProperty("Logging").GetProperty("LogLevel").GetProperty("Default").GetString());
     }
+
+    /// <summary>Adapts a fixed-slot LayerResolutionResult to JsonLayerMerger's arbitrary-length chain signature.</summary>
+    private static string Merge(LayerResolutionResult resolution) =>
+        JsonLayerMerger.Merge(resolution.BasePath, new[] { resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath }
+            .Where(p => p is not null).Select(p => p!).ToList());
 }

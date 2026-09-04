@@ -20,7 +20,7 @@ public class JsonLayerMergerGenericJsonTests
         var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
 
         var resolution = LayerResolution.Resolve(projectDir, "custom-settings.json", overlayRoot, "ClientA", "Production");
-        var merged = JsonLayerMerger.Merge(resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
+        var merged = Merge(resolution);
 
         using var doc = JsonDocument.Parse(merged);
         var primary = doc.RootElement.GetProperty("endpoints").GetProperty("primary");
@@ -39,7 +39,7 @@ public class JsonLayerMergerGenericJsonTests
         var resolution = LayerResolution.Resolve(projectDir, "custom-settings.json", overlayRoot, "ClientB", "Production");
         Assert.Null(resolution.ClientOverlayPath);
 
-        var merged = JsonLayerMerger.Merge(resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
+        var merged = Merge(resolution);
 
         using var doc = JsonDocument.Parse(merged);
         var primary = doc.RootElement.GetProperty("endpoints").GetProperty("primary");
@@ -48,4 +48,9 @@ public class JsonLayerMergerGenericJsonTests
         Assert.Equal("https://dev.example.com/api", primary.GetProperty("url").GetString()); // untouched base
         Assert.False(doc.RootElement.GetProperty("flags").GetProperty("betaEnabled").GetBoolean()); // untouched base
     }
+
+    /// <summary>Adapts a fixed-slot LayerResolutionResult to JsonLayerMerger's arbitrary-length chain signature.</summary>
+    private static string Merge(LayerResolutionResult resolution) =>
+        JsonLayerMerger.Merge(resolution.BasePath, new[] { resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath }
+            .Where(p => p is not null).Select(p => p!).ToList());
 }

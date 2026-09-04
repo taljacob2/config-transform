@@ -21,7 +21,7 @@ public class XmlLayerMergerIisWebConfigTests
         var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
 
         var resolution = LayerResolution.Resolve(projectDir, "Web.config", overlayRoot, "ClientA", "Production");
-        var merged = XmlLayerMerger.Merge(resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
+        var merged = Merge(resolution);
 
         var doc = XDocument.Parse(merged);
 
@@ -49,7 +49,7 @@ public class XmlLayerMergerIisWebConfigTests
 
         // ClientB has no override — only the environment-wide Production layer applies.
         var resolution = LayerResolution.Resolve(projectDir, "Web.config", overlayRoot, "ClientB", "Production");
-        var merged = XmlLayerMerger.Merge(resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
+        var merged = Merge(resolution);
 
         Assert.Null(resolution.ClientOverlayPath);
 
@@ -61,4 +61,9 @@ public class XmlLayerMergerIisWebConfigTests
         Assert.Empty(authorization.Elements("allow"));
         Assert.Single(authorization.Elements("deny"));
     }
+
+    /// <summary>Adapts a fixed-slot LayerResolutionResult to XmlLayerMerger's arbitrary-length chain signature.</summary>
+    private static string Merge(LayerResolutionResult resolution) =>
+        XmlLayerMerger.Merge(resolution.BasePath, new[] { resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath }
+            .Where(p => p is not null).Select(p => p!).ToList());
 }

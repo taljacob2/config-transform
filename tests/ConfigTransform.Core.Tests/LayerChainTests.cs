@@ -131,6 +131,22 @@ public class LayerChainTests
     }
 
     [Fact]
+    public void ResolveResource_throws_when_a_declared_patch_file_does_not_exist_on_disk()
+    {
+        using var root = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(root.Path, "Project"));
+        File.WriteAllText(Path.Combine(root.Path, "Project", "App.config"), "base");
+
+        WriteLayer(root.Path, ".configtransform/Clients/Acme/Production/configtransform.json",
+            extends: null,
+            resources: """[ { "path": "Project/App.config", "patch": ".configtransform/Clients/Acme/Production/missing.xml" } ]""");
+
+        var chain = LayerChain.Build(root.Path, ".configtransform/Clients/Acme/Production/configtransform.json");
+
+        Assert.Throws<FileNotFoundException>(() => LayerChain.ResolveResource(root.Path, chain, "Project/App.config"));
+    }
+
+    [Fact]
     public void ResolveResource_throws_when_base_file_is_missing()
     {
         using var root = new TempDirectory();

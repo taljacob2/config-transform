@@ -15,7 +15,7 @@ public class XmlLayerMergerTests
         var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
 
         var resolution = LayerResolution.Resolve(projectDir, "App.config", overlayRoot, "ClientA", "Production");
-        var merged = XmlLayerMerger.Merge(resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
+        var merged = Merge(resolution);
 
         var doc = XDocument.Parse(merged);
         var appSettings = doc.Root!.Element("appSettings")!;
@@ -37,7 +37,7 @@ public class XmlLayerMergerTests
 
         // Neither Environments/Staging.config nor Clients/ClientB/Staging.config exist.
         var resolution = LayerResolution.Resolve(projectDir, "App.config", overlayRoot, "ClientB", "Staging");
-        var merged = XmlLayerMerger.Merge(resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
+        var merged = Merge(resolution);
 
         Assert.Null(resolution.EnvironmentOverlayPath);
         Assert.Null(resolution.ClientOverlayPath);
@@ -57,7 +57,7 @@ public class XmlLayerMergerTests
 
         // Environments/Production.config exists; Clients/ClientB/Production.config does not.
         var resolution = LayerResolution.Resolve(projectDir, "App.config", overlayRoot, "ClientB", "Production");
-        var merged = XmlLayerMerger.Merge(resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
+        var merged = Merge(resolution);
 
         Assert.NotNull(resolution.EnvironmentOverlayPath);
         Assert.Null(resolution.ClientOverlayPath);
@@ -85,7 +85,7 @@ public class XmlLayerMergerTests
         var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
 
         var resolution = LayerResolution.Resolve(projectDir, "App.config", overlayRoot, "ClientA", "Production");
-        var merged = XmlLayerMerger.Merge(resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
+        var merged = Merge(resolution);
 
         var tempPath = Path.GetTempFileName();
         try
@@ -103,4 +103,9 @@ public class XmlLayerMergerTests
 
     private static string GetAppSetting(XElement appSettings, string key) =>
         appSettings.Elements("add").Single(e => (string)e.Attribute("key")! == key).Attribute("value")!.Value;
+
+    /// <summary>Adapts a fixed-slot LayerResolutionResult to XmlLayerMerger's arbitrary-length chain signature.</summary>
+    private static string Merge(LayerResolutionResult resolution) =>
+        XmlLayerMerger.Merge(resolution.BasePath, new[] { resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath }
+            .Where(p => p is not null).Select(p => p!).ToList());
 }
