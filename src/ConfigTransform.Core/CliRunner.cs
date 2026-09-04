@@ -6,17 +6,20 @@ namespace ConfigTransform.Core;
 /// (--dry-run/--diff) or write (--output) the result — for one resource (--resource given) or
 /// every resource the layer touches, across every registered format, in one call (omitted).
 /// --list is a separate, earlier branch handled by <see cref="LayerLister"/>; `set` is handled by
-/// <see cref="SetRunner"/>; help (no arguments, `help`, `--help`/`-h`) is checked first, before
+/// <see cref="SetRunner"/>; `init` (scaffolding a tree, docs/INIT_COMMAND_DESIGN.md) is handled by
+/// <see cref="InitRunner"/>; help (no arguments, `help`, `--help`/`-h`) is checked first, before
 /// even resolving a working directory, and short-circuits everything else via
 /// <see cref="HelpPrinter"/>. This class knows nothing about XML or JSON specifically — only the
 /// shape every format shares; <paramref name="engines"/> is what the caller (the CLI entry point)
-/// supplies to make it concrete.
+/// supplies to make it concrete. <paramref name="stdin"/>/<paramref name="interactiveAllowed"/>
+/// exist only for `init`'s interactive form — the real entry point passes <see cref="Console.In"/>
+/// and <c>!Console.IsInputRedirected</c>; every other mode ignores both.
 /// </summary>
 public static class CliRunner
 {
     public static int Run(
         string[] args, TextWriter stdout, TextWriter stderr, FormatEngineRegistry engines,
-        string? workingDirectory = null)
+        string? workingDirectory = null, TextReader? stdin = null, bool interactiveAllowed = false)
     {
         try
         {
@@ -29,6 +32,12 @@ public static class CliRunner
             }
 
             var root = workingDirectory ?? Directory.GetCurrentDirectory();
+
+            if (options.Init)
+            {
+                InitRunner.Run(options, root, engines, stdout, stdin ?? Console.In, interactiveAllowed);
+                return 0;
+            }
 
             if (options.Set)
             {

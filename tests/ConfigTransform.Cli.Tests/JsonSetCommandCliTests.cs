@@ -38,9 +38,9 @@ public class JsonSetCommandCliTests
         // every path in the file is repo-root-relative, no exceptions).
         Assert.Equal(".configtransform/Environments/Production/configtransform.json", layer.Extends);
         Assert.Equal(workspace.JsonResourcePath, layer.Resources.Single().Path);
-        Assert.Equal(".configtransform/Clients/Globex/Production/patch-Project-appsettings.json.json", layer.Resources.Single().Patch);
+        Assert.Equal(".configtransform/Clients/Globex/Production/patch-Project-appsettings.json", layer.Resources.Single().Patch);
 
-        var patchPath = Path.Combine(workspace.RootPath, ".configtransform", "Clients", "Globex", "Production", "patch-Project-appsettings.json.json");
+        var patchPath = Path.Combine(workspace.RootPath, ".configtransform", "Clients", "Globex", "Production", "patch-Project-appsettings.json");
         Assert.True(File.Exists(patchPath));
         Assert.Contains("https://globex.example.com", File.ReadAllText(patchPath));
 
@@ -83,7 +83,7 @@ public class JsonSetCommandCliTests
         Assert.True(File.Exists(layerPath));
         Assert.DoesNotContain("extends", File.ReadAllText(layerPath));
 
-        var patchPath = Path.Combine(workspace.RootPath, ".configtransform", "Environments", "Staging", "patch-Project-appsettings.json.json");
+        var patchPath = Path.Combine(workspace.RootPath, ".configtransform", "Environments", "Staging", "patch-Project-appsettings.json");
         Assert.True(File.Exists(patchPath));
         Assert.Contains("https://staging.example.com", File.ReadAllText(patchPath));
     }
@@ -120,7 +120,7 @@ public class JsonSetCommandCliTests
         }, new StringWriter(), new StringWriter(), FormatEngines.All, workspace.RootPath);
 
         Assert.Equal(0, exitCode);
-        var patchPath = Path.Combine(workspace.RootPath, ".configtransform", "Clients", "Globex", "Production", "patch-Project-appsettings.json.json");
+        var patchPath = Path.Combine(workspace.RootPath, ".configtransform", "Clients", "Globex", "Production", "patch-Project-appsettings.json");
         Assert.Contains("\"EnableBeta\": true", File.ReadAllText(patchPath));
     }
 
@@ -157,7 +157,7 @@ public class JsonSetCommandCliTests
         }, stdout, new StringWriter(), FormatEngines.All, workspace.RootPath);
 
         Assert.Equal(0, exitCode);
-        var patchPath = Path.Combine(workspace.RootPath, ".configtransform", "Clients", "Globex", "Production", "patch-Project-appsettings.json.json");
+        var patchPath = Path.Combine(workspace.RootPath, ".configtransform", "Clients", "Globex", "Production", "patch-Project-appsettings.json");
         var patchContent = File.ReadAllText(patchPath);
         Assert.Contains("$elemMatch", patchContent);
 
@@ -189,7 +189,7 @@ public class JsonSetCommandCliTests
             Assert.Equal(0, exitCode);
         }
 
-        var patchPath = Path.Combine(workspace.RootPath, ".configtransform", "Clients", "Globex", "Production", "patch-Project-appsettings.json.json");
+        var patchPath = Path.Combine(workspace.RootPath, ".configtransform", "Clients", "Globex", "Production", "patch-Project-appsettings.json");
         var patchContent = File.ReadAllText(patchPath);
         Assert.Contains("\"role\": \"Admin\"", patchContent);
         Assert.Contains("\"role\": \"Viewer\"", patchContent);
@@ -253,7 +253,7 @@ public class JsonSetCommandCliTests
         }, new StringWriter(), new StringWriter(), FormatEngines.All, workspace.RootPath);
         Assert.Equal(0, exitCode2);
 
-        var patchPath = Path.Combine(workspace.RootPath, ".configtransform", "Clients", "Globex", "Production", "patch-Project-appsettings.json.json");
+        var patchPath = Path.Combine(workspace.RootPath, ".configtransform", "Clients", "Globex", "Production", "patch-Project-appsettings.json");
         var patchContent = File.ReadAllText(patchPath);
         Assert.Contains("https://v2.example.com", patchContent);
         Assert.DoesNotContain("https://v1.example.com", patchContent);

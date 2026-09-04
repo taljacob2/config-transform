@@ -48,6 +48,7 @@ public class HelpPrinterTests
     [InlineData("--output, -o — write")]
     [InlineData("--list — show")]
     [InlineData("set — author")]
+    [InlineData("init — scaffold")]
     public void Every_command_has_both_an_easy_and_a_tldr_example(string sectionHeader)
     {
         var stdout = new StringWriter();

@@ -21,6 +21,7 @@ supports differs by format for reasons that come from the format itself, not an 
 --diff                                     print a unified diff (unpatched vs. merged) via `git diff --no-index`; nothing written to disk
 --list                                     show a layer's resources (--client/--environment), or a tree-wide reverse lookup (--resource) — see below
 help, --help, -h                           print the help page (see "Getting help" below) — also the default with no arguments at all
+init                                       scaffold a .configtransform/ tree — a different verb, see "init" below
 ```
 
 Every flag that takes a value also accepts the short form shown above (`-r`, `-c`, `-e`, `-o`) —
@@ -159,6 +160,69 @@ base file is.
 disk — verified directly by `ConfigTransform.Cli.Tests`' `CliRunnerTests`, not just by code
 inspection. `--diff` prints `(no changes)` rather than an empty diff when the resolved chain has
 nothing to apply.
+
+## `init` — scaffold a tree
+
+Creates `.configtransform/Environments/<Env>/` and `.configtransform/Clients/<Client>/<Env>/`
+layers directly, instead of the first one coming into existence only as a side effect of a first
+`set` — see `docs/INIT_COMMAND_DESIGN.md` for the full design and rationale. A different verb,
+like `set` — `configtransform init ...`, not a flag on the resolve/list command:
+
+```
+init --environment, -e <EnvName>           repeatable — every environment to create
+     --client, -c <ClientName>             repeatable — every client to create (requires --environment)
+     --resource, -r <path>                 repeatable — explicit resources; skips scanning entirely if given
+     --scan-root <dir>                     where to scan for candidate resources (default: repo root)
+     --yes                                 accept every scanned candidate without asking
+     --no-scan                             don't scan — requires at least one --resource
+     --template                            the one canned starter tree — a bare switch, mutually exclusive with every flag above
+     --dry-run                             print what would be written; nothing written to disk
+```
+
+**Two modes, chosen up front, never a blend of flags and prompts:**
+
+- **Interactive** — no `init`-specific flag given at all, and stdin is a real terminal. A plain
+  sequential form (`Console.ReadLine()`, no TUI): scans for candidate resources and asks which to
+  manage (by index, `all`, or `none`), then which environments (required, comma-separated), then
+  which clients (optional, comma-separated) — then echoes the exact file list and writes it.
+- **Quiet** — any `init`-specific flag given, or stdin isn't a terminal (CI-safe by default: it
+  never blocks on a prompt it can't get an answer to). `--environment` becomes required in this
+  mode (there's no one left to ask); everything else comes from flags. If no `--resource` was
+  given and the repo scan finds candidates but stdin *is* a real terminal, it still asks the
+  resource checklist specifically — only the environment/client questions are skipped because
+  flags already answered them.
+
+**Scanning** walks the repo (or `--scan-root`) for every file whose extension a registered format
+engine handles, excluding only `.git/`, `.configtransform/`, `bin/`, `obj/`, `node_modules/` at
+any depth — never a filename/content heuristic (this tool never assumes what "looks like" config,
+the same stance `CLAUDE.md`'s core concepts take everywhere else). The checklist (or `--yes`) is
+where a human decides which candidates are real resources.
+
+**Idempotent**: re-running against a tree `init` or `set` already touched merges in what's new (a
+new client, a newly-added resource) without touching an existing `patch`/`extends` reference —
+the same convention `set` already established.
+
+```bash
+# Try it immediately: a canned Production/Test x Client-A/Client-B tree, one demo resource whose
+# "message" is overridden at every layer, naming that layer -- runnable with no other setup.
+dotnet run --project src/ConfigTransform.Cli -- init --template
+
+dotnet run --project src/ConfigTransform.Cli -- \
+  --client Client-A --environment Production --resource configtransform-template.json --diff
+
+# Quiet/CI-safe: scaffold Production+Test for Acme, scanning the repo for candidates and
+# accepting every one found (skip --yes to get an interactive checklist instead, in a real terminal)
+dotnet run --project src/ConfigTransform.Cli -- \
+  init --environment Production --environment Test --client Acme --yes
+
+# Quiet, explicit resources -- no scanning at all
+dotnet run --project src/ConfigTransform.Cli -- \
+  init --environment Production --client Acme \
+  --resource OrderProcessor.Framework/App.config --resource BillingApi.Core/appsettings.json
+
+# Preview without writing
+dotnet run --project src/ConfigTransform.Cli -- init --template --dry-run
+```
 
 ## `set` — author an overlay field
 

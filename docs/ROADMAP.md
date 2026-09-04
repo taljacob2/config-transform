@@ -307,8 +307,19 @@ identical, `--list` output identical, the only difference being multi-resource m
 skip notes dropping from 2 to 0), plus an `Initech`/`Staging` negative test confirming
 "missing overlay ≠ error" and the known multi-resource-mode/`LegacyGateway` asymmetry both hold
 unchanged. See the pilot's own `FINDINGS.md` "Migrating to the unified CLI (0.8.0-alpha)"
-section and `config-transform-pilot#2` for the full writeup — open as a draft PR as of this
-writing, not yet merged.
+section and `config-transform-pilot#2` (merged) for the full writeup.
+
+**`init` command implemented** — `docs/INIT_COMMAND_DESIGN.md`'s design is fully built: an
+interactive form (plain sequential prompts, no TUI), a flag-driven quiet mode safe for CI, and
+`init --template` (a bare switch, one fixed Production/Test x Client-A/Client-B starter tree whose
+demo resource's `message` names its own layer at every override — immediately runnable via
+`--dry-run`/`--diff` right after `init --template`, no other setup). New `InitScanner`/
+`InitPlanner`/`InitTemplate`/`InitRunner` in `ConfigTransform.Core`; `CliRunner.Run` gained
+`stdin`/`interactiveAllowed` parameters (mirroring how `stdout`/`stderr` are already injected) so
+the whole wizard is testable with no real terminal. Along the way, fixed a real, previously-silent
+patch-filename stutter in `SetTargetResolver`'s naming rule (`PatchFileNaming`, shared by `set`
+and `init --template`) — see `docs/CHANGELOG.md`'s `[Unreleased]` entry for both. 259 tests
+passing solution-wide (39 new). Not yet tagged/released — see `docs/RELEASING.md`.
 
 ## Next up
 
@@ -362,17 +373,6 @@ default next step.
   redesign, see `docs/CONFIG_MANAGEMENT.md` §5.5. Not needed yet.
 - **A real (non-`-alpha`) `1.0.0` release** — once the solution-repo pilot validates the design
   against real content, worth promoting out of pre-release.
-- **A `configtransform init` command — designed, not implemented.** Full design at
-  `docs/INIT_COMMAND_DESIGN.md`: an interactive form (plain sequential `Console.ReadLine()`
-  prompts, deliberately no TUI) or a fully flag-driven quiet mode, either way scanning the repo
-  for existing `.config`/`.xml`/`.json` files to suggest as resources, plus a `--template
-  hello-world` canned starter tree. This is a deliberate, named exception to this bullet's own
-  original "wait for a few solution repos" gate, made by the repo owner with that gate's
-  reasoning fully in view — the same kind of exception `docs/FIELD_AUTHORING_DESIGN.md` already
-  made for `set` against this same gate (see the new doc's "Why this exists, and why now" for the
-  full argument for why this doesn't need the same real-usage validation a TUI/GUI's workflow
-  design would). `docs/GETTING_STARTED.md`'s "Should there be an `init` command?" section is
-  updated to match — implementation is the next actionable step, not a further design pass.
 - **A TUI (`configtransform-tui`) and/or a cross-platform GUI (`configtransform-gui`)** —
   investigated, not started. Two separate blockers, not one:
   1. There's no CLI-level field-authoring feature to build a UI around yet. Today every overlay

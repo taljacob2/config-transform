@@ -26,7 +26,10 @@ to build a UI around yet" — and that specific gap doesn't actually need real-c
 to design correctly, because it isn't guessing at *usage patterns*; it's built directly from the
 mechanics of `Microsoft.Web.Xdt` and `Microsoft.Extensions.Configuration`, which this repo
 already understands and tests thoroughly (`docs/CONFIGTRANSFORM_TOOL_DESIGN.md` §3). `init` and
-the TUI/GUI themselves stay deferred — this is scoped to field authoring only.
+the TUI/GUI themselves stay deferred — this is scoped to field authoring only. (`init` has since
+shipped, via the same kind of deliberate exception to this gate — see
+`docs/INIT_COMMAND_DESIGN.md`'s "Why this exists, and why now." The TUI/GUI entry remains
+deferred.)
 
 **The concrete problem this solves**: hand-writing an XDT overlay is not one operation, it
 branches three ways depending on intent (add a new key to the base file; `SetAttributes` +
@@ -354,6 +357,7 @@ No case needed a bespoke resolution; each was the same rule applied once more.
 
 - [`GETTING_STARTED.md`](GETTING_STARTED.md) — the three-way XDT branching this design
   automates, explained for a human doing it by hand today.
-- [`USAGE.md`](USAGE.md) — the CLI reference `set` will join once implemented.
+- [`USAGE.md`](USAGE.md) — the CLI reference, including `set`'s own section.
 - [`CONFIG_MANAGEMENT.md`](CONFIG_MANAGEMENT.md) §5.5 — YAML/`.env` format compatibility.
-- [`ROADMAP.md`](ROADMAP.md) — the `init`/TUI/GUI entries this document partially unblocks.
+- [`ROADMAP.md`](ROADMAP.md) — `init` (since shipped, `docs/INIT_COMMAND_DESIGN.md`) and the
+  still-deferred TUI/GUI entries this document partially unblocked.

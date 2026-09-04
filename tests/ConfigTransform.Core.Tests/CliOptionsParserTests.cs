@@ -326,4 +326,126 @@ public class CliOptionsParserTests
         Assert.False(options.Set);
         Assert.Equal("set", options.Resource);
     }
+
+    [Fact]
+    public void Init_verb_collects_repeated_environment_client_and_resource_flags_into_their_own_lists()
+    {
+        var options = CliOptionsParser.Parse(new[]
+        {
+            "init", "--environment", "Production", "--environment", "Test",
+            "--client", "Acme", "--resource", "Project/App.config"
+        });
+
+        Assert.True(options.Init);
+        Assert.Equal(new[] { "Production", "Test" }, options.InitEnvironments);
+        Assert.Equal(new[] { "Acme" }, options.InitClients);
+        Assert.Equal(new[] { "Project/App.config" }, options.InitResources);
+        // The singular fields every other mode uses stay untouched -- init never sets them.
+        Assert.Null(options.Client);
+        Assert.Null(options.Environment);
+        Assert.Null(options.Resource);
+    }
+
+    [Fact]
+    public void Init_verb_needs_no_flags_at_all()
+    {
+        var options = CliOptionsParser.Parse(new[] { "init" });
+
+        Assert.True(options.Init);
+        Assert.Empty(options.InitEnvironments);
+        Assert.Empty(options.InitClients);
+        Assert.Empty(options.InitResources);
+    }
+
+    [Fact]
+    public void Init_verb_parses_scan_root_yes_no_scan_and_template()
+    {
+        var options = CliOptionsParser.Parse(new[] { "init", "--scan-root", "src", "--yes", "--no-scan", "--resource", "x" });
+
+        Assert.Equal("src", options.ScanRoot);
+        Assert.True(options.Yes);
+        Assert.True(options.NoScan);
+    }
+
+    [Fact]
+    public void Init_verb_rejects_diff()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { "init", "--diff" }));
+        Assert.Contains("--diff", ex.Message);
+    }
+
+    [Fact]
+    public void Init_verb_rejects_list()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { "init", "--list" }));
+        Assert.Contains("--list", ex.Message);
+    }
+
+    [Fact]
+    public void Init_verb_rejects_output()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { "init", "--output", "out/" }));
+        Assert.Contains("--output", ex.Message);
+    }
+
+    [Fact]
+    public void Init_verb_rejects_match_and_set()
+    {
+        Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { "init", "--match", "x" }));
+        Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { "init", "--set", "x" }));
+    }
+
+    [Fact]
+    public void Init_verb_rejects_client_without_environment()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { "init", "--client", "Acme" }));
+        Assert.Contains("--client requires --environment", ex.Message);
+    }
+
+    [Fact]
+    public void Init_verb_rejects_no_scan_with_no_resource()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { "init", "--no-scan" }));
+        Assert.Contains("--no-scan requires at least one --resource", ex.Message);
+    }
+
+    [Fact]
+    public void Init_verb_parses_a_bare_template_switch()
+    {
+        var options = CliOptionsParser.Parse(new[] { "init", "--template" });
+
+        Assert.True(options.Template);
+    }
+
+    [Theory]
+    [InlineData("--scan-root", "src")]
+    [InlineData("--environment", "Production")]
+    [InlineData("--client", "Acme")]
+    [InlineData("--resource", "x")]
+    public void Init_verb_rejects_template_combined_with_any_other_init_flag(string flag, string value)
+    {
+        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { "init", "--template", flag, value }));
+        Assert.Contains("--template", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("--yes")]
+    [InlineData("--no-scan")]
+    public void Init_verb_rejects_template_combined_with_a_bare_switch_init_flag(string flag)
+    {
+        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { "init", "--template", flag }));
+        Assert.Contains("--template", ex.Message);
+    }
+
+    [Fact]
+    public void The_init_verb_is_only_recognized_as_the_very_first_argument()
+    {
+        var options = CliOptionsParser.Parse(new[]
+        {
+            "--resource", "init", "--client", "ClientA", "--environment", "Production", "--output", "out.config"
+        });
+
+        Assert.False(options.Init);
+        Assert.Equal("init", options.Resource);
+    }
 }

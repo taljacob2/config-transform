@@ -6,6 +6,32 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+### Added
+
+- **`init` command** (`docs/INIT_COMMAND_DESIGN.md`) — scaffolds a `.configtransform/` tree
+  instead of hand-writing the first `configtransform.json`. Three modes: an interactive form
+  (plain sequential prompts — no TUI — asking which scanned resources to manage, then
+  environments, then clients), a fully flag-driven quiet mode safe for CI (`--environment`/
+  `--client`/`--resource` are repeatable here, distinct from their singular meaning everywhere
+  else), and `init --template` — a bare switch, one fixed starter tree (`Production`/`Test` x
+  `Client-A`/`Client-B`, one JSON resource) that's immediately runnable: every layer overrides
+  the resource's `message` field with a value naming itself, so `--dry-run`/`--diff` right after
+  `init --template` show the override chain actually working, not just proof a tree exists.
+  Scanning excludes only structural noise (`.git/`, `.configtransform/`, `bin/`, `obj/`,
+  `node_modules/`) — never a filename/content heuristic, consistent with this tool's
+  format-genericity. Idempotent: re-running merges into whatever's already there (a new
+  client, a newly-added resource) without touching existing `patch`/`extends` references, the
+  same convention `set` already established. New `InitScanner`/`InitPlanner`/`InitTemplate`/
+  `InitRunner` in `ConfigTransform.Core`.
+- **`PatchFileNaming`** (`ConfigTransform.Core`) — the patch-filename convention `set`
+  (`SetTargetResolver`) and `init --template` now share: `patch-{path-with-'/'-as-'-'}`, plus the
+  patch extension only when the resource's own extension doesn't already end with it. Fixes a
+  real, previously-silent stutter for any resource whose extension already matches the patch
+  extension — every plain `.json` resource `set` has ever created a patch for, e.g.
+  `patch-appsettings.json.json` — now `patch-appsettings.json`. Only affects filenames chosen for
+  patches that don't exist yet; an already-recorded `patch` path in an existing
+  `configtransform.json` is never touched.
+
 ## [0.8.0-alpha] - 2026-09-04
 
 Breaking, following this repo's own precedent for a pre-1.0 breaking change (`0.2.0-alpha`'s

@@ -16,6 +16,14 @@ namespace ConfigTransform.Core;
 /// <see cref="Help"/> is set by no arguments at all, a leading bare <c>help</c>, or <c>--help</c>/
 /// <c>-h</c> anywhere in the arguments — it always wins over every other flag (no other
 /// validation runs), and is the default when the tool is invoked with nothing else to go on.
+/// <see cref="Init"/> is the "init" verb (docs/INIT_COMMAND_DESIGN.md) — scaffolds a tree instead
+/// of resolving one; <see cref="InitEnvironments"/>/<see cref="InitClients"/>/
+/// <see cref="InitResources"/> are its own repeatable environment/client/resource lists, distinct
+/// from <see cref="Client"/>/<see cref="Environment"/>/<see cref="Resource"/> (which target one
+/// existing layer, not declare several new ones) even though they're parsed from the same
+/// <c>--environment</c>/<c>--client</c>/<c>--resource</c> flags. <see cref="Template"/> selects
+/// the one canned starter tree instead of scanning/prompting/flags, mutually exclusive with every
+/// other init-specific flag.
 /// </summary>
 public sealed record CliOptions(
     string? Resource,
@@ -28,4 +36,12 @@ public sealed record CliOptions(
     bool Set,
     bool Help,
     IReadOnlyList<string> Match,
-    IReadOnlyList<string> SetFields);
+    IReadOnlyList<string> SetFields,
+    bool Init,
+    IReadOnlyList<string> InitEnvironments,
+    IReadOnlyList<string> InitClients,
+    IReadOnlyList<string> InitResources,
+    string? ScanRoot,
+    bool Yes,
+    bool NoScan,
+    bool Template);
