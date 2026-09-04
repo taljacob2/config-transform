@@ -149,7 +149,7 @@ content:
 
 - Two environments: `Production`, `Test`.
 - Two clients: `Client-A`, `Client-B`.
-- One resource, written to `hello-world/appsettings.json` at the repo root (created if missing;
+- One resource, written to `configtransform-template.json` at the repo root (created if missing;
   refuses to overwrite if a different file is already there — see "Errors"):
   ```json
   { "message": "Hello, world! (from base config)" }
@@ -159,13 +159,13 @@ content:
 repeated at every layer. This is deliberate: a template's entire purpose is to be run against
 immediately and show the layering mechanism actually working, not just to prove the tree was
 created. A patch per layer, each following the existing `patch-{path-with-'/'-as-'-'}.{ext}`
-naming convention (`SetTargetResolver`'s own scheme — `hello-world/appsettings.json` + JSON's
-`json` patch extension becomes `patch-hello-world-appsettings.json.json`, in the same directory
+naming convention (`SetTargetResolver`'s own scheme — `configtransform-template.json` + JSON's
+`json` patch extension becomes `patch-configtransform-template.json.json`, in the same directory
 as the `configtransform.json` referencing it):
 
 | Layer | `resources[].patch` content |
 |---|---|
-| *(base)* `hello-world/appsettings.json` | `{ "message": "Hello, world! (from base config)" }` |
+| *(base)* `configtransform-template.json` | `{ "message": "Hello, world! (from base config)" }` |
 | `Environments/Production` | `{ "message": "Hello, world! (from Production config)" }` |
 | `Environments/Test` | `{ "message": "Hello, world! (from Test config)" }` |
 | `Clients/Client-A/Production` | `{ "message": "Hello, world! (from Client-A Production config)" }` |
@@ -180,16 +180,16 @@ shape" below); a template's whole point is to be immediately runnable, so it alw
 override to show at every layer.
 
 **Immediately runnable, and that's the demo**, three invocations against the exact same
-`--resource hello-world/appsettings.json`, no other setup:
+`--resource configtransform-template.json`, no other setup:
 
 ```
-configtransform --resource hello-world/appsettings.json --dry-run
+configtransform --resource configtransform-template.json --dry-run
   → { "message": "Hello, world! (from base config)" }               # no --client/--environment: base file alone
 
-configtransform --environment Production --resource hello-world/appsettings.json --dry-run
+configtransform --environment Production --resource configtransform-template.json --dry-run
   → { "message": "Hello, world! (from Production config)" }         # Environment layer only, no client
 
-configtransform --client Client-A --environment Production --resource hello-world/appsettings.json --dry-run
+configtransform --client Client-A --environment Production --resource configtransform-template.json --dry-run
   → { "message": "Hello, world! (from Client-A Production config)" } # full chain: base → Production → Client-A
 ```
 
@@ -292,7 +292,7 @@ rather than a one-shot, destructive bootstrap.
   hazard `FileResolver`/`CLAUDE.md`'s "Case-insensitive file resolution" bullet already names for
   resource files (Linux CI vs. Windows dev) — a directory name is exactly as exposed to that
   hazard as a resource file name is.
-- `--template hello-world` and `hello-world/appsettings.json` already exists with *different*
+- `--template hello-world` and `configtransform-template.json` already exists with *different*
   content than the template's own → error, refusing to overwrite (never silently clobbers content
   that isn't `init`'s own template output); if the content is byte-for-byte the template's own
   (e.g. a re-run), it's a no-op, consistent with idempotency above.
