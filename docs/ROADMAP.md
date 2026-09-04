@@ -168,6 +168,27 @@ section for worked examples. 41 new tests: `JsonElemMatchResolverTests` (new, 17
 additions to `JsonFieldAuthorTests`/`JsonSetCommandCliTests` (11 combined, net of two tests that
 pinned the old "rejected outright" behavior and were rewritten to match the new one).
 
+**Added `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`, now fully decided** — replace `manifest.json`
+and the fixed base→Environments→Clients rule (`CONFIG_MANAGEMENT.md` §9) with a Kustomize-style
+self-describing `configtransform.json` per layer directory, declaring `resources` (each pairing a
+project's real repo-root-relative path with its own optional `patch`, same convention) plus an
+optional `extends` naming the layer to inherit from. Raised directly by the repo owner, and every
+design question it originally opened is now settled: JSON, not YAML (no new dependency for a
+config file this tool doesn't merge); one file spans every project/format a client×environment
+touches, accepting that `ConfigTransform.Xml`/`ConfigTransform.Json` likely unify into one CLI
+dispatcher as a first-class, separately-scoped consequence; each resource carries its own patch
+directly rather than two lists cross-referenced by convention, which needed the new `extends`
+field (flagged as new, not silently folded in) to stay unambiguous when a layer inherits from
+another spanning multiple projects; every path — `extends`, `path`, `patch` alike — is
+repo-root-relative uniformly, no same-directory exception for `patch` (two real inconsistencies
+in the first pass, caught by the repo owner and corrected in favor of one predictable rule over a
+little repetition); `manifest.json` is fully replaced, a clean break, no coexistence period; and
+`set` gains a new `--resource <path>` targeting flag plus rules for creating/updating a layer's
+`resources` entries and patch files as needed, while its actual field-authoring logic
+(`XmlFieldAuthor`/`JsonFieldAuthor`, `$elemMatch`, verified defaults) stays untouched. Nothing
+design-level remains open — see "Next up" below for what's left, which is implementation
+planning, not more design.
+
 One operational note worth carrying forward: this session's GitHub credentials can push
 branches but not tags (a real `403`, confirmed via verbose tracing, not a bug) — cutting the
 `0.1.0-alpha`, `0.1.0-alpha2`, `0.2.0-alpha`, `0.3.0-alpha`, `0.4.0-alpha`, and `0.5.0-alpha`
@@ -196,6 +217,23 @@ default next step.
      existing* array item is mechanically answerable the same way an XML element match already
      is, so this could in principle be implemented independently of `Insert` — not done only for
      lack of time, not a design blocker. See `docs/FIELD_AUTHORING_DESIGN.md`'s "Open items".
+- **Self-describing overlays (`configtransform.json`)** — design fully decided, ready for an
+  implementation plan: `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md` replaces `manifest.json` and the
+  fixed base→Environments→Clients rule with a Kustomize-style self-describing manifest per layer
+  directory. Every question the document originally opened is now settled — file format (JSON),
+  scope (one file spans every project/format a client×environment touches, meaning
+  `ConfigTransform.Xml`/`ConfigTransform.Json` likely unify into one CLI entry point),
+  patch-to-resource matching (each resource pairs its own `path` with an optional `patch`
+  directly, via a new `extends` field separating layer inheritance from what one layer itself
+  adds), path convention (`extends`/`path`/`patch` all repo-root-relative, uniformly), that
+  `manifest.json` is fully replaced with no coexistence period, and what `set` needs to do
+  differently (a new `--resource <path>` flag, rules for creating/updating `resources` entries
+  and patch files — its actual field-authoring logic is untouched). This is a bigger, more
+  foundational change than `set`'s remaining gaps above — it touches `Manifest`/`ManifestLoader`/
+  `ManifestDiscovery`/`ManifestEntrySelector`/`LayerResolution`/`SetTargetResolver` and both
+  tools' `CliRunner`, not one command, plus the CLI-unification consequence as its own
+  separately-scoped piece of work. What's left is sequencing an implementation plan, not further
+  design — no open question remains to resolve first.
 - **Solution-repo pilot, first round complete** — `config-transform-pilot` (synthetic, three
   projects at varying nesting depth, one per config format) validated the core design claims
   end to end and found/fixed one real bug (see "Current state" above and the pilot's

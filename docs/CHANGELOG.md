@@ -8,6 +8,26 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ### Added
 
+- `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`: **now fully decided** — replaces `manifest.json` and
+  the fixed base→Environments→Clients rule with a Kustomize-style self-describing
+  `configtransform.json` per layer directory, raised directly by the repo owner. Every design
+  question it originally opened is settled: file format (JSON, not YAML — no new dependency for a
+  config file this tool doesn't merge); scope (one file spans every project/format a
+  client×environment touches, not just one project — accepting `ConfigTransform.Xml`/
+  `ConfigTransform.Json` likely unifying into one CLI dispatcher as a first-class consequence);
+  patch-to-resource matching (each `resources` entry pairs its own `path` with an optional `patch`
+  field directly, requested by the repo owner over the document's own earlier filename-convention
+  proposal — needed a new `extends` field to keep that unambiguous when a layer inherits from
+  another multi-project layer); path convention (`extends`, `path`, and `patch` all
+  repo-root-relative, uniformly — the document's first pass special-cased `patch` as a
+  same-directory filename and gave `extends` a different anchor than `path`, both real
+  inconsistencies caught and corrected, prioritizing one predictable rule over the repetition it
+  costs); `manifest.json`'s fate (fully replaced, a clean break, no coexistence period); and
+  `set`'s redesign (a new `--resource <path>` targeting flag, rules for creating/updating a
+  layer's `resources` entries and patch files, while the actual field-authoring logic —
+  `XmlFieldAuthor`/`JsonFieldAuthor`, `$elemMatch`, verified defaults — stays untouched). See
+  `docs/ROADMAP.md`'s "Next up" for what's left, which is implementation planning, not more design.
+
 - **`set` support for JSON array-of-objects matching, via a `$elemMatch` overlay syntax** —
   closes the gap flagged below as "not implemented". `--match key=<array>` locates the array, one
   or more further `--match <field>=<value>` (any attribute other than `key`/`literal-key`) become
