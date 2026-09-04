@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 namespace ConfigTransform.Core;
 
 /// <summary>
@@ -69,16 +67,10 @@ public static class SetTargetResolver
             ? Path.GetFullPath(existingEntry.Patch, root)
             : Path.Combine(
                 Path.GetDirectoryName(targetLayerFullPath)!,
-                $"patch-{canonicalResourcePath.Replace('/', '-')}.{newPatchFileExtension}");
+                PatchFileNaming.BuildFileName(canonicalResourcePath, newPatchFileExtension));
 
         return new SetTarget(canonicalResourcePath, basePath, IsBaseTarget: false, targetLayerFullPath, extends, patchPath, precedingPatches);
     }
-
-    private static readonly JsonSerializerOptions WriteOptions = new()
-    {
-        WriteIndented = true,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-    };
 
     /// <summary>
     /// Creates or updates the target's configtransform.json so <see cref="SetTarget.ResourcePath"/>
@@ -109,6 +101,6 @@ public static class SetTargetResolver
 
         var dir = Path.GetDirectoryName(targetLayerFullPath)!;
         Directory.CreateDirectory(dir);
-        File.WriteAllText(targetLayerFullPath, JsonSerializer.Serialize(updated, WriteOptions));
+        File.WriteAllText(targetLayerFullPath, LayerManifestSerializer.Serialize(updated));
     }
 }

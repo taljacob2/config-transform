@@ -61,7 +61,14 @@ flowchart LR
    Once installed, `dotnet tool run configtransform` with no arguments at all (or
    `configtransform help`/`--help`/`-h` anytime) prints a quick tldr-style cheat sheet — worth
    running once just to confirm the install worked, before setting up a real override below.
-3. Author the first override with `set` rather than hand-writing a `configtransform.json` and a
+3. **Optional but recommended**: scaffold the tree itself first, with `init`, rather than letting
+   the very first `set` below create a Client layer before any Environment layer exists. `init`
+   scans the repo for candidate resources (or takes them explicitly), asks (or takes as flags)
+   which environments and clients to create, and writes the skeleton — see `docs/USAGE.md`'s
+   `init` section for the full flag reference, or just try `dotnet tool run configtransform --
+   init --template` for a canned, immediately-runnable starter tree with no setup at all. Skipping
+   this step is fine too — `set` (next) creates whatever layer it needs on first write regardless.
+4. Author the first override with `set` rather than hand-writing a `configtransform.json` and a
    patch file — it creates both, correctly, in one step:
    ```bash
    dotnet tool run configtransform -- set \
@@ -76,7 +83,7 @@ flowchart LR
    `.configtransform/Clients/ClientA/Production/patch-<project>-App.config.xml`, and prints the
    effective diff. See `docs/FIELD_AUTHORING_DESIGN.md` for everything `set` can do, and `USAGE.md`
    for the full flag reference.
-4. Preview before committing anything:
+5. Preview before committing anything:
    ```bash
    dotnet tool run configtransform -- \
      --resource path/to/YourProject/App.config \
@@ -154,16 +161,17 @@ Same idea, one layer deeper — override in the Client layer's own patch file
   no matching required) when a key should exist for one client only and nowhere else — an
   unusual, deliberate exception, not the default way to add a field.
 
-## Should there be an `init` command?
+## `init`
 
-**Designed, not implemented yet** — full design at `docs/INIT_COMMAND_DESIGN.md`. This section
-originally said "not yet," reasoning that `set` already covers the common case, no real solution
-repo had validated a "typical" tree shape, and it would mean real added CLI scope. All three are
-still true, and the design doc doesn't pretend otherwise — it's a deliberate, named exception to
-that gate (the same kind of exception this file's own `FIELD_AUTHORING_DESIGN.md` already made
-for `set`), made by the repo owner with the original reasoning fully in view rather than by
-waiting for the trigger condition below to fire on its own. See the design doc's "Why this
-exists, and why now" for the full argument.
+**Implemented** — see "Setting up a project from scratch" above (step 3) and `docs/USAGE.md`'s
+`init` section for the flag reference. Full design and the decision log behind every default
+(scan filters, the bare `--template` switch, why an Environment layer lists every selected
+resource even with no `patch`) is `docs/INIT_COMMAND_DESIGN.md`.
 
-Tracked in `ROADMAP.md`'s "Next up" — implementation is the next actionable step, not a further
-design pass.
+This section originally asked "should there be an `init` command?" and said "not yet," reasoning
+that `set` already covered the common case, no real solution repo had validated a "typical" tree
+shape, and it would mean real added CLI scope. All three were still true when the design was
+written — it was a deliberate, named exception to that gate (the same kind of exception this
+file's own `FIELD_AUTHORING_DESIGN.md` already made for `set`), made by the repo owner with the
+original reasoning fully in view rather than by waiting for a second/third real solution repo.
+See the design doc's "Why this exists, and why now" for the full argument.

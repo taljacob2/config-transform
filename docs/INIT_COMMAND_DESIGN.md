@@ -1,9 +1,16 @@
 # Scaffolding a tree (`init`) — design
 
-**Status: designed, not implemented.** This document is the full design for a new
-`configtransform init` command. Nothing here is live yet — `CHANGELOG.md`/`ROADMAP.md` are the
-source of truth for what's actually shipped; treat this as the plan an implementation pass should
-follow, not a description of current behavior.
+**Status: implemented**, matching this design as written — `docs/CHANGELOG.md`'s `[Unreleased]`
+entry and `docs/ROADMAP.md`'s "Current state" have exactly what shipped and where (`InitScanner`/
+`InitPlanner`/`InitTemplate`/`InitRunner` in `ConfigTransform.Core`, `PatchFileNaming` shared with
+`SetTargetResolver`). Treat this document as the design rationale and decision log behind current
+behavior, not a plan still to be executed; if a specific claim here ever reads as aspirational,
+`CHANGELOG.md`/the code are the source of truth. One correction versus the original text below:
+the "Immediately runnable" demo under "Template mode" originally assumed a resolve/`--dry-run`/
+`--diff` invocation could omit `--client`/`--environment` (base-only or Environment-only) the way
+`set`/`--list` can — it can't (`docs/USAGE.md`'s flag reference: both are always required for a
+resolve), so that demo now varies client and environment together instead of progressively
+dropping one. Caught by the manual smoke test during implementation, not assumed correct.
 
 ## Why this exists, and why now
 
@@ -185,17 +192,20 @@ shape" below); a template's whole point is to be immediately runnable, so it alw
 override to show at every layer.
 
 **Immediately runnable, and that's the demo**, three invocations against the exact same
-`--resource configtransform-template.json`, no other setup:
+`--resource configtransform-template.json`, no other setup. `--client`/`--environment` are both
+always required for a resolve/dry-run/diff (`docs/USAGE.md`'s flag reference — unlike `set`/
+`--list`, which allow a base-only or Environment-only target, the plain resolve path doesn't), so
+the demo varies client and environment together rather than progressively dropping one:
 
 ```
-configtransform --resource configtransform-template.json --dry-run
-  → { "message": "Hello, world! (from base config)" }               # no --client/--environment: base file alone
-
-configtransform --environment Production --resource configtransform-template.json --dry-run
-  → { "message": "Hello, world! (from Production config)" }         # Environment layer only, no client
-
 configtransform --client Client-A --environment Production --resource configtransform-template.json --dry-run
-  → { "message": "Hello, world! (from Client-A Production config)" } # full chain: base → Production → Client-A
+  → { "message": "Hello, world! (from Client-A Production config)" }
+
+configtransform --client Client-A --environment Test --resource configtransform-template.json --dry-run
+  → { "message": "Hello, world! (from Client-A Test config)" }
+
+configtransform --client Client-B --environment Production --resource configtransform-template.json --dry-run
+  → { "message": "Hello, world! (from Client-B Production config)" }
 ```
 
 `--diff` against any of the above shows exactly one line changing (`message`), which is the point

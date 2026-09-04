@@ -23,6 +23,8 @@ public static class HelpPrinter
               configtransform [--resource <path>] --client <C> --environment <E> [--dry-run | --diff | --output <path>]
               configtransform --list [--client <C> --environment <E> | --resource <path>]
               configtransform set --resource <path> [--client <C> --environment <E>] --match <k>=<v> [--match ...] --set <k>=<v> [--set ...]
+              configtransform init [--environment <E> ...] [--client <C> ...] [--resource <path> ...] [--yes] [--dry-run]
+              configtransform init --template [--dry-run]
               configtransform | help | --help | -h            this page (also shown for no arguments at all)
 
             COMMON COMMANDS
@@ -33,6 +35,8 @@ public static class HelpPrinter
               Inspect a layer                   configtransform --list -c <Client> -e <Environment>
               Find every layer patching a file  configtransform --list -r <path>
               Author an override                configtransform set -r <path> -c <Client> -e <Environment> --match <field>=<value> --set <field>=<value>
+              Try it with a starter tree         configtransform init --template
+              Scaffold a real tree               configtransform init -e Production -e Test -c Acme --yes
 
             --dry-run — print the fully merged result to stdout; nothing written to disk
               easy:  configtransform -r OrderProcessor.Framework/App.config -c Acme -e Production --dry-run
@@ -60,6 +64,15 @@ public static class HelpPrinter
               tldr:  configtransform set -r BillingApi.Core/appsettings.json -c Acme -e Production --match key=Rules --match role=Admin --match env=Production --set enabled=true
                      (JSON array-of-objects: matches or creates the item identified by role+env,
                      via $elemMatch — no array position is ever written; upserts if nothing matches)
+
+            init — scaffold .configtransform/Environments/ and .configtransform/Clients/ trees
+              easy:  configtransform init --template
+                     (Production/Test x Client-A/Client-B, one demo resource whose value names its
+                     own layer — immediately runnable, try --diff -c Client-A -e Production -r configtransform-template.json)
+              tldr:  configtransform init -e Production -e Test -c Acme --yes
+                     (quiet/CI-safe: scans the repo for more .config/.xml/.json candidates too,
+                     unless --resource is given; with no flags at all in a real terminal, asks
+                     interactively instead)
 
             Full reference — every flag, --list's two modes in full, and exactly what set supports
             per format (and why) — is docs/USAGE.md in the config-transform repo.

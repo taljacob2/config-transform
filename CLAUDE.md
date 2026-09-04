@@ -137,6 +137,11 @@ updating and creating) and also matches or creates an item inside an array of ob
 implementation, for JSON, is closed; XML's own array-of-objects matching remains open, alongside
 `Insert`. `0.8.0-alpha` is tagged and published, and `config-transform-pilot` has been migrated
 onto it (unified `configtransform` command, golden-output-verified against a real pre-migration
-baseline — see that repo's `FINDINGS.md` and `config-transform-pilot#2`). See `docs/ROADMAP.md`'s
-"Next up" for what's actionable now versus what needs either a solution repo that doesn't exist
-yet or an owner decision.
+baseline — see that repo's `FINDINGS.md` and `config-transform-pilot#2`, merged). A new `init`
+command (`docs/INIT_COMMAND_DESIGN.md`) scaffolds a `.configtransform/` tree directly — an
+interactive form (no TUI), a flag-driven quiet mode safe for CI, and a bare `init --template`
+starter tree that's immediately runnable (every layer's demo resource names itself in its
+override). Along the way, fixed a real patch-filename stutter shared with `set`
+(`PatchFileNaming`). Not yet released — still in `[Unreleased]`. See `docs/ROADMAP.md`'s "Next
+up" for what's actionable now versus what needs either a solution repo that doesn't exist yet or
+an owner decision.
