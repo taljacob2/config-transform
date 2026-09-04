@@ -286,10 +286,29 @@ command), reachable via no arguments, a leading bare `help`, or `--help`/`-h` an
 position — all of which win over every other flag, including what would otherwise be a
 validation error. Supported extensions are read from the real `FormatEngineRegistry`, not
 hardcoded, so the page can't drift from what the binary actually handles. 200 tests passing
-solution-wide. Folded into the still-unpushed `[0.8.0-alpha]` CHANGELOG section (rather than its
-own version) since `ConfigTransform.Cli` has no published version yet to be additive *relative
-to* — one clean first release covers both the CLI unification and this. See
-`docs/CHANGELOG.md`'s `[0.8.0-alpha]` entry.
+solution-wide. Folded into the `[0.8.0-alpha]` CHANGELOG section (rather than its own version)
+since `ConfigTransform.Cli` had no published version yet to be additive *relative to* — one clean
+first release covers both the CLI unification and this. See `docs/CHANGELOG.md`'s `[0.8.0-alpha]`
+entry.
+
+**`0.8.0-alpha` is live and `config-transform-pilot` has been migrated onto it.** The owner
+tagged and pushed `0.8.0-alpha`; `publish.yml` ran green end to end, including the
+mixed-format-single-call smoke test (`ConfigTransform.Cli` release:
+`https://github.com/taljacob2/config-transform-pilot`'s
+`docs/CHANGELOG.md`/GitHub Releases in `config-transform` have the details). The pilot's own
+`.config/dotnet-tools.json` is re-pinned to `ConfigTransform.Cli 0.8.0-alpha`,
+`build-transformed.yml`'s five invocations now call the unified `configtransform`, and the
+"Demonstrate multi-resource mode" step collapsed from two per-format calls to one
+`--resource`-omitted call — the actual headline capability, validated against real
+multi-project content, not just this repo's own synthetic smoke test. Verified via three real
+`workflow_dispatch` runs, not just reasoning about the change: a golden-output diff against a
+freshly-triggered `0.7.0-alpha2` baseline run (all four resolved resources byte-for-byte
+identical, `--list` output identical, the only difference being multi-resource mode's stderr
+skip notes dropping from 2 to 0), plus an `Initech`/`Staging` negative test confirming
+"missing overlay ≠ error" and the known multi-resource-mode/`LegacyGateway` asymmetry both hold
+unchanged. See the pilot's own `FINDINGS.md` "Migrating to the unified CLI (0.8.0-alpha)"
+section and `config-transform-pilot#2` for the full writeup — open as a draft PR as of this
+writing, not yet merged.
 
 ## Next up
 
@@ -312,18 +331,6 @@ default next step.
      existing* array item is mechanically answerable the same way an XML element match already
      is, so this could in principle be implemented independently of `Insert` — not done only for
      lack of time, not a design blocker. See `docs/FIELD_AUTHORING_DESIGN.md`'s "Open items".
-- **Migrate `config-transform-pilot` off the two-tool CLI, onto `ConfigTransform.Cli 0.8.0-alpha`**
-  — deliberately deferred out of this change, same precedent as the `manifest.json` migration
-  (shipped here first, migrated in the pilot's own repo as a separate pass afterward). The pilot
-  is the only place the headline new capability can actually be validated against real
-  multi-project content: it has three projects spanning both formats, so collapsing
-  `build-transformed.yml`'s four per-format `dotnet tool run configtransform-xml`/
-  `configtransform-json` invocations into a single `--resource`-omitted `configtransform` call
-  is the real proof, not just this repo's own synthetic smoke test. Concrete scope once
-  `0.8.0-alpha`'s tag is pushed (owner-only, this repo's sessions can push branches but not tags):
-  re-pin `.config/dotnet-tools.json` to `ConfigTransform.Cli 0.8.0-alpha` (dropping both old
-  entries), collapse the per-format invocations, diff golden outputs against the `0.7.0-alpha2`
-  baseline, update the pilot's own `FINDINGS.md`.
 - **`docs/MANIFEST_SCHEMA.md`'s filename vs. its content** — now describes the
   `configtransform.json` schema in full (the self-describing-overlays implementation above), but
   kept its old filename to avoid a large cross-reference rename across `docs/`. Worth revisiting

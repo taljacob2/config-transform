@@ -135,6 +135,8 @@ brand-new one, `Insert`, is not implemented), JSON writes a nested key directly 
 updating and creating) and also matches or creates an item inside an array of objects via a
 `$elemMatch` overlay syntax (`JsonElemMatchResolver`) — the one real design gap found during
 implementation, for JSON, is closed; XML's own array-of-objects matching remains open, alongside
-`Insert`. See `docs/ROADMAP.md`'s "Next up" for what's actionable now versus what needs either a
-solution repo that doesn't exist yet or an owner decision — including migrating
-`config-transform-pilot` onto the unified CLI, deliberately deferred out of that change.
+`Insert`. `0.8.0-alpha` is tagged and published, and `config-transform-pilot` has been migrated
+onto it (unified `configtransform` command, golden-output-verified against a real pre-migration
+baseline — see that repo's `FINDINGS.md` and `config-transform-pilot#2`). See `docs/ROADMAP.md`'s
+"Next up" for what's actionable now versus what needs either a solution repo that doesn't exist
+yet or an owner decision.
