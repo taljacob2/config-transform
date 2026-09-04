@@ -50,7 +50,9 @@ public static class SetTargetResolver
         // inherit," not an error (Settled decisions #6). An Environment-layer target has no
         // `extends` at all. Trust an already-existing file's own `extends` over this default, in
         // case it was hand-edited to something else.
-        var defaultExtends = client is null ? null : LayerPathResolver.Resolve(root, client: null, environment);
+        var defaultExtends = client is null
+            ? null
+            : LayerChain.ToRepoRelative(root, LayerPathResolver.Resolve(root, client: null, environment)!);
         var extends = File.Exists(targetLayerFullPath)
             ? LayerManifestLoader.Load(targetLayerFullPath).Extends
             : defaultExtends;

@@ -1,6 +1,6 @@
 # Self-describing overlays (`configtransform.json`) — design
 
-**Status: proposed, fully decided, not yet implemented.** This document exists to get every open
+**Status: implemented.** This document exists to get every open
 question on the table before any code changes, the same way `FIELD_AUTHORING_DESIGN.md` did for
 `set` — and, like that document once it reached this stage, every design question below is now
 settled by the repo owner. In order: **file format is JSON** (`configtransform.json`, not
@@ -380,22 +380,27 @@ nice-to-have.
 | `manifest.json`'s fate | Fully replaced — a clean break, no coexistence/migration period | Keep `manifest.json` alongside the new tree for some transition period, or preserve its directory-indirection some other way | Confirmed directly by the repo owner: the indirection is an accepted, named loss, not worth preserving. No real solution repo has adopted the current schema in production yet, so there's no live user a dual-support path would protect — consistent with this repo's SemVer policy allowing any breaking change pre-1.0. |
 | `set`'s new targeting flag | `--resource <path>`, naming the project by its real repo-root-relative path | Keep `--manifest`/`--file`; invent a new project-label indirection to replace `manifest.json`'s | `manifest.json` is gone (see the row above), so there's no project label left to target by — `path` is already how every resource is addressed everywhere else in this design, so reusing it for `set`'s own targeting needs no new vocabulary. |
 
-## Open items for implementation
+## Implemented — what shipped, and what's still open
 
-All six "Settled decisions" above are confirmed by the repo owner — this design has no remaining
-open questions. What's left is implementation, not more design:
+All seven "Settled decisions" above are confirmed by the repo owner and are now real code, not
+just design. `LayerManifest`/`LayerManifestLoader`/`LayerPathResolver`/`LayerChain`/`LayerLister`
+(`ConfigTransform.Core`) replace `Manifest`/`ManifestLoader`/`ManifestDiscovery`/
+`ManifestEntrySelector`/`ManifestLister`/`LayerResolution` (all deleted); `XmlLayerMerger`/
+`JsonLayerMerger` take an arbitrary-length ordered patch chain; `SetTargetResolver` and both
+tools' `CliRunner` are rewritten around `--resource`. `docs/MANIFEST_SCHEMA.md`,
+`docs/GETTING_STARTED.md`, `docs/ONBOARDING.md`, `docs/USAGE.md`, and `CLAUDE.md` are rewritten;
+`docs/CONFIG_MANAGEMENT.md` §3/§4/§5.1/§9 are updated in the same change.
 
-- The CLI-unification consequence of "Settled decisions" #2 (`ConfigTransform.Xml`/
-  `ConfigTransform.Json` likely merging into one dispatcher) is its own, separately-scoped design
-  and implementation pass — not a detail to fold into the rest of this work.
-- `docs/MANIFEST_SCHEMA.md`, `docs/GETTING_STARTED.md`, `docs/ONBOARDING.md`, and
-  `docs/CONFIG_MANAGEMENT.md` §3/§4/§9 all describe the current schema in detail and would need a
-  full rewrite, not just an addendum, once this design is finalized — `manifest.json` being fully
-  replaced (not kept alongside) means these can't just gain an addendum section either.
-- `ManifestLoader`/`ManifestDiscovery`/`ManifestEntrySelector`/`LayerResolution`/
-  `SetTargetResolver` in `ConfigTransform.Core`, and each tool's `CliRunner`, are the concrete
-  implementation surface — see their current form for what a `configtransform.json`-based
-  replacement would need to do instead.
+One item was explicitly deferred, not overlooked:
+
+- **The CLI-unification consequence of "Settled decisions" #2** (`ConfigTransform.Xml`/
+  `ConfigTransform.Json` merging into one dispatcher) is still its own, separately-scoped design
+  and implementation pass, exactly as flagged when this design was written — not started. The
+  interim behavior implemented instead: each tool processes every resource of its own format that
+  a resolved layer touches, skipping the other format's resources with a stderr note rather than
+  an error or silence. See `docs/ROADMAP.md`'s "Next up" for what a unification pass would still
+  need to decide (binary/project name, how `set`'s engine selection carries over to one
+  dispatcher).
 
 ## Related reading
 

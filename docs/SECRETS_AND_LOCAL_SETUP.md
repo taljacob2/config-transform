@@ -190,7 +190,7 @@ Actions job made of separate steps.
    (`.bashrc`, PowerShell `$PROFILE`) or a durable env var (`setx GITHUB_ACTOR ...` on Windows).
 3. Run the tool exactly as CI does — identical invocation on every platform, regardless of host:
    ```
-   dotnet tool run configtransform-xml -- --manifest .configtransform/<Project>/manifest.json --file App.config --client ClientA --environment Production --diff
+   dotnet tool run configtransform-xml -- --resource <Project>/App.config --client ClientA --environment Production --diff
    ```
 
 ## 2. git-crypt for the consuming repo's `.configtransform/` tree

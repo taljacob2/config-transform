@@ -1,3 +1,4 @@
+using ConfigTransform.Core;
 using ConfigTransform.Json.Tests.TestSupport;
 using Xunit;
 
@@ -30,7 +31,13 @@ public class JsonSetCommandCliTests
 
         var layerPath = Path.Combine(workspace.RootPath, ".configtransform", "Clients", "Globex", "Production", "configtransform.json");
         Assert.True(File.Exists(layerPath));
-        Assert.Contains(".configtransform/Environments/Production/configtransform.json", File.ReadAllText(layerPath));
+        var layer = LayerManifestLoader.Load(layerPath);
+        // Exact equality, not just Contains -- `extends` must be repo-root-relative, not the
+        // absolute path LayerPathResolver itself works with internally (Settled decisions #4:
+        // every path in the file is repo-root-relative, no exceptions).
+        Assert.Equal(".configtransform/Environments/Production/configtransform.json", layer.Extends);
+        Assert.Equal(workspace.ResourcePath, layer.Resources.Single().Path);
+        Assert.Equal(".configtransform/Clients/Globex/Production/patch-Project-appsettings.json.json", layer.Resources.Single().Patch);
 
         var patchPath = Path.Combine(workspace.RootPath, ".configtransform", "Clients", "Globex", "Production", "patch-Project-appsettings.json.json");
         Assert.True(File.Exists(patchPath));

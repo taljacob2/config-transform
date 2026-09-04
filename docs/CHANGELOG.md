@@ -8,6 +8,41 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ### Added
 
+- **Self-describing overlays (`configtransform.json`) implemented** —
+  `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`'s fully-decided design (see the entry below) is now
+  real code. `manifest.json` and the fixed base→Environments→Clients rule are gone: one
+  `configtransform.json` per layer directory (`.configtransform/Environments/<Env>/` and
+  `.configtransform/Clients/<Client>/<Env>/`) declares an optional `extends` and a `resources[]`
+  list, each entry pairing a project's repo-root-relative path with its own optional `patch`.
+  `Manifest`/`ManifestLoader`/`ManifestDiscovery`/`ManifestEntrySelector`/`ManifestLister`/
+  `LayerResolution` (`ConfigTransform.Core`) are deleted, replaced by `LayerManifest`/
+  `LayerManifestLoader`/`LayerPathResolver`/`LayerChain`/`LayerLister`. `XmlLayerMerger`/
+  `JsonLayerMerger.Merge` take an arbitrary-length ordered patch chain instead of a fixed
+  base+environment+client two-slot signature; `JsonLayerMerger`'s `$elemMatch` progressive
+  resolution now folds over the whole chain (verified with a genuine 3-deep chain test, not just
+  the old 2-hop case).
+  **CLI**: `--manifest`/`--file` are gone; `--resource <repo-root-relative path>` is the tool-wide
+  targeting flag for a resolve/`--dry-run`/`--diff`/a real run/`--list`/`set`. Omitting it
+  processes every resource the resolved layer touches, in that tool's own format, in one call — a
+  real run then requires `--output <directory>` and writes one file per resource; a resource in
+  the other tool's format is skipped with a stderr note, not an error or silent drop (true
+  single-binary dispatch across formats is a separate, not-yet-started pass). `--list` shows one
+  layer's resources and `extends` (or, given `--resource` instead, a tree-wide reverse lookup —
+  every layer that patches one project, closing a real ergonomic gap the new tree creates).
+  **`set`**: now targets a resource by its own path; creates a missing `configtransform.json` on
+  first write, defaulting a Client layer's `extends` to the matching Environment layer even if
+  that file doesn't exist yet (a missing `extends` target is "nothing to inherit," not an error) —
+  its actual field-authoring logic is untouched. A real bug caught only by manual smoke-testing,
+  not the unit suite: `set` was writing an *absolute* path into a newly-created layer's `extends`
+  field instead of repo-root-relative, violating the design's own "every path is repo-root-relative,
+  no exceptions" rule — fixed, with the regression coverage tightened from a loose substring check
+  to exact-value assertions.
+  All fixture trees migrated to the new tree shape; `TempCliWorkspace` (both test projects)
+  rebuilt around a synthetic repo root; `CLAUDE.md`/`MANIFEST_SCHEMA.md`/`GETTING_STARTED.md`/
+  `ONBOARDING.md`/`USAGE.md`/`CONFIG_MANAGEMENT.md` §3/§4/§5.1/§9 rewritten in the same change.
+  CLI unification (`ConfigTransform.Xml`/`ConfigTransform.Json` merging into one dispatcher)
+  remains the one deliberately deferred piece — see `docs/ROADMAP.md`'s "Next up".
+
 - `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`: **now fully decided** — replaces `manifest.json` and
   the fixed base→Environments→Clients rule with a Kustomize-style self-describing
   `configtransform.json` per layer directory, raised directly by the repo owner. Every design

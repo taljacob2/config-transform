@@ -16,9 +16,9 @@ ConfigTransform/                              (repo root)
 ├── Directory.Build.props                     # shared TargetFramework, Nullable, LangVersion
 ├── src/
 │   ├── ConfigTransform.Core/                 # shared logic, no CLI — see §2
-│   │   ├── Manifest.cs
+│   │   ├── LayerManifest.cs                  # configtransform.json shape (extends + resources[])
 │   │   ├── FileResolver.cs                   # case-insensitive resolution, §5.4 of the spec
-│   │   ├── LayerResolution.cs                # found/not-found reporting, §5.1
+│   │   ├── LayerChain.cs                     # extends-chain resolution, found/not-found reporting, §5.1
 │   │   └── ConfigTransform.Core.csproj
 │   ├── ConfigTransform.Xml/                  # CLI front-end wrapping Microsoft.Web.Xdt
 │   │   ├── Program.cs
@@ -43,7 +43,7 @@ ConfigTransform/                              (repo root)
 │       └── publish.yml                       # dotnet pack + nuget push, on tagged release only
 ├── docs/
 │   ├── USAGE.md                              # full CLI reference: every flag, both tools
-│   ├── MANIFEST_SCHEMA.md                    # authoritative manifest.json schema reference —
+│   ├── MANIFEST_SCHEMA.md                    # authoritative configtransform.json schema reference —
 │   │                                          # the tool's own input contract, kept here rather
 │   │                                          # than only in a consuming repo's docs
 │   └── CHANGELOG.md                          # per-version history, keyed to the SemVer policy

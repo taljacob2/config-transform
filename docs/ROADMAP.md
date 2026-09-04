@@ -196,6 +196,34 @@ tags all required the repo owner to push them manually (`0.4.1` too, going by it
 though not part of this session's own release work). Expect the same for any future release
 tag.
 
+**Self-describing overlays (`configtransform.json`) implemented** — `docs/SELF_DESCRIBING_
+OVERLAYS_DESIGN.md`'s fully-decided design is now real code, not just a plan. `manifest.json` and
+`ManifestLoader`/`ManifestDiscovery`/`ManifestEntrySelector`/`ManifestLister`/`LayerResolution`
+are deleted, replaced by `LayerManifest`/`LayerManifestLoader`/`LayerPathResolver`/`LayerChain`/
+`LayerLister` (`ConfigTransform.Core`). `XmlLayerMerger`/`JsonLayerMerger` now take an
+arbitrary-length ordered patch chain instead of a fixed base+environment+client two-slot
+signature — `JsonLayerMerger`'s `$elemMatch` progressive resolution folds over the whole chain
+(verified with a genuine 3-deep chain test, not just the old 2-hop case). `--manifest`/`--file`
+are gone; `--resource <repo-root-relative path>` is the tool-wide targeting flag everywhere
+(`--dry-run`/`--diff`/a real run/`--list`/`set`), and omitting it processes every resource the
+resolved layer touches, in this tool's own format, in one call (mixed-format layers are fine — the
+other tool's resources are skipped with a stderr note, not silently dropped or an error; true
+single-binary dispatch across formats is the separately-scoped CLI-unification pass below, still
+not started). `set` creates a missing `configtransform.json` on first write, defaulting a Client
+layer's `extends` to the matching Environment layer even if that file doesn't exist yet — its
+actual field-authoring logic (`XmlFieldAuthor`/`JsonFieldAuthor`, `$elemMatch`) is untouched, as
+designed. A real bug caught only by manual smoke-testing (not the unit suite): `set` was writing
+an *absolute* path into a newly-created layer's `extends` field instead of repo-root-relative,
+violating the design's own "every path is repo-root-relative, no exceptions" rule — fixed, with
+the fix's regression coverage tightened from a loose substring check to exact-value assertions so
+the same class of bug can't silently pass again. All fixture trees (`DotNetFramework`,
+`GenericXml`, `IisWebConfig`, `DotNetCore` (+`ElemMatch`), `GenericJson` (+`ElemMatch`)) migrated
+to the new `.configtransform/Environments/<Env>/`+`.configtransform/Clients/<Client>/<Env>/` shape;
+`TempCliWorkspace` (both test projects) rebuilt around a synthetic repo root. Docs rewritten in the
+same change: `CLAUDE.md`, `MANIFEST_SCHEMA.md` (content now describes `configtransform.json`, kept
+its filename), `GETTING_STARTED.md`, `ONBOARDING.md`, `USAGE.md`; `CONFIG_MANAGEMENT.md` and
+`docs/INDEX.md` still need their own pass (see "Next up"). 177 tests passing solution-wide.
+
 ## Next up
 
 One item below is now actionable purely within this repo (see the first bullet); every other
@@ -217,23 +245,28 @@ default next step.
      existing* array item is mechanically answerable the same way an XML element match already
      is, so this could in principle be implemented independently of `Insert` — not done only for
      lack of time, not a design blocker. See `docs/FIELD_AUTHORING_DESIGN.md`'s "Open items".
-- **Self-describing overlays (`configtransform.json`)** — design fully decided, ready for an
-  implementation plan: `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md` replaces `manifest.json` and the
-  fixed base→Environments→Clients rule with a Kustomize-style self-describing manifest per layer
-  directory. Every question the document originally opened is now settled — file format (JSON),
-  scope (one file spans every project/format a client×environment touches, meaning
-  `ConfigTransform.Xml`/`ConfigTransform.Json` likely unify into one CLI entry point),
-  patch-to-resource matching (each resource pairs its own `path` with an optional `patch`
-  directly, via a new `extends` field separating layer inheritance from what one layer itself
-  adds), path convention (`extends`/`path`/`patch` all repo-root-relative, uniformly), that
-  `manifest.json` is fully replaced with no coexistence period, and what `set` needs to do
-  differently (a new `--resource <path>` flag, rules for creating/updating `resources` entries
-  and patch files — its actual field-authoring logic is untouched). This is a bigger, more
-  foundational change than `set`'s remaining gaps above — it touches `Manifest`/`ManifestLoader`/
-  `ManifestDiscovery`/`ManifestEntrySelector`/`LayerResolution`/`SetTargetResolver` and both
-  tools' `CliRunner`, not one command, plus the CLI-unification consequence as its own
-  separately-scoped piece of work. What's left is sequencing an implementation plan, not further
-  design — no open question remains to resolve first.
+- **CLI unification (`ConfigTransform.Xml`/`ConfigTransform.Json` merging into one dispatcher)** —
+  the one piece of `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md` deliberately left out of the
+  implementation above, per that document's own "Open items for implementation": since a single
+  `configtransform.json` can list resources of both formats, and dispatch is per-resource by file
+  extension, a genuinely single "process every resource, regardless of format, in one call"
+  experience needs one CLI entry point instead of two. Today's interim behavior (each tool skips
+  the other format's resources with a stderr note) works but isn't that end state. No design work
+  needed first — the design doc already confirms this is a first-class, accepted consequence, not
+  an open question — but it needs its own implementation pass: a new consolidated project/binary
+  (name not yet chosen), `XmlLayerMerger`/`JsonLayerMerger` staying as internal engines either way,
+  and a decision on how `set`'s engine selection (today inferred from `--resource`'s extension
+  inside each tool) carries over to one dispatcher choosing between them.
+- **`docs/MANIFEST_SCHEMA.md`'s filename vs. its content** — now describes the
+  `configtransform.json` schema in full (the self-describing-overlays implementation above), but
+  kept its old filename to avoid a large cross-reference rename across `docs/`. Worth revisiting
+  as a pure rename (e.g. `LAYER_SCHEMA.md`) if the mismatch causes real confusion — not urgent,
+  purely cosmetic.
+- **`docs/CONFIG_MANAGEMENT.md` §3/§4/§9 and `docs/INDEX.md`'s own descriptions** still describe
+  (or point at docs describing) the old `manifest.json`/fixed-layering model in places the
+  self-describing-overlays implementation above didn't reach in its own change — needs a follow-up
+  pass so `CONFIG_MANAGEMENT.md` (the primary "why" document) doesn't contradict what `CLAUDE.md`/
+  `MANIFEST_SCHEMA.md`/`GETTING_STARTED.md`/`ONBOARDING.md`/`USAGE.md` now say.
 - **Solution-repo pilot, first round complete** — `config-transform-pilot` (synthetic, three
   projects at varying nesting depth, one per config format) validated the core design claims
   end to end and found/fixed one real bug (see "Current state" above and the pilot's

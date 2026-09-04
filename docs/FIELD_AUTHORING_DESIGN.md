@@ -44,8 +44,8 @@ ship a change that's silently wrong.
 ## Command shape
 
 ```
-configtransform-xml  set --manifest ... --client <C> --environment <E> --match <attr>=<value> [--match ...] --set <attr>=<value> [--set ...]
-configtransform-json set --manifest ... --client <C> --environment <E> --match <attr>=<value> [--match ...] --set <attr>=<value> [--set ...]
+configtransform-xml  set --resource <path> --client <C> --environment <E> --match <attr>=<value> [--match ...] --set <attr>=<value> [--set ...]
+configtransform-json set --resource <path> --client <C> --environment <E> --match <attr>=<value> [--match ...] --set <attr>=<value> [--set ...]
 ```
 
 Identical shape across `ConfigTransform.Xml` and `ConfigTransform.Json` — same principle

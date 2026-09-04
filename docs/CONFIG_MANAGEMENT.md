@@ -83,36 +83,20 @@ repo-root/
 │   └── appsettings.json
 │
 ├── .configtransform/
-│   ├── ProjectA.Framework/
-│   │   ├── manifest.json
-│   │   ├── App.config/
-│   │   │   ├── Environments/
-│   │   │   │   ├── Production.config
-│   │   │   │   └── Staging.config
-│   │   │   └── Clients/
-│   │   │       ├── ClientA/
-│   │   │       │   ├── Production.config
-│   │   │       │   └── Staging.config
-│   │   │       └── ClientB/
-│   │   │           └── Production.config
-│   │   └── NLog.config/
-│   │       ├── Environments/
-│   │       │   └── Production.config
-│   │       └── Clients/
-│   │           └── ClientA/
-│   │               └── Production.config
+│   ├── Environments/
+│   │   └── Production/
+│   │       ├── configtransform.json
+│   │       ├── patch-ProjectA.Framework-App.config.xml
+│   │       └── patch-ProjectB.Core-appsettings.json.json
 │   │
-│   └── ProjectB.Core/
-│       ├── manifest.json
-│       └── appsettings.json/
-│           ├── Environments/
-│           │   ├── Production.json
-│           │   └── Staging.json
-│           └── Clients/
-│               ├── ClientA/
-│               │   └── Production.json
-│               └── ClientB/
-│                   └── Production.json
+│   └── Clients/
+│       ├── ClientA/
+│       │   └── Production/
+│       │       ├── configtransform.json          # extends .../Environments/Production/configtransform.json
+│       │       └── patch-ProjectA.Framework-App.config.xml
+│       └── ClientB/
+│           └── Production/
+│               └── configtransform.json          # extends-only, no resources of its own — see §4
 │
 ├── .config/
 │   └── dotnet-tools.json                      # pins the ConfigTransform tool version for this repo — see §11
@@ -122,70 +106,83 @@ repo-root/
     └── CONFIG_MANAGEMENT.md                   # this document, once committed
 ```
 
-`.configtransform/<Project>/` is a human-readable label only — it carries no assumption about where
-the project's code actually lives. That mapping is explicit in `manifest.json`.
+`.configtransform/` holds one `configtransform.json` per **layer directory** —
+`Environments/<Env>/` and `Clients/<Client>/<Env>/` — not one per project. A layer's `resources[]`
+entries are what map it to real project files, each by its own repo-root-relative path
+(`ProjectA.Framework/App.config`, `services/billing/ProjectB.Core/appsettings.json`) — there's no
+project-to-directory indirection to maintain separately the way `manifest.json`'s `directory`
+field once was; see §4 and `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md` for the full design and why
+it replaced that indirection.
 
 Note: the transform tool itself (`ConfigTransform.Xml` / `ConfigTransform.Json`) does **not**
 live in this repo. It lives in its own dedicated repository and is consumed as a versioned
 `dotnet tool` — see §11.
 
-## 4. Manifest schema
+## 4. Layer schema (`configtransform.json`)
 
 ```json
 {
-  "directory": "services/billing/ProjectB.Core",
-  "files": [
-    { "relativeToDirectory": "appsettings.json", "type": "json" }
+  "extends": ".configtransform/Environments/Production/configtransform.json",
+  "resources": [
+    { "path": "services/billing/ProjectB.Core/appsettings.json", "patch": ".configtransform/Clients/ClientA/Production/patch-ProjectB.Core-appsettings.json.json" }
   ]
 }
 ```
 
-- `directory`: repo-relative path to the directory holding the project's config file(s),
-  wherever it actually is. **Not** a `.csproj` reference, despite earlier revisions of this
-  schema calling the field `project` and describing it that way — the tool never opens or
-  validates anything at this path, it only resolves `relativeToDirectory` against it. See
-  `MANIFEST_SCHEMA.md`'s "`directory` is not a `.csproj` reference" section for the full
-  implication: this is why the tool has no `TargetFramework` coupling (§11, confirmed via the
-  pilot's net35 project), and why it works identically for a Node.js/Angular/React app's JSON
-  config, not just a `.csproj`-anchored one — the only real constraint is the config file format
+- `extends` (optional): the layer this one starts from — another `configtransform.json`'s own
+  fully-resolved output, not the raw base files. An Environment layer has none; a Client layer
+  typically extends the matching Environment layer.
+- `resources[].path`: the project's real config file, **repo-root-relative** — the same identity
+  everywhere this design addresses a resource (`--resource`, every `resources[]` entry across the
+  tree). **Not** a `.csproj` reference — the tool never opens or validates anything at this path,
+  only resolves it against the repo root. This is why the tool has no `TargetFramework` coupling
+  (§11, confirmed via the pilot's net35 project), and why it works identically for a
+  Node.js/Angular/React app's JSON config — the only real constraint is the config file format
   (XML or JSON today), not the language or ecosystem of the project it belongs to.
-- `files[].relativeToDirectory`: path to the base config file, relative to `directory`.
-- `files[].type`: `xml` or `json` — selects which transform tool handles it.
-- `files[].name` (optional): the subfolder name under `.configtransform/<Project>/` holding
-  that file's `Environments/` and `Clients/` overlays. When omitted (the normal case), it's
-  derived automatically from `relativeToDirectory`'s own filename — `appsettings.json` →
-  `appsettings.json/`, `App.config` → `App.config/`. Supply it explicitly only to disambiguate
-  the rare case of two base files sharing a filename in different subdirectories of the same
-  project, where auto-derivation would otherwise collide.
+- `resources[].patch` (optional): the overlay file for this resource at this layer — omitted
+  entirely for a resource this layer doesn't touch, which just passes through untouched. Also
+  repo-root-relative, uniformly with `extends`/`path` — no same-directory shorthand, a deliberate
+  consistency choice; see `docs/MANIFEST_SCHEMA.md`'s "Path convention" for the full reasoning.
 
-Onboarding a new project is: add a `.configtransform/<Project>/manifest.json`, populate
-`Environments/`/`Clients/` overlays as needed. Onboarding a new client for an existing
-project is: add `.configtransform/<Project>/<FileName>/Clients/<NewClient>/` with whatever
-environment files it needs. Neither requires touching CI logic or the source tree.
+Full field reference, worked examples, and the design history behind this shape:
+`docs/MANIFEST_SCHEMA.md` and `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`.
+
+Onboarding a new project is: run `set` once against its base file (`--resource <path>
+--client <C> --environment <E> --match ... --set ...`) — it creates the layer's
+`configtransform.json` (with the right `extends`) and authors the patch file in one step, no
+separate manifest to hand-write first. Onboarding a new client for an existing project is the
+same `set` invocation with the new client's name; a client that needs to inherit an Environment
+layer's content with no overrides of its own still needs an (empty-`resources`, extends-only)
+`configtransform.json` created for it — the "accepted cost" `docs/SELF_DESCRIBING_OVERLAYS_
+DESIGN.md` names explicitly, see `MANIFEST_SCHEMA.md`. Neither requires touching CI logic or the
+source tree.
 
 ## 5. Config resolution
 
-### 5.1 Merge order (per project, per config file)
+### 5.1 Merge order (per resource)
 
 ```
-base file → Environments/<Environment>.<ext> (if present) → Clients/<Client>/<Environment>.<ext> (if present) → final file
+base file → each layer's own patch, in `extends` order (outermost/base-most first) → final file
 ```
 
-Applied identically for every project, every file, every client, every environment — the
-order is a fixed rule in the tool, not declared per-file (contrast with Kustomize, where
-each overlay explicitly declares its own base reference — see §9 for the fuller comparison).
-A missing overlay file is not an error (it means "this client/environment has no override at
-this layer"); a missing **base** file must fail loudly, since that indicates something is
-actually broken, not an intentional absence.
+An Environment layer's own patch (if it lists the resource) applies first, then a Client layer
+extending it applies second, and so on for however deep an `extends` chain actually goes — this
+is a declared reference in each layer's own `configtransform.json`, not a fixed two-slot rule
+baked into the tool (contrast with Kustomize, whose overlays are self-describing the same way —
+see §9). A layer simply not listing the resource, or listing it with no `patch`, is not an error;
+a `patch` that *is* declared but whose file doesn't exist on disk is a different case — a broken
+reference — and always is one. A missing **base** file must fail loudly regardless, since that
+indicates something is actually broken, not an intentional absence.
 
-The tool does not attempt to detect or guess typos (e.g. an `Environments/Prodution.config`
-folder created by a misspelled environment name) — it isn't in a position to know intent, and
-shouldn't try. What it does instead: every run (`--dry-run`, `--diff`, and real runs alike)
-explicitly reports, for each layer, whether a matching file was found or not (e.g.
-`Environments/Production.config: not found, skipping` / `Clients/ClientA/Production.config:
-found, applying`). This keeps a typo visible to a human reading the output — because the file
-they expected to exist is reported as not found — without the tool trying to be clever about
-whether an absence was intentional.
+The tool does not attempt to detect or guess typos (e.g. a `configtransform.json` under a
+misspelled `Environments/Prodution/` folder) — it isn't in a position to know intent, and
+shouldn't try. What it does instead: every single-resource run (`--dry-run`, `--diff`, and real
+runs alike) explicitly reports, for each layer in the resolved chain, whether the resource was
+listed and patched (e.g. `.configtransform/Environments/Production/configtransform.json:
+'ProjectA.Framework/App.config' patched, applying (...)`) or not (`not listed, skipping` /
+`listed with no patch, skipping`). This keeps a typo visible to a human reading the output —
+because the layer they expected to patch the resource is reported as not doing so — without the
+tool trying to be clever about whether an absence was intentional.
 
 ### 5.2 XML (.NET Framework)
 
@@ -268,36 +265,36 @@ isn't lost.
 Both `ConfigTransform.Xml` and `ConfigTransform.Json` share the same CLI shape:
 
 ```
---manifest <path to manifest.json>     required
---file <base filename, e.g. App.config>  required if manifest has >1 file entry — matches the derived (or explicit override) overlay subfolder name, §4
+--resource <repo-root-relative path>   optional — omit for every resource the layer touches
 --client <ClientName>                  required
 --environment <EnvironmentName>        required
---output <path>                        real runs only — where the merged result is written (CI passes the publish dir path)
+--output <path>                        real runs only — where the merged result is written (CI passes the publish dir path; a directory when --resource is omitted)
 --dry-run                              print the fully merged result to stdout; nothing is written to disk
---diff                                 print a unified diff (base vs. fully merged) using `git diff --no-index`; nothing is written to disk except throwaway temp files, cleaned up immediately
+--diff                                 print a unified diff (unpatched vs. fully merged) using `git diff --no-index`; nothing is written to disk except throwaway temp files, cleaned up immediately
 ```
 
 `--dry-run` and `--diff` never write to the base file's own location — real runs only ever
 write to an explicitly passed `--output` path, which CI always points at the build/publish
-output directory, never at the source tree.
+output directory, never at the source tree. Full flag reference, including `--list` and `set`:
+`docs/USAGE.md`.
 
 Example:
 
 ```bash
 # Preview what ClientA actually gets in Production
 dotnet run --project tools/ConfigTransform.Xml -- \
-  --manifest .configtransform/ProjectA.Framework/manifest.json \
-  --file App.config --client ClientA --environment Production --dry-run
+  --resource ProjectA.Framework/App.config \
+  --client ClientA --environment Production --dry-run
 
-# See exactly what ClientA's overrides change vs. the untouched base
+# See exactly what ClientA's overrides change vs. the unpatched chain
 dotnet run --project tools/ConfigTransform.Xml -- \
-  --manifest .configtransform/ProjectA.Framework/manifest.json \
-  --file App.config --client ClientA --environment Production --diff
+  --resource ProjectA.Framework/App.config \
+  --client ClientA --environment Production --diff
 
 # Real run, as CI invokes it
 dotnet run --project tools/ConfigTransform.Xml -- \
-  --manifest .configtransform/ProjectA.Framework/manifest.json \
-  --file App.config --client ClientA --environment Production \
+  --resource ProjectA.Framework/App.config \
+  --client ClientA --environment Production \
   --output publish/App.config
 ```
 
@@ -436,9 +433,10 @@ specific client+environment" are different questions with different trust requir
 2. `git-crypt unlock` using the CI secret keyfile.
 3. NuGet auth for the tool feed, `dotnet tool restore`.
 4. `dotnet build`/`msbuild` builds normally against the base config files.
-5. For each `.configtransform/*/manifest.json`, for each file entry: run the appropriate
-   `ConfigTransform.*` tool (base → env → client, using the dispatch inputs) with `--output`
-   pointed at the publish directory, overwriting the built base config with the resolved one.
+5. Run each `ConfigTransform.*` tool once, using the dispatch inputs as `--client`/`--environment`
+   and `--output` pointed at the publish directory (a directory, since `--resource` is omitted) —
+   resolves and writes every resource of that tool's format the target layer touches, overwriting
+   the built base configs with the resolved ones.
 6. **Validate** the merged result: well-formed XML/JSON, and a check that expected keys
    aren't empty — catches an XDT `Locator` that silently failed to match before it ships.
 7. Package and deploy that artifact for that specific client + environment.
@@ -470,21 +468,31 @@ Tenants feature). Not decided; needs its own follow-up.
 ## 9. Relationship to Kustomize (for context, not implementation)
 
 The base+overlay principle is the same one used in the team's existing Kustomize-based
-Kubernetes GitOps repo (`base/` + `overlays/<env>/` + `components/`). Two differences worth
-keeping in mind:
+Kubernetes GitOps repo (`base/` + `overlays/<env>/` + `components/`). This section originally
+argued the tool's old fixed base→Environments→Clients rule was *simpler* than Kustomize's
+self-describing overlays precisely because there was no per-file selection/composition decision
+to make. That argument was correct on its own terms, but the repo owner's position — after
+reviewing a real Kustomize tree for contrast — was that self-describing overlays are still easier
+to understand and add to, a different axis (authoring ergonomics) than the file-count/boilerplate
+argument against them. `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md` adopted that shape (§3/§4 above,
+implemented) — see that document's "Origin and problem statement" for the fuller account of this
+reversal, not repeated here.
 
-- Kustomize composes a *graph* of many independent resources with optional, named,
-  selectively-included components (`kustomization.yaml` declares what an overlay pulls in).
-  This system patches a *single file* through a *fixed, always-applied* two-layer chain —
-  there is no selection/inclusion decision to make, so there is no `components/` equivalent
-  here, and none should be added unless a real case for optional, cross-cutting, selectively-
-  included config fragments actually appears.
-- Kustomize overlays are self-describing (`resources: [../../base]` in their own
-  `kustomization.yaml`); this system's layering order is a fixed rule inside the transform
-  tool itself, not declared per-file. Simpler, but means understanding "what does ClientA
-  actually get" requires either running the tool (`--dry-run`/`--diff`) or knowing the fixed
-  rule — there's no single file to read that shows the inheritance chain the way a Kustomize
-  overlay's `kustomization.yaml` does.
+What actually carried over from Kustomize, and what didn't:
+
+- **Self-describing composition, adopted**: a `configtransform.json`'s own `extends` field is now
+  the equivalent of `kustomization.yaml`'s `resources: [../../base]` — the inheritance chain is a
+  file you can read, not a fixed rule you have to already know.
+- **Path convention, deliberately *not* adopted wholesale**: Kustomize resolves paths relative to
+  each `kustomization.yaml`'s own directory, which in a real production tree accumulates long,
+  fragile `../../../../` chains — a real, frequently-complained-about pain point that tree
+  exhibited directly. This design uses repo-root-relative paths everywhere instead (§4) — same
+  self-describing benefit, without that failure mode.
+- **Graph composition and `components/`, not adopted**: Kustomize composes a *graph* of many
+  independent resources with optional, named, selectively-included components. This system still
+  resolves one chain per resource — there's no selection/inclusion decision to make the way
+  Kustomize's does, so there is no `components/` equivalent here, and none should be added unless
+  a real case for optional, cross-cutting, selectively-included config fragments actually appears.
 
 ## 10. Tool distribution & versioning
 
