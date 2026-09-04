@@ -7,6 +7,19 @@ self-describing `configtransform.json` layers.
 Status: **implemented, tested, and released** (pre-1.0, `-alpha` — see
 [`docs/ROADMAP.md`](docs/ROADMAP.md) for exactly what that does and doesn't mean).
 
+## Quick start
+
+```bash
+dotnet new tool-manifest   # if the repo doesn't already have one
+dotnet tool install --local ConfigTransform.Cli --version <latest>
+dotnet tool run configtransform          # no arguments -- prints a tldr-style help page
+```
+
+Running `configtransform` with no arguments at all — or `configtransform help`/`--help`/`-h`
+anytime — prints a quick-reference cheat sheet: common commands, and an easy plus a more advanced
+example for each. See [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) for setting up a
+project from scratch and [`docs/USAGE.md`](docs/USAGE.md) for the full CLI reference.
+
 ## Projects
 
 - `src/ConfigTransform.Core` — shared, format-agnostic logic (`configtransform.json` parsing,

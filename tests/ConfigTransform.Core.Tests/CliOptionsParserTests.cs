@@ -265,6 +265,56 @@ public class CliOptionsParserTests
     }
 
     [Fact]
+    public void No_arguments_at_all_means_help()
+    {
+        var options = CliOptionsParser.Parse(Array.Empty<string>());
+        Assert.True(options.Help);
+    }
+
+    [Fact]
+    public void Bare_help_verb_means_help()
+    {
+        var options = CliOptionsParser.Parse(new[] { "help" });
+        Assert.True(options.Help);
+    }
+
+    [Theory]
+    [InlineData("--help")]
+    [InlineData("-h")]
+    public void Help_flag_wins_regardless_of_position_or_other_flags(string helpFlag)
+    {
+        var options = CliOptionsParser.Parse(new[]
+        {
+            "--client", "ClientA", "--environment", "Production", helpFlag
+        });
+
+        Assert.True(options.Help);
+    }
+
+    [Fact]
+    public void Help_flag_wins_even_over_what_would_otherwise_be_a_validation_error()
+    {
+        // No --environment at all would normally throw ("--environment is required") -- --help
+        // short-circuits before that validation ever runs.
+        var options = CliOptionsParser.Parse(new[] { "--client", "ClientA", "--help" });
+        Assert.True(options.Help);
+    }
+
+    [Fact]
+    public void A_flag_value_that_happens_to_equal_dash_h_is_not_mistaken_for_the_help_flag()
+    {
+        // Token-position-aware: "-h" consumed by --set as a value never reaches the switch as a
+        // flag, so it must not trigger help.
+        var options = CliOptionsParser.Parse(new[]
+        {
+            "set", "--resource", "Project/App.config", "--match", "key=ApiUrl", "--set", "value=-h"
+        });
+
+        Assert.False(options.Help);
+        Assert.Equal(new[] { "value=-h" }, options.SetFields);
+    }
+
+    [Fact]
     public void The_set_verb_is_only_recognized_as_the_very_first_argument()
     {
         // A literal "set" elsewhere (e.g. as a --resource value) is just a normal string, not

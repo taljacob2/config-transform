@@ -12,12 +12,22 @@ namespace ConfigTransform.Core;
 /// docs/FIELD_AUTHORING_DESIGN.md. It switches on --match/--set (each repeatable) and relaxes
 /// --client/--environment to optional (they choose *which* layer set writes, rather than being
 /// required inputs to a resolve).
+/// No arguments at all, a leading bare "help", or "--help"/"-h" in flag position anywhere in the
+/// arguments (never mistaken for a value some other flag is consuming, e.g. `--set value=-h`)
+/// always wins and short-circuits every other check — help is the default when there's nothing
+/// else to go on, not an error.
 /// </summary>
 public static class CliOptionsParser
 {
+    private static readonly CliOptions HelpOptions = new(
+        null, null, null, null, DryRun: false, Diff: false, List: false, Set: false, Help: true, [], []);
+
     public static CliOptions Parse(string[] args)
     {
-        var set = args.Length > 0 && args[0] == "set";
+        if (args.Length == 0 || args[0] == "help")
+            return HelpOptions;
+
+        var set = args[0] == "set";
         var rest = set ? args[1..] : args;
 
         string? resource = null;
@@ -34,6 +44,9 @@ public static class CliOptionsParser
         {
             switch (rest[i])
             {
+                case "--help":
+                case "-h":
+                    return HelpOptions;
                 case "--resource":
                 case "-r":
                     resource = RequireValue(rest, ref i, rest[i]);
@@ -104,7 +117,7 @@ public static class CliOptionsParser
                 throw new ArgumentException("--output is required for a real run (omit only with --dry-run or --diff).");
         }
 
-        return new CliOptions(resource, client, environment, output, dryRun, diff, list, set, match, setFields);
+        return new CliOptions(resource, client, environment, output, dryRun, diff, list, set, Help: false, match, setFields);
     }
 
     private static string RequireValue(string[] args, ref int i, string flag)

@@ -123,7 +123,9 @@ tool-wide targeting flag; omitting it processes every resource a layer touches, 
 registered format, in one call — a mixed XML/JSON layer resolves with no skipping at all; a
 resource whose extension no format engine handles is reported on stderr and skipped, never
 silently dropped. `--list` shows one layer's resources (or, given `--resource` instead, a
-tree-wide reverse lookup).
+tree-wide reverse lookup). No arguments at all (or `help`/`--help`/`-h` anytime) prints a
+tldr-style help page — common commands plus an easy and an advanced example each — via the new
+`HelpPrinter`.
 
 `set` (docs/FIELD_AUTHORING_DESIGN.md) targets a resource by its own repo-root-relative path,
 dispatching to the right engine by that path's extension, and creates a missing

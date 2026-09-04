@@ -20,6 +20,7 @@ supports differs by format for reasons that come from the format itself, not an 
 --dry-run                                  print the fully merged result to stdout; nothing written to disk
 --diff                                     print a unified diff (unpatched vs. merged) via `git diff --no-index`; nothing written to disk
 --list                                     show a layer's resources (--client/--environment), or a tree-wide reverse lookup (--resource) — see below
+help, --help, -h                           print the help page (see "Getting help" below) — also the default with no arguments at all
 ```
 
 Every flag that takes a value also accepts the short form shown above (`-r`, `-c`, `-e`, `-o`) —
@@ -30,6 +31,24 @@ Every path — `--resource`'s value, and everything a `configtransform.json` its
 (`extends`, `resources[].path`, `resources[].patch`) — is **repo-root-relative**, resolved
 against the current working directory. Run the tool from the repository root, the same way CI
 does.
+
+## Getting help
+
+Running `configtransform` with **no arguments at all** prints a help page and exits 0 — it's the
+default, not an error, specifically so a new user's first, uninformed invocation actually teaches
+them something instead of just failing. The same page is reachable anytime via a leading bare
+`configtransform help`, or `--help`/`-h` added to any other invocation (both are recognized only
+in flag position, so a value some other flag is consuming that happens to equal `-h` is never
+mistaken for the flag) — and it wins over every other flag, including what would otherwise be a
+validation error (`configtransform --client Acme --help` shows help, not "--environment is
+required.").
+
+The page itself is a short, tldr-style cheat sheet, not the full reference this document is —
+a `USAGE` summary, a `COMMON COMMANDS` quick-reference table, and, for every command, one easy
+example plus one more advanced example (a mixed-format single-call resolve, a `--list --resource`
+reverse lookup, a `set` with a compound `$elemMatch` condition). The list of supported resource
+extensions it prints is read from the tool's own real, registered format engines, not a separate
+hardcoded copy — it can't drift from what the binary actually handles.
 
 ## Resolving `--client`/`--environment` to a layer
 

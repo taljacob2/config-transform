@@ -6,6 +6,23 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+### Added
+
+- **`help` command, and the default when the tool is run with no arguments at all.** New
+  `HelpPrinter` (`ConfigTransform.Core`) prints a tldr-style page: a `USAGE` summary, a
+  `COMMON COMMANDS` quick-reference table, and — for every command (`--dry-run`, `--diff`,
+  `--output`, `--list`, `set`) — one easy example plus one more advanced ("tldr") example (a
+  mixed-format single-call resolve, a `--list --resource` reverse lookup, a `set` with a
+  compound JSON `$elemMatch` condition). Supported extensions are listed from the real,
+  currently-registered `FormatEngineRegistry` rather than hardcoded, so the page never drifts
+  from what the binary actually handles. Reachable four ways, all equivalent: no arguments,
+  a leading bare `help`, or `--help`/`-h` anywhere in the arguments — the last two are
+  recognized only in flag position (never mistaken for a value some other flag is consuming,
+  e.g. `--set value=-h`), and win over every other flag, including what would otherwise be a
+  validation error (a bare `--client` with no `--environment` now shows help instead of
+  "--environment is required."). `CliOptions` gains a `Help` field; `CliRunner.Run` checks it
+  first, before even resolving a working directory.
+
 ## [0.8.0-alpha] - 2026-09-04
 
 Breaking, following this repo's own precedent for a pre-1.0 breaking change (`0.2.0-alpha`'s

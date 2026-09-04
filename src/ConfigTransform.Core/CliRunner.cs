@@ -6,7 +6,9 @@ namespace ConfigTransform.Core;
 /// (--dry-run/--diff) or write (--output) the result — for one resource (--resource given) or
 /// every resource the layer touches, across every registered format, in one call (omitted).
 /// --list is a separate, earlier branch handled by <see cref="LayerLister"/>; `set` is handled by
-/// <see cref="SetRunner"/>. This class knows nothing about XML or JSON specifically — only the
+/// <see cref="SetRunner"/>; help (no arguments, `help`, `--help`/`-h`) is checked first, before
+/// even resolving a working directory, and short-circuits everything else via
+/// <see cref="HelpPrinter"/>. This class knows nothing about XML or JSON specifically — only the
 /// shape every format shares; <paramref name="engines"/> is what the caller (the CLI entry point)
 /// supplies to make it concrete.
 /// </summary>
@@ -19,6 +21,13 @@ public static class CliRunner
         try
         {
             var options = CliOptionsParser.Parse(args);
+
+            if (options.Help)
+            {
+                HelpPrinter.Print(stdout, engines);
+                return 0;
+            }
+
             var root = workingDirectory ?? Directory.GetCurrentDirectory();
 
             if (options.Set)
