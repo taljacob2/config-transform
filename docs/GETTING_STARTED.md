@@ -57,6 +57,10 @@ flowchart LR
    credential are set up. See [`SECRETS_AND_LOCAL_SETUP.md`](SECRETS_AND_LOCAL_SETUP.md) §1 for
    the one-time setup (CI secret + `nuget.config` + local env vars, with Windows/macOS/Linux
    instructions) — do that first if this repo hasn't already.
+
+   Once installed, `dotnet tool run configtransform` with no arguments at all (or
+   `configtransform help`/`--help`/`-h` anytime) prints a quick tldr-style cheat sheet — worth
+   running once just to confirm the install worked, before setting up a real override below.
 3. Author the first override with `set` rather than hand-writing a `configtransform.json` and a
    patch file — it creates both, correctly, in one step:
    ```bash

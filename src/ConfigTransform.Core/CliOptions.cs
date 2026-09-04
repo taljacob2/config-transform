@@ -13,6 +13,9 @@ namespace ConfigTransform.Core;
 /// the Environment layer, or the Client layer) rather than required, and <see cref="Match"/>/
 /// <see cref="SetFields"/> carry the raw, not-yet-parsed --match/--set argument strings (see
 /// <see cref="MatchSpec"/>).
+/// <see cref="Help"/> is set by no arguments at all, a leading bare <c>help</c>, or <c>--help</c>/
+/// <c>-h</c> anywhere in the arguments — it always wins over every other flag (no other
+/// validation runs), and is the default when the tool is invoked with nothing else to go on.
 /// </summary>
 public sealed record CliOptions(
     string? Resource,
@@ -23,5 +26,6 @@ public sealed record CliOptions(
     bool Diff,
     bool List,
     bool Set,
+    bool Help,
     IReadOnlyList<string> Match,
     IReadOnlyList<string> SetFields);

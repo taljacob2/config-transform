@@ -279,6 +279,17 @@ unregistered-extension error/skip cases — that no test process could previousl
 two-tool split meant no single test could touch both formats at once). See
 `docs/CHANGELOG.md`'s `[0.8.0-alpha]` entry.
 
+**`help` command added, and the default when the tool is run with no arguments at all** — a new
+`HelpPrinter` (`ConfigTransform.Core`) prints a tldr-style page (a `USAGE` line, a
+`COMMON COMMANDS` quick-reference table, and an easy + a more advanced "tldr" example for every
+command), reachable via no arguments, a leading bare `help`, or `--help`/`-h` anywhere in flag
+position — all of which win over every other flag, including what would otherwise be a
+validation error. Supported extensions are read from the real `FormatEngineRegistry`, not
+hardcoded, so the page can't drift from what the binary actually handles. 200 tests passing
+solution-wide. See `docs/CHANGELOG.md`'s `[Unreleased]` section — not yet cut as its own version,
+since this addition is purely additive (no existing valid invocation's behavior changes; only
+the previously-error-only empty invocation now succeeds).
+
 ## Next up
 
 One item below is now actionable purely within this repo (see the first bullet); every other

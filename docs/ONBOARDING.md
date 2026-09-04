@@ -97,6 +97,15 @@ base64 -d key.b64 > key   # Linux/macOS/Git Bash
 Always run from the repo root — every path (`--resource`, and everything a `configtransform.json`
 itself declares) is resolved relative to your current directory, same as CI.
 
+The fastest sanity check that the install itself worked, no repo tree needed:
+```bash
+dotnet tool run configtransform
+```
+No arguments at all prints a quick tldr-style help page (also reachable via
+`configtransform help`/`--help`/`-h` anytime) — commonly used commands plus an easy and a more
+advanced example for each. If that prints, the tool is installed correctly; move on to a real
+merge below.
+
 See what one layer actually has, with no risk of writing anything (pick a real client/environment
 this repo already uses):
 ```bash
