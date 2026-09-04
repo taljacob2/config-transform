@@ -44,7 +44,7 @@ project. `init` scans for candidates instead.
 ```
 configtransform init [--scan-root <dir>] [--yes]
 configtransform init --environment <Env> [--environment <Env> ...] [--client <Client> ...] [--resource <path> ...] [--no-scan] [--yes]
-configtransform init --template <name>
+configtransform init --template
 configtransform init --dry-run [any of the above]
 ```
 
@@ -61,7 +61,7 @@ pre-fill skips the matching prompt" below):
   would just read EOF and silently misbehave, the same CI-safety concern already on record in
   `FIELD_AUTHORING_DESIGN.md` for why `set` has no interactive prompt of its own.
 
-`--template <name>` is mutually exclusive with every other init flag (`--scan-root`,
+`--template` is mutually exclusive with every other init flag (`--scan-root`,
 `--environment`, `--client`, `--resource`, `--no-scan`, `--yes`) — combining them is a
 `CliOptionsParser`-style error naming both flags, matching the existing convention (e.g.
 `"--client requires --environment with 'set'"`).
@@ -142,7 +142,7 @@ Same three inputs, from flags instead of prompts, and nothing is asked:
 
 ## Template mode
 
-`configtransform init --template hello-world` — the one case `init` creates a resource file
+`configtransform init --template` — the one case `init` creates a resource file
 itself, since a template has to scaffold against *something* even in a repo with no existing
 config files yet (scanning a fresh/empty repo would just find nothing). Fixed, non-configurable
 content:
@@ -159,9 +159,14 @@ content:
 repeated at every layer. This is deliberate: a template's entire purpose is to be run against
 immediately and show the layering mechanism actually working, not just to prove the tree was
 created. A patch per layer, each following the existing `patch-{path-with-'/'-as-'-'}.{ext}`
-naming convention (`SetTargetResolver`'s own scheme — `configtransform-template.json` + JSON's
-`json` patch extension becomes `patch-configtransform-template.json.json`, in the same directory
-as the `configtransform.json` referencing it):
+naming convention (`SetTargetResolver`'s own scheme, in the same directory as the
+`configtransform.json` referencing it) — **except that the trailing `.{ext}` is only appended
+when it isn't already there**: `configtransform-template.json`'s own extension already is `json`,
+same as the JSON engine's patch extension, so the patch file is `patch-configtransform-template.json`,
+not `patch-configtransform-template.json.json`. This is a small, real fix to
+`SetTargetResolver.cs`'s naming rule as it exists today — see "Related fix to `SetTargetResolver`"
+below — not something invented for the template alone; `init` reusing the *fixed* rule keeps it
+one convention instead of two.
 
 | Layer | `resources[].patch` content |
 |---|---|
@@ -194,17 +199,37 @@ configtransform --client Client-A --environment Production --resource configtran
 ```
 
 `--diff` against any of the above shows exactly one line changing (`message`), which is the point
-— a brand-new user's very first command after `init --template hello-world` can be `--diff`
-instead of `--dry-run`, and see the override mechanism itself rather than just a merged blob.
+— a brand-new user's very first command after `init --template` can be `--diff` instead of
+`--dry-run`, and see the override mechanism itself rather than just a merged blob.
 
 - The full skeleton tree from "Manifest shape" below otherwise applies unchanged — template mode
   differs only in *where the inputs come from* (fixed, not scanned/typed) and in always writing a
   real patch at every layer instead of the patch-less Environment default — not in the underlying
   mechanics of how the tree gets built.
 
-`--template` takes exactly one recognized name; `hello-world` is the only one this design defines.
-The flag takes a name (not a bare switch) specifically so a second template can be added later
-without a breaking flag-shape change — see "Open items."
+**`--template` is a bare switch, not a named flag.** There is exactly one template (referred to in
+this document as "the hello-world template" purely for readability — it isn't a name the CLI
+itself ever takes as input), and it's meant to stay the basic/default starter regardless of
+whether a second one is ever added — see the decision log for why this is a deliberate reversal
+of this document's original name-based-flag proposal, and "Open items" for the accepted cost if a
+second template does eventually show up.
+
+### Related fix to `SetTargetResolver`
+
+`SetTargetResolver.cs`'s existing patch-filename rule (used by `set` today, already shipped) is
+`patch-{path-with-'/'-as-'-'}.{patchExt}` unconditionally — for any resource whose own extension
+already equals the engine's patch extension, that produces a stuttering double extension:
+`appsettings.json` → `patch-appsettings.json.json`, the exact case this template's own resource
+hits. This isn't a template-specific concern; every JSON resource `set` has ever created a patch
+for has this same stutter today, silently. The fix is small and safe to make everywhere at once,
+not just for `init`: append `.{patchExt}` only when the sanitized path doesn't already end with
+it. It's safe because `SetTargetResolver.ResolveTarget` only computes this candidate name when
+creating a **new** patch entry (`existingEntry?.Patch is not null` always wins and is used as-is,
+untouched) — no already-recorded `patch` path in any existing `configtransform.json` is affected,
+only file names chosen for patches that don't exist yet. This document assumes that fix lands as
+part of the same implementation pass as `init` (so `init`'s template and `set`'s own patch
+creation agree on one naming rule, not two) — see "Open items" if it turns out `set`'s side needs
+to be split into its own separate change instead.
 
 ## Scanning: directory filters, not content filters
 
@@ -292,7 +317,7 @@ rather than a one-shot, destructive bootstrap.
   hazard `FileResolver`/`CLAUDE.md`'s "Case-insensitive file resolution" bullet already names for
   resource files (Linux CI vs. Windows dev) — a directory name is exactly as exposed to that
   hazard as a resource file name is.
-- `--template hello-world` and `configtransform-template.json` already exists with *different*
+- `--template` given and `configtransform-template.json` already exists with *different*
   content than the template's own → error, refusing to overwrite (never silently clobbers content
   that isn't `init`'s own template output); if the content is byte-for-byte the template's own
   (e.g. a re-run), it's a no-op, consistent with idempotency above.
@@ -312,8 +337,9 @@ rather than a one-shot, destructive bootstrap.
 | Environment layer lists every selected resource, even with no `patch` | Yes, always | Leave resources unlisted until a real override exists via `set` | `LayerChain.ResolveAllResources`'s no-`--resource` union only sees resources actually present in some layer's `resources[]`; skipping this would make a freshly `init`'d tree resolve to nothing until `set` ran once per resource, defeating the point of scaffolding. |
 | Flag identity for environments/clients | Reuse `--environment/-e`/`--client/-c`, repeatable in `init` mode | New `--environments`/`--clients` plural flags | Keeps the flag vocabulary from growing for a mode-scoped arity difference — the same pattern `--match`/`--set` already use (repeatable, no separate plural sibling) rather than a new naming convention. |
 | Idempotent re-runs | Merge into existing manifests (mirrors `SetTargetResolver.EnsureResourceListed`) | Refuse if `.configtransform/` already has content, or always overwrite | Onboarding a second client, or a newly-added resource, later is a normal case, not an error — same convention `set` already established. |
-| `--template` scope | One fixed, non-configurable `hello-world` template; name-based flag for future extensibility | A bare `--template` switch with no name; a fully configurable template system (custom env/client names, custom resource content) | A named flag avoids a breaking shape change if a second template is added later. Configurable templates would just be quiet mode with extra steps — no separate feature earns its complexity yet. |
+| `--template` shape | A bare switch, no value | A named flag (`--template <name>`), a fully configurable template system (custom env/client names, custom resource content) | There is exactly one template, meant to stay the basic/default starter even if a second one is ever added — a bare switch says that plainly. A named flag optimizes for a future that may never arrive at the cost of a slightly worse everyday command (`init --template hello-world` vs. `init --template`) for the one template that actually exists. Configurable templates would just be quiet mode with extra steps — no separate feature earns its complexity yet. See "Open items" for the accepted cost if a second template does show up later. |
 | `hello-world` template's `message` value | A distinct value per layer, naming that layer (`"...from Client-A Production config"`, etc.) | The same `"Hello, world!"` string repeated at every layer | A template exists to be run against immediately — a repeated string would create a tree that merges but never visibly *changes*, hiding the one thing `init --template` is supposed to demonstrate. A distinct message per layer makes `--diff`/`--dry-run` show the override chain working on the very first command. |
+| Patch filename: trailing extension only appended if not already present | Yes, and retrofitted onto `SetTargetResolver`'s existing rule too, not just for `init` | Keep `SetTargetResolver`'s unconditional `patch-{path}.{ext}` rule, let `init`'s template produce an inconsistent, cleaner-looking name of its own | A resource whose own extension already matches the patch extension (every plain `.json` resource, which is the common case) gets a stuttering `name.json.json` under the unconditional rule — real, already live in `set` today, not template-specific. Fixing it in one place keeps `init` and `set` agreeing on one naming convention; fixing it only in `init`'s template would leave two different, competing conventions in the same tool. Safe to change: only affects filenames chosen for patches that don't exist yet (`SetTargetResolver` always reuses an already-recorded `patch` path verbatim). |
 | Proceeding before the "few solution repos" gate's trigger condition is literally met | Yes, as an explicit, named owner override | Wait for a second/third pilot repo first | Same kind of exception `FIELD_AUTHORING_DESIGN.md` already made for `set` against this same gate — every default here is a mechanical convention already proven elsewhere in this tool (manifest JSON shape, path resolution, idempotency), not a guess at workflow patterns the way a TUI/GUI's design would be. The accepted risk (a default proving wrong against a second real repo) is bounded and explicitly named, not ignored. |
 
 ## Open items for implementation
@@ -328,8 +354,17 @@ rather than a one-shot, destructive bootstrap.
   today the only escape hatch is hand-editing the generated `configtransform.json` afterward
   (same escape hatch `set` already relies on for anything outside its own scope). Worth a second
   pass once real trees show this actually matters, rather than designed speculatively now.
-- **A second template** — nothing beyond `hello-world` is defined. The named-flag shape (vs. a
-  bare switch) is deliberately ready for this; the template content itself isn't designed here.
+- **A second template** — nothing beyond the one bare `--template` is defined, and `--template`
+  is deliberately a bare switch, not a named flag (see decision log). If a second template is
+  ever actually needed, `--template` would have to grow a value (`--template <name>`, defaulting
+  to the existing one for compatibility) — a real, if small, breaking flag-shape change, accepted
+  now on the belief that this stays the only template for the foreseeable future. Not designed
+  speculatively here.
+- **Whether the `SetTargetResolver` patch-naming fix ships in the same change as `init`, or
+  separately** — this document assumes the same change (see "Related fix to `SetTargetResolver`"
+  under "Template mode"), since shipping `init` with a naming rule `set` doesn't share would be a
+  worse outcome than splitting the fix out first. If implementation finds a reason they need to
+  be separate, the fix should still land, just not necessarily gated on `init` itself.
 - **Scan performance on a very large repo** — `Directory.EnumerateFiles(..., AllDirectories)` is
   already used once in this codebase (`LayerChain.ReverseLookup`) without a performance concern
   raised; worth re-checking only if a real repo's scan turns out slow in practice, not speculatively
