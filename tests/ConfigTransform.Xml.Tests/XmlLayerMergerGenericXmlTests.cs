@@ -15,21 +15,18 @@ namespace ConfigTransform.Xml.Tests;
 public class XmlLayerMergerGenericXmlTests
 {
     private static string FixturesRoot => Path.Combine(AppContext.BaseDirectory, "Fixtures", "GenericXml");
+    private const string ResourcePath = "Project/settings.custom.xml";
 
     [Fact]
     public void Merges_an_arbitrary_schema_with_a_non_config_extension()
     {
-        var projectDir = Path.Combine(FixturesRoot, "Project");
-        var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
+        var resolved = Resolve("ClientA", "Production");
 
-        var resolution = LayerResolution.Resolve(projectDir, "settings.custom.xml", overlayRoot, "ClientA", "Production");
+        // Two patches (Environment, then Client) confirm LayerChain never special-cases ".config".
+        Assert.Equal(2, resolved.PatchPathsInOrder.Count);
+        Assert.All(resolved.PatchPathsInOrder, p => Assert.EndsWith(".xml", p));
 
-        // The overlay file name is derived from the base file's own extension (.xml here, not
-        // .config) — confirms LayerResolution never hardcodes ".config".
-        Assert.EndsWith("Production.xml", resolution.EnvironmentOverlayPath);
-        Assert.EndsWith("Production.xml", resolution.ClientOverlayPath);
-
-        var merged = Merge(resolution);
+        var merged = XmlLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
         var doc = XDocument.Parse(merged);
 
         var endpoint = doc.Root!.Element("Endpoints")!.Element("Endpoint")!;
@@ -43,13 +40,12 @@ public class XmlLayerMergerGenericXmlTests
     [Fact]
     public void Environment_layer_alone_leaves_client_specific_values_untouched()
     {
-        var projectDir = Path.Combine(FixturesRoot, "Project");
-        var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
+        // ClientB's own configtransform.json declares only `extends` (no resources of its own)
+        // -- see XmlLayerMergerTests's identical comment for why this file still needs to exist.
+        var resolved = Resolve("ClientB", "Production");
+        Assert.Single(resolved.PatchPathsInOrder);
 
-        var resolution = LayerResolution.Resolve(projectDir, "settings.custom.xml", overlayRoot, "ClientB", "Production");
-        Assert.Null(resolution.ClientOverlayPath);
-
-        var merged = Merge(resolution);
+        var merged = XmlLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
         var doc = XDocument.Parse(merged);
 
         var endpoint = doc.Root!.Element("Endpoints")!.Element("Endpoint")!;
@@ -60,8 +56,9 @@ public class XmlLayerMergerGenericXmlTests
         Assert.Equal("false", flag.Attribute("enabled")!.Value); // untouched base value
     }
 
-    /// <summary>Adapts a fixed-slot LayerResolutionResult to XmlLayerMerger's arbitrary-length chain signature.</summary>
-    private static string Merge(LayerResolutionResult resolution) =>
-        XmlLayerMerger.Merge(resolution.BasePath, new[] { resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath }
-            .Where(p => p is not null).Select(p => p!).ToList());
+    private static ResolvedResource Resolve(string client, string environment)
+    {
+        var chain = LayerChain.Build(FixturesRoot, LayerPathResolver.Resolve(FixturesRoot, client, environment));
+        return LayerChain.ResolveResource(FixturesRoot, chain, ResourcePath);
+    }
 }

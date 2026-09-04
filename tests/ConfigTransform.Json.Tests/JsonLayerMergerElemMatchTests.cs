@@ -17,20 +17,19 @@ namespace ConfigTransform.Json.Tests;
 public class JsonLayerMergerElemMatchTests
 {
     private static string FixturesRoot => Path.Combine(AppContext.BaseDirectory, "Fixtures", "DotNetCore", "ElemMatch");
+    private const string ResourcePath = "Project/appsettings.json";
 
-    private static (string BasePath, string? EnvPath, string? ClientPath) Resolve(string client, string environment)
+    private static ResolvedResource Resolve(string? client, string? environment)
     {
-        var projectDir = Path.Combine(FixturesRoot, "Project");
-        var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
-        var resolution = LayerResolution.Resolve(projectDir, "appsettings.json", overlayRoot, client, environment);
-        return (resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
+        var chain = LayerChain.Build(FixturesRoot, LayerPathResolver.Resolve(FixturesRoot, client, environment));
+        return LayerChain.ResolveResource(FixturesRoot, chain, ResourcePath);
     }
 
     [Fact]
     public void Environment_layer_elemMatch_resolves_against_base_only()
     {
-        var (basePath, envPath, _) = Resolve("ClientA", "Production");
-        var merged = Merge(basePath, envPath, null);
+        var resolved = Resolve(client: null, "Production");
+        var merged = JsonLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
         using var doc = JsonDocument.Parse(merged);
         var rules = doc.RootElement.GetProperty("Rules");
@@ -49,8 +48,8 @@ public class JsonLayerMergerElemMatchTests
     [Fact]
     public void Client_layer_elemMatch_resolves_against_the_base_plus_environment_merged_array_not_base_alone()
     {
-        var (basePath, envPath, clientPath) = Resolve("ClientA", "Production");
-        var merged = Merge(basePath, envPath, clientPath);
+        var resolved = Resolve("ClientA", "Production");
+        var merged = JsonLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
         using var doc = JsonDocument.Parse(merged);
         var rules = doc.RootElement.GetProperty("Rules");
@@ -82,8 +81,8 @@ public class JsonLayerMergerElemMatchTests
     [Fact]
     public void ElemMatch_array_and_a_sibling_plain_positional_array_overlay_in_the_same_file_both_resolve_correctly()
     {
-        var (basePath, envPath, clientPath) = Resolve("ClientA", "Production");
-        var merged = Merge(basePath, envPath, clientPath);
+        var resolved = Resolve("ClientA", "Production");
+        var merged = JsonLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
         using var doc = JsonDocument.Parse(merged);
         var origins = doc.RootElement.GetProperty("AllowedOrigins");
@@ -103,14 +102,54 @@ public class JsonLayerMergerElemMatchTests
         // set should merge identically to plain positional-array behavior -- confirms the
         // fast-path guard in JsonLayerMerger.Merge doesn't accidentally engage for ordinary
         // content.
-        var (basePath, _, _) = Resolve("ClientA", "Production");
-        var merged = Merge(basePath, null, null);
+        var resolved = Resolve(client: null, environment: null);
+        var merged = JsonLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
         using var doc = JsonDocument.Parse(merged);
         var rules = doc.RootElement.GetProperty("Rules");
         Assert.Equal(2, rules.GetArrayLength());
         Assert.False(rules[0].GetProperty("enabled").GetBoolean());
         Assert.False(rules[1].GetProperty("enabled").GetBoolean());
+    }
+
+    [Fact]
+    public void ElemMatch_resolves_progressively_across_a_genuine_three_deep_chain()
+    {
+        // The old hardcoded implementation only ever had two steps (env-against-base,
+        // client-against-base+env). This design's chain is unbounded -- prove the fold actually
+        // recomputes the accumulated state at each of three steps, not just two.
+        var basePath = WriteTempJson("""{ "Rules": [ { "role": "Admin", "enabled": false } ] }""");
+        var envPatch = WriteTempJson("""{ "Rules": [ { "$elemMatch": { "role": "Viewer" }, "enabled": false } ] }""");
+        var regionPatch = WriteTempJson("""
+            { "Rules": [
+              { "$elemMatch": { "role": "Auditor" }, "enabled": false },
+              { "$elemMatch": { "role": "Viewer" }, "enabled": true }
+            ] }
+            """);
+        var clientPatch = WriteTempJson("""{ "Rules": [ { "$elemMatch": { "role": "Auditor" }, "enabled": true } ] }""");
+        try
+        {
+            var merged = JsonLayerMerger.Merge(basePath, [envPatch, regionPatch, clientPatch]);
+            using var doc = JsonDocument.Parse(merged);
+            var rules = doc.RootElement.GetProperty("Rules");
+
+            // If the region patch had (incorrectly) resolved "Viewer" against the base alone, or
+            // the client patch had resolved "Auditor" against base+env alone, each would append a
+            // duplicate instead of updating the item the prior step created. Exactly one of each
+            // role, all updated, is the three-deep progressive-layering proof.
+            Assert.Equal(3, rules.GetArrayLength());
+            var byRole = Enumerable.Range(0, rules.GetArrayLength()).Select(i => rules[i])
+                .ToDictionary(r => r.GetProperty("role").GetString()!, r => r.GetProperty("enabled").GetBoolean());
+
+            Assert.False(byRole["Admin"]); // untouched by any patch
+            Assert.True(byRole["Viewer"]); // created by env, updated by region
+            Assert.True(byRole["Auditor"]); // created by region, updated by client
+        }
+        finally
+        {
+            foreach (var path in new[] { basePath, envPatch, regionPatch, clientPatch })
+                File.Delete(path);
+        }
     }
 
     // --- Scenarios not naturally expressed by one fixture pair: ad hoc temp files ---

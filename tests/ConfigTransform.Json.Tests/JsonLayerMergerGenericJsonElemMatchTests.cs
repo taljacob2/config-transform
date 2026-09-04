@@ -14,20 +14,19 @@ namespace ConfigTransform.Json.Tests;
 public class JsonLayerMergerGenericJsonElemMatchTests
 {
     private static string FixturesRoot => Path.Combine(AppContext.BaseDirectory, "Fixtures", "GenericJson", "ElemMatch");
+    private const string ResourcePath = "Project/custom-settings.json";
 
-    private static (string BasePath, string? EnvPath, string? ClientPath) Resolve(string client, string environment)
+    private static ResolvedResource Resolve(string? client, string? environment)
     {
-        var projectDir = Path.Combine(FixturesRoot, "Project");
-        var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
-        var resolution = LayerResolution.Resolve(projectDir, "custom-settings.json", overlayRoot, client, environment);
-        return (resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
+        var chain = LayerChain.Build(FixturesRoot, LayerPathResolver.Resolve(FixturesRoot, client, environment));
+        return LayerChain.ResolveResource(FixturesRoot, chain, ResourcePath);
     }
 
     [Fact]
     public void Environment_layer_elemMatch_resolves_against_the_base_array()
     {
-        var (basePath, envPath, _) = Resolve("ClientA", "Production");
-        var merged = Merge(basePath, envPath, null);
+        var resolved = Resolve(client: null, "Production");
+        var merged = JsonLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
         using var doc = JsonDocument.Parse(merged);
         var routes = doc.RootElement.GetProperty("endpoints").GetProperty("routes");
@@ -41,8 +40,8 @@ public class JsonLayerMergerGenericJsonElemMatchTests
     [Fact]
     public void Client_layer_elemMatch_resolves_against_base_plus_environment_merged_not_base_alone()
     {
-        var (basePath, envPath, clientPath) = Resolve("ClientA", "Production");
-        var merged = Merge(basePath, envPath, clientPath);
+        var resolved = Resolve("ClientA", "Production");
+        var merged = JsonLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
         using var doc = JsonDocument.Parse(merged);
         var routes = doc.RootElement.GetProperty("endpoints").GetProperty("routes");
@@ -63,8 +62,8 @@ public class JsonLayerMergerGenericJsonElemMatchTests
     [Fact]
     public void Sibling_plain_array_at_a_different_key_is_unaffected()
     {
-        var (basePath, envPath, clientPath) = Resolve("ClientA", "Production");
-        var merged = Merge(basePath, envPath, clientPath);
+        var resolved = Resolve("ClientA", "Production");
+        var merged = JsonLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
         using var doc = JsonDocument.Parse(merged);
         var tags = doc.RootElement.GetProperty("tags");
@@ -73,8 +72,4 @@ public class JsonLayerMergerGenericJsonElemMatchTests
         Assert.Equal("gamma", tags[0].GetString());
         Assert.Equal("beta", tags[1].GetString());
     }
-
-    /// <summary>Adapts fixed-slot (env, client) arguments to JsonLayerMerger's arbitrary-length chain signature.</summary>
-    private static string Merge(string basePath, params string?[] patches) =>
-        JsonLayerMerger.Merge(basePath, patches.Where(p => p is not null).Select(p => p!).ToList());
 }

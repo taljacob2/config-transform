@@ -12,15 +12,13 @@ namespace ConfigTransform.Json.Tests;
 public class JsonLayerMergerGenericJsonTests
 {
     private static string FixturesRoot => Path.Combine(AppContext.BaseDirectory, "Fixtures", "GenericJson");
+    private const string ResourcePath = "Project/custom-settings.json";
 
     [Fact]
     public void Merges_an_arbitrary_schema()
     {
-        var projectDir = Path.Combine(FixturesRoot, "Project");
-        var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
-
-        var resolution = LayerResolution.Resolve(projectDir, "custom-settings.json", overlayRoot, "ClientA", "Production");
-        var merged = Merge(resolution);
+        var resolved = Resolve("ClientA", "Production");
+        var merged = JsonLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
         using var doc = JsonDocument.Parse(merged);
         var primary = doc.RootElement.GetProperty("endpoints").GetProperty("primary");
@@ -33,13 +31,14 @@ public class JsonLayerMergerGenericJsonTests
     [Fact]
     public void Environment_layer_alone_leaves_client_specific_values_untouched()
     {
-        var projectDir = Path.Combine(FixturesRoot, "Project");
-        var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
+        // ClientB's own configtransform.json declares only `extends` (no resources of its own)
+        // -- the "accepted cost" workaround the design doc names explicitly: unlike the old
+        // fixed base->Environments->Clients rule, a Client layer must still exist on disk (even
+        // resource-less) for the Environment layer's content to flow through to it at all.
+        var resolved = Resolve("ClientB", "Production");
+        Assert.Single(resolved.PatchPathsInOrder);
 
-        var resolution = LayerResolution.Resolve(projectDir, "custom-settings.json", overlayRoot, "ClientB", "Production");
-        Assert.Null(resolution.ClientOverlayPath);
-
-        var merged = Merge(resolution);
+        var merged = JsonLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
         using var doc = JsonDocument.Parse(merged);
         var primary = doc.RootElement.GetProperty("endpoints").GetProperty("primary");
@@ -49,8 +48,9 @@ public class JsonLayerMergerGenericJsonTests
         Assert.False(doc.RootElement.GetProperty("flags").GetProperty("betaEnabled").GetBoolean()); // untouched base
     }
 
-    /// <summary>Adapts a fixed-slot LayerResolutionResult to JsonLayerMerger's arbitrary-length chain signature.</summary>
-    private static string Merge(LayerResolutionResult resolution) =>
-        JsonLayerMerger.Merge(resolution.BasePath, new[] { resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath }
-            .Where(p => p is not null).Select(p => p!).ToList());
+    private static ResolvedResource Resolve(string client, string environment)
+    {
+        var chain = LayerChain.Build(FixturesRoot, LayerPathResolver.Resolve(FixturesRoot, client, environment));
+        return LayerChain.ResolveResource(FixturesRoot, chain, ResourcePath);
+    }
 }

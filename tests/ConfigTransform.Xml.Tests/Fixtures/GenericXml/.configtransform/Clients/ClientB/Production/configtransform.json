@@ -1,0 +1,1 @@
+{ "extends": ".configtransform/Environments/Production/configtransform.json", "resources": [] }

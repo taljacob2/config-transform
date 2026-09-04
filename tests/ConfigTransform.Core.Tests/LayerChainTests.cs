@@ -70,7 +70,7 @@ public class LayerChainTests
     }
 
     [Fact]
-    public void ResolveResource_collects_patches_in_extends_order_across_three_layers()
+    public void ResolveResource_collects_patches_in_extends_order_across_two_layers()
     {
         using var root = new TempDirectory();
         Directory.CreateDirectory(Path.Combine(root.Path, "Project"));
@@ -94,6 +94,43 @@ public class LayerChainTests
         Assert.EndsWith("env.xml", resolved.PatchPathsInOrder[0]);
         Assert.EndsWith("client.xml", resolved.PatchPathsInOrder[1]);
         Assert.All(resolved.Report, line => Assert.DoesNotContain("not listed", line));
+    }
+
+    [Fact]
+    public void ResolveResource_collects_patches_in_extends_order_across_a_genuine_three_deep_chain()
+    {
+        // The old fixed base->Environments->Clients rule never needed more than two overlay
+        // slots -- this design's `extends` is unbounded, so prove it actually walks a chain
+        // deeper than the traditional Environment+Client pair (here: Environment -> Region ->
+        // Client, three separate configtransform.json files).
+        using var root = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(root.Path, "Project"));
+        File.WriteAllText(Path.Combine(root.Path, "Project", "App.config"), "base");
+
+        WriteLayer(root.Path, ".configtransform/Environments/Production/configtransform.json",
+            extends: null,
+            resources: """[ { "path": "Project/App.config", "patch": ".configtransform/Environments/Production/env.xml" } ]""");
+        File.WriteAllText(Path.Combine(root.Path, ".configtransform/Environments/Production/env.xml"), "env");
+
+        WriteLayer(root.Path, ".configtransform/Regions/Emea/Production/configtransform.json",
+            extends: ".configtransform/Environments/Production/configtransform.json",
+            resources: """[ { "path": "Project/App.config", "patch": ".configtransform/Regions/Emea/Production/region.xml" } ]""");
+        File.WriteAllText(Path.Combine(root.Path, ".configtransform/Regions/Emea/Production/region.xml"), "region");
+
+        WriteLayer(root.Path, ".configtransform/Clients/Acme/Production/configtransform.json",
+            extends: ".configtransform/Regions/Emea/Production/configtransform.json",
+            resources: """[ { "path": "Project/App.config", "patch": ".configtransform/Clients/Acme/Production/client.xml" } ]""");
+        File.WriteAllText(Path.Combine(root.Path, ".configtransform/Clients/Acme/Production/client.xml"), "client");
+
+        var chain = LayerChain.Build(root.Path, ".configtransform/Clients/Acme/Production/configtransform.json");
+        Assert.Equal(3, chain.Count);
+
+        var resolved = LayerChain.ResolveResource(root.Path, chain, "Project/App.config");
+
+        Assert.Equal(3, resolved.PatchPathsInOrder.Count);
+        Assert.EndsWith("env.xml", resolved.PatchPathsInOrder[0]);
+        Assert.EndsWith("region.xml", resolved.PatchPathsInOrder[1]);
+        Assert.EndsWith("client.xml", resolved.PatchPathsInOrder[2]);
     }
 
     [Fact]

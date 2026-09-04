@@ -13,15 +13,13 @@ namespace ConfigTransform.Xml.Tests;
 public class XmlLayerMergerIisWebConfigTests
 {
     private static string FixturesRoot => Path.Combine(AppContext.BaseDirectory, "Fixtures", "IisWebConfig");
+    private const string ResourcePath = "Project/Web.config";
 
     [Fact]
     public void Merges_environment_and_client_layers_including_location_wrapped_elements()
     {
-        var projectDir = Path.Combine(FixturesRoot, "Project");
-        var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
-
-        var resolution = LayerResolution.Resolve(projectDir, "Web.config", overlayRoot, "ClientA", "Production");
-        var merged = Merge(resolution);
+        var resolved = Resolve("ClientA", "Production");
+        var merged = XmlLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
         var doc = XDocument.Parse(merged);
 
@@ -44,14 +42,12 @@ public class XmlLayerMergerIisWebConfigTests
     [Fact]
     public void Environment_layer_alone_does_not_touch_the_location_wrapped_authorization()
     {
-        var projectDir = Path.Combine(FixturesRoot, "Project");
-        var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
+        // ClientB's own configtransform.json declares only `extends` (no resources of its own)
+        // -- see XmlLayerMergerTests's identical comment for why this file still needs to exist.
+        var resolved = Resolve("ClientB", "Production");
+        Assert.Single(resolved.PatchPathsInOrder);
 
-        // ClientB has no override — only the environment-wide Production layer applies.
-        var resolution = LayerResolution.Resolve(projectDir, "Web.config", overlayRoot, "ClientB", "Production");
-        var merged = Merge(resolution);
-
-        Assert.Null(resolution.ClientOverlayPath);
+        var merged = XmlLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
         var doc = XDocument.Parse(merged);
         var authorization = doc.Root!.Elements("location")
@@ -62,8 +58,9 @@ public class XmlLayerMergerIisWebConfigTests
         Assert.Single(authorization.Elements("deny"));
     }
 
-    /// <summary>Adapts a fixed-slot LayerResolutionResult to XmlLayerMerger's arbitrary-length chain signature.</summary>
-    private static string Merge(LayerResolutionResult resolution) =>
-        XmlLayerMerger.Merge(resolution.BasePath, new[] { resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath }
-            .Where(p => p is not null).Select(p => p!).ToList());
+    private static ResolvedResource Resolve(string client, string environment)
+    {
+        var chain = LayerChain.Build(FixturesRoot, LayerPathResolver.Resolve(FixturesRoot, client, environment));
+        return LayerChain.ResolveResource(FixturesRoot, chain, ResourcePath);
+    }
 }
