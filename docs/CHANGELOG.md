@@ -6,6 +6,53 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.8.0-alpha] - 2026-09-04
+
+Breaking, following this repo's own precedent for a pre-1.0 breaking change (`0.2.0-alpha`'s
+manifest-schema rename, `0.7.0-alpha`'s manifest.json removal): a MINOR bump, not a jump to
+`1.0.0` — `CONFIG_MANAGEMENT.md` §10.8 ties dropping `-alpha` to real-content validation, not to
+breaking-change size, unchanged by this release.
+
+### Changed
+
+- **CLI unification: `ConfigTransform.Xml`/`ConfigTransform.Json` (two separate dotnet tools,
+  `configtransform-xml`/`configtransform-json`) are replaced by one `ConfigTransform.Cli` tool
+  (`configtransform`)**, the deferred piece of `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`'s
+  "Settled decisions" #2 finally implemented. Every resource a resolved layer touches — across
+  **every** registered format, not just one tool's own — now resolves in a single call: a mixed
+  XML/JSON layer no longer needs two separate tool invocations, and omitting `--resource` no
+  longer skips the other format with a stderr note (that skip only fires now for a genuinely
+  unregistered extension, e.g. a future YAML resource — reported, never silently dropped).
+  `set` dispatches the same way, by the target resource's own extension, so one shared
+  `configtransform.json` layer can list both an XML-authored and a JSON-authored resource,
+  each written by its own engine independently.
+  **New types in `ConfigTransform.Core`**: `FormatEngine` (one format's merge function, field-
+  author function, owned extensions, and patch-file extension) and `FormatEngineRegistry`
+  (dispatches a resource to its engine by extension; throws naming supported extensions for an
+  unregistered one). `CliRunner.Run` and the new `SetRunner.Run` (the unified `set` orchestration,
+  replacing each tool's own near-duplicate `RunSet`) take a `FormatEngineRegistry` instead of a
+  single hardcoded merge function — `XmlLayerMerger`/`JsonLayerMerger`/`XmlFieldAuthor`/
+  `JsonFieldAuthor` are otherwise **unchanged**, still the actual merge/authoring engines, exactly
+  as the design doc said they would stay.
+  **`ConfigTransform.Xml`/`ConfigTransform.Json` are now internal libraries, not their own NuGet
+  packages** (`IsPackable=false`) — every version already published under those package IDs stays
+  installable forever (GitHub Packages is immutable), but neither receives a new version from
+  this point on. `ConfigTransform.Core` also gets `IsPackable=false` in this same change, fixing
+  an unrelated pre-existing oversight (it was implicitly packable, never actually meant to be its
+  own package).
+  **Accepted cost**: `ConfigTransform.Cli`'s package now bundles both `Microsoft.Web.Xdt` and
+  `Microsoft.Extensions.Configuration(.Json)` — a JSON-only consumer downloads the XDT dependency
+  and vice versa. Inherent to a single dispatcher; not worth a second package split back apart.
+  **Migration**: any CI/CD invocation using `configtransform-xml`/`configtransform-json` needs
+  updating to install `ConfigTransform.Cli` and invoke `configtransform` instead — the flag shape
+  itself (`--resource`/`--client`/`--environment`/`--output`/`--dry-run`/`--diff`/`--list`/`set`)
+  is unchanged. `config-transform-pilot` is **not** migrated in this change — deliberately
+  deferred, see `docs/ROADMAP.md`'s "Next up".
+  `docs/USAGE.md` rewritten in full for the unified tool; `scripts/smoke-test-published-tool.sh`
+  now installs one tool and asserts a single mixed-format call resolves both an XML and a JSON
+  resource with no stderr skip note — the real capability this release delivers, not just a
+  rename.
+
 ## [0.7.0-alpha2] - 2026-09-04
 
 Corrects a partial release, not a code or schema change — no `src/` changes in this entry. See

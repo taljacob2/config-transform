@@ -17,8 +17,8 @@ worked out in "Settled decisions" #6; and **every other command (`--dry-run`, `-
 a real run) gets the same `--resource` flag, with omitting it meaning "every project this layer
 touches, in one call"** — a real behavior change for a real run's `--output` (becomes a directory)
 and a new reverse-lookup mode for `--list`, worked out with full CLI examples in "Settled
-decisions" #7. See "Open items for implementation" for what's left — implementation planning, not
-further design.
+decisions" #7. See "Implemented" below — every design question here is both settled and shipped,
+including the CLI-unification consequence of "Settled decisions" #2.
 
 ## Origin and problem statement
 
@@ -333,9 +333,8 @@ Confirmed directly by the repo owner — treat these as fixed, not open to silen
      Clients/Acme/Production/configtransform.json   (patch-OrderProcessor.Framework-App.config.xml, extends Environments/Production)
    ```
 
-   `configtransform` above is a placeholder invocation name — "Settled decisions" #2's CLI
-   unification is confirmed as a consequence, but no specific binary/project name has been chosen;
-   see "Open items for implementation".
+   `configtransform` above is the real, shipped invocation name — "Settled decisions" #2's CLI
+   unification is implemented as `ConfigTransform.Cli`, `0.8.0-alpha`; see "Implemented" below.
 
 ## What this design does *not* change (confirmed, not open)
 
@@ -380,7 +379,7 @@ nice-to-have.
 | `manifest.json`'s fate | Fully replaced — a clean break, no coexistence/migration period | Keep `manifest.json` alongside the new tree for some transition period, or preserve its directory-indirection some other way | Confirmed directly by the repo owner: the indirection is an accepted, named loss, not worth preserving. No real solution repo has adopted the current schema in production yet, so there's no live user a dual-support path would protect — consistent with this repo's SemVer policy allowing any breaking change pre-1.0. |
 | `set`'s new targeting flag | `--resource <path>`, naming the project by its real repo-root-relative path | Keep `--manifest`/`--file`; invent a new project-label indirection to replace `manifest.json`'s | `manifest.json` is gone (see the row above), so there's no project label left to target by — `path` is already how every resource is addressed everywhere else in this design, so reusing it for `set`'s own targeting needs no new vocabulary. |
 
-## Implemented — what shipped, and what's still open
+## Implemented
 
 All seven "Settled decisions" above are confirmed by the repo owner and are now real code, not
 just design. `LayerManifest`/`LayerManifestLoader`/`LayerPathResolver`/`LayerChain`/`LayerLister`
@@ -391,16 +390,23 @@ tools' `CliRunner` are rewritten around `--resource`. `docs/MANIFEST_SCHEMA.md`,
 `docs/GETTING_STARTED.md`, `docs/ONBOARDING.md`, `docs/USAGE.md`, and `CLAUDE.md` are rewritten;
 `docs/CONFIG_MANAGEMENT.md` §3/§4/§5.1/§9 are updated in the same change.
 
-One item was explicitly deferred, not overlooked:
+The one item explicitly deferred at the time — the CLI-unification consequence of "Settled
+decisions" #2 (`ConfigTransform.Xml`/`ConfigTransform.Json` merging into one dispatcher) — is now
+also implemented, as its own separately-scoped pass, versioned `0.8.0-alpha`. `ConfigTransform.Cli`
+(`configtransform`) registers both formats' merge/field-authoring engines (`FormatEngine`/
+`FormatEngineRegistry`, `ConfigTransform.Core`) and dispatches each resource to the right one by
+its own file extension — the interim "skip the other format with a stderr note" behavior is gone;
+that skip now only fires for a genuinely unregistered extension (e.g. a future YAML resource,
+`CONFIG_MANAGEMENT.md` §5.5), and is still reported, never silently dropped.
+`XmlLayerMerger`/`JsonLayerMerger`/`XmlFieldAuthor`/`JsonFieldAuthor` did stay as internal engines,
+exactly as anticipated here — `ConfigTransform.Xml`/`ConfigTransform.Json` are now internal
+libraries rather than their own packaged tools. `configtransform` is no longer a placeholder
+invocation name in the worked examples above — it's the real, shipped command. See
+`docs/CHANGELOG.md`'s `[0.8.0-alpha]` entry and `docs/ROADMAP.md`'s "Current state" for the full
+implementation writeup.
 
-- **The CLI-unification consequence of "Settled decisions" #2** (`ConfigTransform.Xml`/
-  `ConfigTransform.Json` merging into one dispatcher) is still its own, separately-scoped design
-  and implementation pass, exactly as flagged when this design was written — not started. The
-  interim behavior implemented instead: each tool processes every resource of its own format that
-  a resolved layer touches, skipping the other format's resources with a stderr note rather than
-  an error or silence. See `docs/ROADMAP.md`'s "Next up" for what a unification pass would still
-  need to decide (binary/project name, how `set`'s engine selection carries over to one
-  dispatcher).
+Every design question this document originally opened is now both settled and implemented — no
+open items remain here.
 
 ## Related reading
 

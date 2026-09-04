@@ -12,7 +12,7 @@ information but none of the "why."
 
 ## 1. Authenticating to the GitHub Packages feed
 
-`ConfigTransform.Xml`/`.Json` are published to a **private-by-default** GitHub Packages NuGet
+`ConfigTransform.Cli` is published to a **private-by-default** GitHub Packages NuGet
 feed (`CONFIG_MANAGEMENT.md` §10.2/§10.4). Any repo running `dotnet tool restore` against it
 needs a credential — there is no way to `dotnet tool install`/`restore` these packages
 anonymously unless they're explicitly made public.
@@ -29,7 +29,7 @@ from `config-transform`'s own repo — which is the normal case, by design (§2:
 its own dedicated repo, not copied into each solution repo).
 
 First check whether it's even needed: `https://<host>/<owner>?tab=packages` — if
-`ConfigTransform.Xml`/`.Json` show "Public", skip straight to `nuget.config` below. `<host>` is
+`ConfigTransform.Cli` shows "Public", skip straight to `nuget.config` below. `<host>` is
 `github.com` for the ordinary case; see "Which host?" below if `config-transform` is published
 from a GitHub Enterprise Cloud tenant instead.
 
@@ -190,14 +190,14 @@ Actions job made of separate steps.
    (`.bashrc`, PowerShell `$PROFILE`) or a durable env var (`setx GITHUB_ACTOR ...` on Windows).
 3. Run the tool exactly as CI does — identical invocation on every platform, regardless of host:
    ```
-   dotnet tool run configtransform-xml -- --resource <Project>/App.config --client ClientA --environment Production --diff
+   dotnet tool run configtransform -- --resource <Project>/App.config --client ClientA --environment Production --diff
    ```
 
 ## 2. git-crypt for the consuming repo's `.configtransform/` tree
 
 This is the *consuming repo's own* encryption choice (`CONFIG_MANAGEMENT.md` §7) — the tool
-itself has no git-crypt dependency at all; `ConfigTransform.Xml`/`.Json` just read plaintext
-files off whatever disk they're given, encrypted-and-unlocked or not. Most real consuming repos
+itself has no git-crypt dependency at all; `configtransform` just reads plaintext files off
+whatever disk it's given, encrypted-and-unlocked or not. Most real consuming repos
 will still want this, since it's what this architecture recommends for secrets sitting in
 `.configtransform/**` (connection strings, API keys). Skip this whole section if a consuming
 repo has decided not to encrypt that tree.

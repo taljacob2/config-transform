@@ -1,14 +1,15 @@
+using ConfigTransform.Cli.Tests.TestSupport;
 using ConfigTransform.Core;
-using ConfigTransform.Xml.Tests.TestSupport;
 using Xunit;
 
-namespace ConfigTransform.Xml.Tests;
+namespace ConfigTransform.Cli.Tests;
 
 /// <summary>
-/// End-to-end tests of the "set" verb through <see cref="XmlCliRunner"/> — layer resolution
-/// (base/Environment/Client, creating a configtransform.json when it doesn't exist yet),
-/// target-patch selection, writing, and the auto-diff. Decision logic itself (match/ambiguity/
-/// defaults) is covered directly in <see cref="XmlFieldAuthorTests"/>.
+/// End-to-end tests of the "set" verb against an XML resource, through the unified
+/// <see cref="CliRunner"/> — layer resolution (base/Environment/Client, creating a
+/// configtransform.json when it doesn't exist yet), target-patch selection, writing, and the
+/// auto-diff. Decision logic itself (match/ambiguity/defaults) is covered directly in
+/// <c>XmlFieldAuthorTests</c> (ConfigTransform.Xml.Tests).
 /// </summary>
 public class XmlSetCommandCliTests
 {
@@ -19,12 +20,12 @@ public class XmlSetCommandCliTests
         var stdout = new StringWriter();
         var stderr = new StringWriter();
 
-        var exitCode = XmlCliRunner.Run(new[]
+        var exitCode = CliRunner.Run(new[]
         {
-            "set", "--resource", workspace.ResourcePath,
+            "set", "--resource", workspace.XmlResourcePath,
             "--client", "Globex", "--environment", "Production",
             "--match", "ApiUrl", "--set", "https://globex.example.com"
-        }, stdout, stderr, workspace.RootPath);
+        }, stdout, stderr, FormatEngines.All, workspace.RootPath);
 
         Assert.Equal(0, exitCode);
         Assert.Empty(stderr.ToString());
@@ -36,7 +37,7 @@ public class XmlSetCommandCliTests
         // absolute path LayerPathResolver itself works with internally (Settled decisions #4:
         // every path in the file is repo-root-relative, no exceptions).
         Assert.Equal(".configtransform/Environments/Production/configtransform.json", layer.Extends);
-        Assert.Equal(workspace.ResourcePath, layer.Resources.Single().Path);
+        Assert.Equal(workspace.XmlResourcePath, layer.Resources.Single().Path);
         Assert.Equal(".configtransform/Clients/Globex/Production/patch-Project-App.config.xml", layer.Resources.Single().Patch);
 
         var patchPath = Path.Combine(workspace.RootPath, ".configtransform", "Clients", "Globex", "Production", "patch-Project-App.config.xml");
@@ -59,12 +60,12 @@ public class XmlSetCommandCliTests
         var stdout = new StringWriter();
         var stderr = new StringWriter();
 
-        var exitCode = XmlCliRunner.Run(new[]
+        var exitCode = CliRunner.Run(new[]
         {
-            "set", "--resource", workspace.ResourcePath,
+            "set", "--resource", workspace.XmlResourcePath,
             "--client", "Globex", "--environment", "Production",
             "--match", "ApiUrl", "--set", "https://globex.example.com", "--dry-run"
-        }, stdout, stderr, workspace.RootPath);
+        }, stdout, stderr, FormatEngines.All, workspace.RootPath);
 
         Assert.Equal(0, exitCode);
         Assert.Contains("globex.example.com", stdout.ToString());
@@ -78,12 +79,12 @@ public class XmlSetCommandCliTests
         var stdout = new StringWriter();
         var stderr = new StringWriter();
 
-        var exitCode = XmlCliRunner.Run(new[]
+        var exitCode = CliRunner.Run(new[]
         {
-            "set", "--resource", workspace.ResourcePath,
+            "set", "--resource", workspace.XmlResourcePath,
             "--environment", "Staging",
             "--match", "key=ApiUrl", "--set", "value=https://staging.example.com"
-        }, stdout, stderr, workspace.RootPath);
+        }, stdout, stderr, FormatEngines.All, workspace.RootPath);
 
         Assert.Equal(0, exitCode);
 
@@ -103,14 +104,14 @@ public class XmlSetCommandCliTests
         var stdout = new StringWriter();
         var stderr = new StringWriter();
 
-        var exitCode = XmlCliRunner.Run(new[]
+        var exitCode = CliRunner.Run(new[]
         {
-            "set", "--resource", workspace.ResourcePath,
+            "set", "--resource", workspace.XmlResourcePath,
             "--match", "key=ApiUrl", "--set", "value=https://everyone.example.com"
-        }, stdout, stderr, workspace.RootPath);
+        }, stdout, stderr, FormatEngines.All, workspace.RootPath);
 
         Assert.Equal(0, exitCode);
-        var baseContent = File.ReadAllText(workspace.ProjectFilePath);
+        var baseContent = File.ReadAllText(workspace.XmlProjectFilePath);
         Assert.Contains("https://everyone.example.com", baseContent);
         Assert.DoesNotContain("xdt:", baseContent);
     }
@@ -122,11 +123,11 @@ public class XmlSetCommandCliTests
         var stdout = new StringWriter();
         var stderr = new StringWriter();
 
-        var exitCode = XmlCliRunner.Run(new[]
+        var exitCode = CliRunner.Run(new[]
         {
-            "set", "--resource", workspace.ResourcePath,
+            "set", "--resource", workspace.XmlResourcePath,
             "--client", "Globex", "--match", "key=ApiUrl", "--set", "value=X"
-        }, stdout, stderr, workspace.RootPath);
+        }, stdout, stderr, FormatEngines.All, workspace.RootPath);
 
         Assert.Equal(1, exitCode);
         Assert.Contains("--client requires --environment", stderr.ToString());
@@ -139,12 +140,12 @@ public class XmlSetCommandCliTests
         var stdout = new StringWriter();
         var stderr = new StringWriter();
 
-        var exitCode = XmlCliRunner.Run(new[]
+        var exitCode = CliRunner.Run(new[]
         {
-            "set", "--resource", workspace.ResourcePath,
+            "set", "--resource", workspace.XmlResourcePath,
             "--client", "Globex", "--environment", "Production",
             "--match", "key=BrandNewKey", "--set", "value=X"
-        }, stdout, stderr, workspace.RootPath);
+        }, stdout, stderr, FormatEngines.All, workspace.RootPath);
 
         Assert.Equal(1, exitCode);
         Assert.Contains("No element found", stderr.ToString());
@@ -155,21 +156,21 @@ public class XmlSetCommandCliTests
     {
         using var workspace = new TempCliWorkspace();
         var stdout1 = new StringWriter();
-        var exitCode1 = XmlCliRunner.Run(new[]
+        var exitCode1 = CliRunner.Run(new[]
         {
-            "set", "--resource", workspace.ResourcePath,
+            "set", "--resource", workspace.XmlResourcePath,
             "--client", "Globex", "--environment", "Production",
             "--match", "ApiUrl", "--set", "https://v1.example.com"
-        }, stdout1, new StringWriter(), workspace.RootPath);
+        }, stdout1, new StringWriter(), FormatEngines.All, workspace.RootPath);
         Assert.Equal(0, exitCode1);
 
         var stdout2 = new StringWriter();
-        var exitCode2 = XmlCliRunner.Run(new[]
+        var exitCode2 = CliRunner.Run(new[]
         {
-            "set", "--resource", workspace.ResourcePath,
+            "set", "--resource", workspace.XmlResourcePath,
             "--client", "Globex", "--environment", "Production",
             "--match", "ApiUrl", "--set", "https://v2.example.com"
-        }, stdout2, new StringWriter(), workspace.RootPath);
+        }, stdout2, new StringWriter(), FormatEngines.All, workspace.RootPath);
         Assert.Equal(0, exitCode2);
 
         var patchPath = Path.Combine(workspace.RootPath, ".configtransform", "Clients", "Globex", "Production", "patch-Project-App.config.xml");

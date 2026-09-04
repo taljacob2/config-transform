@@ -86,10 +86,14 @@ here is accidental rather than deliberate.
 ## Repo structure — where to look
 
 - `src/ConfigTransform.Core/` — shared, format-agnostic logic (`configtransform.json` parsing,
-  `extends`-chain resolution, file resolution, layer-resolution reporting). Change here first for
-  anything that should behave identically across XML and JSON.
-- `src/ConfigTransform.Xml/`, `src/ConfigTransform.Json/` — thin CLI front-ends, one per
-  format, each wrapping a different merge engine.
+  `extends`-chain resolution, file resolution, layer-resolution reporting, `set` orchestration,
+  and `FormatEngine`/`FormatEngineRegistry` dispatch). Change here first for anything that should
+  behave identically across XML and JSON.
+- `src/ConfigTransform.Xml/`, `src/ConfigTransform.Json/` — internal merge-engine libraries, one
+  per format (`XmlLayerMerger`/`XmlFieldAuthor`, `JsonLayerMerger`/`JsonFieldAuthor`), not their
+  own dotnet tools.
+- `src/ConfigTransform.Cli/` — the actual CLI, packaged as the `configtransform` dotnet tool.
+  Registers both format engines above into Core's dispatcher; this is genuinely all it does.
 - `tests/*/Fixtures/` — real-shaped fixture files per scenario: `DotNetFramework`,
   `IisWebConfig`, `GenericXml` (XML); `DotNetCore`, `GenericJson` (JSON). New merge-behavior
   test cases belong here as fixtures, exercised by data-driven tests — not as inline strings
@@ -109,25 +113,26 @@ here is accidental rather than deliberate.
 
 See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the current plan (this is the doc rule #1 above
 points at) and [`docs/CHANGELOG.md`](docs/CHANGELOG.md) for exactly what's implemented so far.
-Short version as of the last update here: `ConfigTransform.Xml` and `ConfigTransform.Json` are
-both fully implemented, tested, and released. `manifest.json` and the fixed base→Environments→
+Short version as of the last update here: `manifest.json` and the fixed base→Environments→
 Clients rule are gone — replaced by self-describing `configtransform.json` layers
-(`docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`, fully implemented). `--resource` is the tool-wide
-targeting flag; omitting it processes every resource a layer touches, in this tool's own format,
-in one call (a mixed-format layer is fine — the *other* tool's resources are skipped with a
-stderr note, not silently dropped; true single-binary dispatch across both formats is a separate,
-not-yet-implemented pass). `--list` shows one layer's resources (or, given `--resource` instead,
-a tree-wide reverse lookup).
+(`docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`, fully implemented). The CLI is a single unified tool,
+`configtransform` (`ConfigTransform.Cli`) — `ConfigTransform.Xml`/`ConfigTransform.Json` are now
+internal merge-engine libraries, not separate dotnet tools; every already-published version of
+those two tools stays installable forever, but neither gets a new one. `--resource` is the
+tool-wide targeting flag; omitting it processes every resource a layer touches, across every
+registered format, in one call — a mixed XML/JSON layer resolves with no skipping at all; a
+resource whose extension no format engine handles is reported on stderr and skipped, never
+silently dropped. `--list` shows one layer's resources (or, given `--resource` instead, a
+tree-wide reverse lookup).
 
-Both tools also have a `set` command (docs/FIELD_AUTHORING_DESIGN.md), now targeting a resource
-by its own repo-root-relative path and creating a missing `configtransform.json` layer (with the
-right `extends`) on first write: XML authors an overlay field's `SetAttributes` operation
-mechanically (updating an existing key/attribute; creating a brand-new one, `Insert`, is not
-implemented), JSON writes a nested key directly (covers both updating and creating) and also
-matches or creates an item inside an array of objects via a `$elemMatch` overlay syntax
-(`JsonElemMatchResolver`) — the one real design gap found during implementation, for JSON, is
-closed; XML's own array-of-objects matching remains open, alongside `Insert`. See
-`docs/ROADMAP.md`'s "Next up" for what's actionable now versus what needs either a solution repo
-that doesn't exist yet or an owner decision — including CLI unification (`ConfigTransform.Xml`/
-`ConfigTransform.Json` merging into one dispatcher), a deliberately separate, not-yet-started
-pass.
+`set` (docs/FIELD_AUTHORING_DESIGN.md) targets a resource by its own repo-root-relative path,
+dispatching to the right engine by that path's extension, and creates a missing
+`configtransform.json` layer (with the right `extends`) on first write: XML authors an overlay
+field's `SetAttributes` operation mechanically (updating an existing key/attribute; creating a
+brand-new one, `Insert`, is not implemented), JSON writes a nested key directly (covers both
+updating and creating) and also matches or creates an item inside an array of objects via a
+`$elemMatch` overlay syntax (`JsonElemMatchResolver`) — the one real design gap found during
+implementation, for JSON, is closed; XML's own array-of-objects matching remains open, alongside
+`Insert`. See `docs/ROADMAP.md`'s "Next up" for what's actionable now versus what needs either a
+solution repo that doesn't exist yet or an owner decision — including migrating
+`config-transform-pilot` onto the unified CLI, deliberately deferred out of that change.

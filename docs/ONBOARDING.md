@@ -100,21 +100,22 @@ itself declares) is resolved relative to your current directory, same as CI.
 See what one layer actually has, with no risk of writing anything (pick a real client/environment
 this repo already uses):
 ```bash
-dotnet tool run configtransform-xml -- --list --client <Client> --environment <Environment>
+dotnet tool run configtransform -- --list --client <Client> --environment <Environment>
 ```
 Or, given a resource's own path, see every layer in the tree that patches it:
 ```bash
-dotnet tool run configtransform-xml -- --list --resource <path/to/App.config>
+dotnet tool run configtransform -- --list --resource <path/to/App.config>
 ```
 
 Then see a real merge:
 ```bash
-dotnet tool run configtransform-xml -- -r <path/to/App.config> -c <Client> -e <Environment> --diff
+dotnet tool run configtransform -- -r <path/to/App.config> -c <Client> -e <Environment> --diff
 ```
 (`-r`/`-c`/`-e` are short for `--resource`/`--client`/`--environment` — handy for typing
-interactively; `-o`/`--output` works the same way. Use `configtransform-json` instead of
-`configtransform-xml` for a `.json`-based project. Omit `--resource` entirely to see every
-resource this layer touches, in one call.)
+interactively; `-o`/`--output` works the same way. `configtransform` is one tool for both XML and
+JSON projects — it dispatches by `--resource`'s own extension, so there's no separate command to
+remember for a `.json`-based project. Omit `--resource` entirely to see every resource this layer
+touches, across every format, in one call.)
 
 If that prints a diff (or `(no changes)`), you're set up correctly. Done.
 

@@ -10,12 +10,18 @@ Status: **implemented, tested, and released** (pre-1.0, `-alpha` — see
 ## Projects
 
 - `src/ConfigTransform.Core` — shared, format-agnostic logic (`configtransform.json` parsing,
-  `extends`-chain resolution, case-insensitive file resolution, layer-resolution reporting).
-- `src/ConfigTransform.Xml` — XDT-based resolution for App.config/Web.config/other XML config
-  files, distributed as the `configtransform-xml` dotnet tool.
-- `src/ConfigTransform.Json` — `Microsoft.Extensions.Configuration`-based resolution for
-  appsettings.json and other JSON config files, distributed as the `configtransform-json`
-  dotnet tool.
+  `extends`-chain resolution, case-insensitive file resolution, layer-resolution reporting,
+  format-engine dispatch).
+- `src/ConfigTransform.Xml` — XDT-based merge engine for App.config/Web.config/other XML config
+  files. An internal library, not its own dotnet tool.
+- `src/ConfigTransform.Json` — `Microsoft.Extensions.Configuration`-based merge engine for
+  appsettings.json and other JSON config files. An internal library, not its own dotnet tool.
+- `src/ConfigTransform.Cli` — the unified CLI, distributed as the `configtransform` dotnet tool
+  (`ConfigTransform.Cli` package). Dispatches each resource to the right engine above by its own
+  file extension, so a mixed XML/JSON layer resolves in one call. Replaces the separate
+  `configtransform-xml`/`configtransform-json` tools (`ConfigTransform.Xml`/`ConfigTransform.Json`
+  packages) — every already-published version of those stays installable forever, but neither
+  receives a new version.
 
 ## Docs
 

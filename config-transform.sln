@@ -1,4 +1,4 @@
-Microsoft Visual Studio Solution File, Format Version 12.00
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
@@ -13,6 +13,14 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConfigTransform.Xml.Tests", "tests\ConfigTransform.Xml.Tests\ConfigTransform.Xml.Tests.csproj", "{B53B4E56-4ED4-4A2D-92F5-13A5C600AAEF}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConfigTransform.Json.Tests", "tests\ConfigTransform.Json.Tests\ConfigTransform.Json.Tests.csproj", "{60F8482B-B480-4122-808D-D44FBEB02828}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{DE5908A5-4672-46BE-8CB1-2C4FCAC1601D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConfigTransform.Cli", "src\ConfigTransform.Cli\ConfigTransform.Cli.csproj", "{DF3494A3-77EB-4E40-8B4D-F5A8093D2BCE}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{866B3C44-3447-4C36-BD67-3EB4203896F8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConfigTransform.Cli.Tests", "tests\ConfigTransform.Cli.Tests\ConfigTransform.Cli.Tests.csproj", "{D8C096B3-0705-4772-8CB9-71F29321C620}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -44,8 +52,20 @@ Global
 		{60F8482B-B480-4122-808D-D44FBEB02828}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{60F8482B-B480-4122-808D-D44FBEB02828}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{60F8482B-B480-4122-808D-D44FBEB02828}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DF3494A3-77EB-4E40-8B4D-F5A8093D2BCE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DF3494A3-77EB-4E40-8B4D-F5A8093D2BCE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DF3494A3-77EB-4E40-8B4D-F5A8093D2BCE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DF3494A3-77EB-4E40-8B4D-F5A8093D2BCE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D8C096B3-0705-4772-8CB9-71F29321C620}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D8C096B3-0705-4772-8CB9-71F29321C620}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D8C096B3-0705-4772-8CB9-71F29321C620}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D8C096B3-0705-4772-8CB9-71F29321C620}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{DF3494A3-77EB-4E40-8B4D-F5A8093D2BCE} = {DE5908A5-4672-46BE-8CB1-2C4FCAC1601D}
+		{D8C096B3-0705-4772-8CB9-71F29321C620} = {866B3C44-3447-4C36-BD67-3EB4203896F8}
 	EndGlobalSection
 EndGlobal

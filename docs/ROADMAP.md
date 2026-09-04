@@ -255,6 +255,30 @@ merged value in the output, not just exit code 0 — verified locally against re
 tools before tagging) and cutting `0.7.0-alpha2`, a release-process-only correction with no
 `src/` changes. See `docs/CHANGELOG.md`'s `[0.7.0-alpha2]` entry.
 
+**CLI unification implemented — `ConfigTransform.Xml`/`ConfigTransform.Json` merged into one
+`ConfigTransform.Cli` dispatcher (`configtransform`), versioned `0.8.0-alpha`.** The one piece of
+`docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`'s "Settled decisions" #2 deliberately left out of the
+`0.7.0-alpha` implementation, now done: every resource a resolved layer touches, across every
+registered format, resolves in one call — a mixed XML/JSON layer no longer needs two tool
+invocations, and the old "skip the other format with a stderr note" interim behavior is gone
+(that skip now only fires for a genuinely unregistered extension, e.g. a future YAML resource,
+and is still reported, never silently dropped). New Core types `FormatEngine`/
+`FormatEngineRegistry` and a new `SetRunner` (the unified `set` orchestration, replacing each
+tool's own near-duplicate `RunSet`) do the dispatching by resource extension;
+`XmlLayerMerger`/`JsonLayerMerger`/`XmlFieldAuthor`/`JsonFieldAuthor` are unchanged internal
+engines, exactly as the design doc anticipated. `ConfigTransform.Xml`/`ConfigTransform.Json` are
+now internal libraries (`IsPackable=false`), no longer their own NuGet packages — every version
+already published under those IDs stays installable forever, but neither gets a new version.
+Verified via a real `dotnet pack`/local-tool-install rehearsal (the exact gate `0.7.0-alpha`
+skipped, which cost a broken release) and a manual smoke test of the actual new capability: one
+`--dry-run` call with `--resource` omitted resolving both an XML and a JSON resource with zero
+stderr output. 179 tests passing solution-wide (a 37-test `ConfigTransform.Cli.Tests` project
+replaces the migrated `*CliRunnerTests`/`*SetCommandCliTests`, plus new coverage — mixed-format
+single-call resolution, `set` dispatching by extension within one shared layer, the
+unregistered-extension error/skip cases — that no test process could previously reach, since the
+two-tool split meant no single test could touch both formats at once). See
+`docs/CHANGELOG.md`'s `[0.8.0-alpha]` entry.
+
 ## Next up
 
 One item below is now actionable purely within this repo (see the first bullet); every other
@@ -276,18 +300,18 @@ default next step.
      existing* array item is mechanically answerable the same way an XML element match already
      is, so this could in principle be implemented independently of `Insert` — not done only for
      lack of time, not a design blocker. See `docs/FIELD_AUTHORING_DESIGN.md`'s "Open items".
-- **CLI unification (`ConfigTransform.Xml`/`ConfigTransform.Json` merging into one dispatcher)** —
-  the one piece of `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md` deliberately left out of the
-  implementation above, per that document's own "Open items for implementation": since a single
-  `configtransform.json` can list resources of both formats, and dispatch is per-resource by file
-  extension, a genuinely single "process every resource, regardless of format, in one call"
-  experience needs one CLI entry point instead of two. Today's interim behavior (each tool skips
-  the other format's resources with a stderr note) works but isn't that end state. No design work
-  needed first — the design doc already confirms this is a first-class, accepted consequence, not
-  an open question — but it needs its own implementation pass: a new consolidated project/binary
-  (name not yet chosen), `XmlLayerMerger`/`JsonLayerMerger` staying as internal engines either way,
-  and a decision on how `set`'s engine selection (today inferred from `--resource`'s extension
-  inside each tool) carries over to one dispatcher choosing between them.
+- **Migrate `config-transform-pilot` off the two-tool CLI, onto `ConfigTransform.Cli 0.8.0-alpha`**
+  — deliberately deferred out of this change, same precedent as the `manifest.json` migration
+  (shipped here first, migrated in the pilot's own repo as a separate pass afterward). The pilot
+  is the only place the headline new capability can actually be validated against real
+  multi-project content: it has three projects spanning both formats, so collapsing
+  `build-transformed.yml`'s four per-format `dotnet tool run configtransform-xml`/
+  `configtransform-json` invocations into a single `--resource`-omitted `configtransform` call
+  is the real proof, not just this repo's own synthetic smoke test. Concrete scope once
+  `0.8.0-alpha`'s tag is pushed (owner-only, this repo's sessions can push branches but not tags):
+  re-pin `.config/dotnet-tools.json` to `ConfigTransform.Cli 0.8.0-alpha` (dropping both old
+  entries), collapse the per-format invocations, diff golden outputs against the `0.7.0-alpha2`
+  baseline, update the pilot's own `FINDINGS.md`.
 - **`docs/MANIFEST_SCHEMA.md`'s filename vs. its content** — now describes the
   `configtransform.json` schema in full (the self-describing-overlays implementation above), but
   kept its old filename to avoid a large cross-reference rename across `docs/`. Worth revisiting

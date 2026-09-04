@@ -45,13 +45,12 @@ ship a change that's silently wrong.
 ## Command shape
 
 ```
-configtransform-xml  set --resource <path> --client <C> --environment <E> --match <attr>=<value> [--match ...] --set <attr>=<value> [--set ...]
-configtransform-json set --resource <path> --client <C> --environment <E> --match <attr>=<value> [--match ...] --set <attr>=<value> [--set ...]
+configtransform set --resource <path> --client <C> --environment <E> --match <attr>=<value> [--match ...] --set <attr>=<value> [--set ...]
 ```
 
-Identical shape across `ConfigTransform.Xml` and `ConfigTransform.Json` — same principle
-`docs/USAGE.md` already holds for the rest of the CLI ("both tools share the exact same CLI
-shape"). `--match` locates the target; `--set` writes fields on it. Both repeatable, and always
+Identical shape regardless of `--resource`'s format — `configtransform` dispatches to the XML or
+JSON field-authoring engine by that path's own extension, same principle `docs/USAGE.md` already
+holds for the rest of the CLI. `--match` locates the target; `--set` writes fields on it. Both repeatable, and always
 typed in full (`--match key=ApiUrl`, not a bare `--match ApiUrl`, except where the "Defaults"
 section below applies) — a single consistent shape rather than a shorthand for the simple case,
 so the command looks the same regardless of which element it's touching.
