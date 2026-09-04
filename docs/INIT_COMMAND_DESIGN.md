@@ -152,11 +152,55 @@ content:
 - One resource, written to `hello-world/appsettings.json` at the repo root (created if missing;
   refuses to overwrite if a different file is already there — see "Errors"):
   ```json
-  { "message": "Hello, world!" }
+  { "message": "Hello, world! (from base config)" }
   ```
-- The full skeleton tree from "Manifest shape" below, built the normal way from those three
-  inputs — template mode differs only in *where the inputs come from* (fixed, not scanned/typed),
-  not in how the tree gets built.
+
+**Every layer overrides `message` with its own value, naming itself** — not the same string
+repeated at every layer. This is deliberate: a template's entire purpose is to be run against
+immediately and show the layering mechanism actually working, not just to prove the tree was
+created. A patch per layer, each following the existing `patch-{path-with-'/'-as-'-'}.{ext}`
+naming convention (`SetTargetResolver`'s own scheme — `hello-world/appsettings.json` + JSON's
+`json` patch extension becomes `patch-hello-world-appsettings.json.json`, in the same directory
+as the `configtransform.json` referencing it):
+
+| Layer | `resources[].patch` content |
+|---|---|
+| *(base)* `hello-world/appsettings.json` | `{ "message": "Hello, world! (from base config)" }` |
+| `Environments/Production` | `{ "message": "Hello, world! (from Production config)" }` |
+| `Environments/Test` | `{ "message": "Hello, world! (from Test config)" }` |
+| `Clients/Client-A/Production` | `{ "message": "Hello, world! (from Client-A Production config)" }` |
+| `Clients/Client-A/Test` | `{ "message": "Hello, world! (from Client-A Test config)" }` |
+| `Clients/Client-B/Production` | `{ "message": "Hello, world! (from Client-B Production config)" }` |
+| `Clients/Client-B/Test` | `{ "message": "Hello, world! (from Client-B Test config)" }` |
+
+Thirteen files total (1 base + 2 Environment manifests + 2 Environment patches + 4 Client
+manifests + 4 Client patches) — every one of them written, none left as an empty
+patch-less skeleton the way a scanned/typed `init` run's Environment layers are (see "Manifest
+shape" below); a template's whole point is to be immediately runnable, so it always has a real
+override to show at every layer.
+
+**Immediately runnable, and that's the demo**, three invocations against the exact same
+`--resource hello-world/appsettings.json`, no other setup:
+
+```
+configtransform --resource hello-world/appsettings.json --dry-run
+  → { "message": "Hello, world! (from base config)" }               # no --client/--environment: base file alone
+
+configtransform --environment Production --resource hello-world/appsettings.json --dry-run
+  → { "message": "Hello, world! (from Production config)" }         # Environment layer only, no client
+
+configtransform --client Client-A --environment Production --resource hello-world/appsettings.json --dry-run
+  → { "message": "Hello, world! (from Client-A Production config)" } # full chain: base → Production → Client-A
+```
+
+`--diff` against any of the above shows exactly one line changing (`message`), which is the point
+— a brand-new user's very first command after `init --template hello-world` can be `--diff`
+instead of `--dry-run`, and see the override mechanism itself rather than just a merged blob.
+
+- The full skeleton tree from "Manifest shape" below otherwise applies unchanged — template mode
+  differs only in *where the inputs come from* (fixed, not scanned/typed) and in always writing a
+  real patch at every layer instead of the patch-less Environment default — not in the underlying
+  mechanics of how the tree gets built.
 
 `--template` takes exactly one recognized name; `hello-world` is the only one this design defines.
 The flag takes a name (not a bare switch) specifically so a second template can be added later
@@ -269,6 +313,7 @@ rather than a one-shot, destructive bootstrap.
 | Flag identity for environments/clients | Reuse `--environment/-e`/`--client/-c`, repeatable in `init` mode | New `--environments`/`--clients` plural flags | Keeps the flag vocabulary from growing for a mode-scoped arity difference — the same pattern `--match`/`--set` already use (repeatable, no separate plural sibling) rather than a new naming convention. |
 | Idempotent re-runs | Merge into existing manifests (mirrors `SetTargetResolver.EnsureResourceListed`) | Refuse if `.configtransform/` already has content, or always overwrite | Onboarding a second client, or a newly-added resource, later is a normal case, not an error — same convention `set` already established. |
 | `--template` scope | One fixed, non-configurable `hello-world` template; name-based flag for future extensibility | A bare `--template` switch with no name; a fully configurable template system (custom env/client names, custom resource content) | A named flag avoids a breaking shape change if a second template is added later. Configurable templates would just be quiet mode with extra steps — no separate feature earns its complexity yet. |
+| `hello-world` template's `message` value | A distinct value per layer, naming that layer (`"...from Client-A Production config"`, etc.) | The same `"Hello, world!"` string repeated at every layer | A template exists to be run against immediately — a repeated string would create a tree that merges but never visibly *changes*, hiding the one thing `init --template` is supposed to demonstrate. A distinct message per layer makes `--diff`/`--dry-run` show the override chain working on the very first command. |
 | Proceeding before the "few solution repos" gate's trigger condition is literally met | Yes, as an explicit, named owner override | Wait for a second/third pilot repo first | Same kind of exception `FIELD_AUTHORING_DESIGN.md` already made for `set` against this same gate — every default here is a mechanical convention already proven elsewhere in this tool (manifest JSON shape, path resolution, idempotency), not a guess at workflow patterns the way a TUI/GUI's design would be. The accepted risk (a default proving wrong against a second real repo) is bounded and explicitly named, not ignored. |
 
 ## Open items for implementation
