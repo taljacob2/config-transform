@@ -16,9 +16,9 @@ public class XmlCliRunnerTests
 
         var exitCode = XmlCliRunner.Run(new[]
         {
-            "--manifest", workspace.ManifestPath,
+            "--resource", workspace.ResourcePath,
             "--client", "ClientA", "--environment", "Production", "--dry-run"
-        }, stdout, stderr);
+        }, stdout, stderr, workspace.RootPath);
 
         Assert.Equal(0, exitCode);
         Assert.Contains("https://clienta.example.com", stdout.ToString());
@@ -37,9 +37,9 @@ public class XmlCliRunnerTests
 
         var exitCode = XmlCliRunner.Run(new[]
         {
-            "--manifest", workspace.ManifestPath,
+            "--resource", workspace.ResourcePath,
             "--client", "ClientA", "--environment", "Production", "--diff"
-        }, stdout, stderr);
+        }, stdout, stderr, workspace.RootPath);
 
         Assert.Equal(0, exitCode);
         Assert.Contains("dev.example.com", stdout.ToString());
@@ -48,8 +48,11 @@ public class XmlCliRunnerTests
     }
 
     [Fact]
-    public void Diff_reports_no_changes_when_neither_layer_overrides_anything()
+    public void Diff_reports_no_changes_for_a_layer_that_does_not_exist_on_disk()
     {
+        // Missing overlay/layer is never fatal (CONFIG_MANAGEMENT.md §5.1) -- a client/environment
+        // combination with no configtransform.json anywhere in its chain just falls through to
+        // the raw base file, the same tolerance a missing overlay always had.
         using var workspace = new TempCliWorkspace();
 
         var stdout = new StringWriter();
@@ -57,9 +60,9 @@ public class XmlCliRunnerTests
 
         var exitCode = XmlCliRunner.Run(new[]
         {
-            "--manifest", workspace.ManifestPath,
+            "--resource", workspace.ResourcePath,
             "--client", "ClientB", "--environment", "Staging", "--diff"
-        }, stdout, stderr);
+        }, stdout, stderr, workspace.RootPath);
 
         Assert.Equal(0, exitCode);
         Assert.Contains("(no changes)", stdout.ToString());
@@ -76,43 +79,21 @@ public class XmlCliRunnerTests
 
         var exitCode = XmlCliRunner.Run(new[]
         {
-            "--manifest", workspace.ManifestPath,
+            "--resource", workspace.ResourcePath,
             "--client", "ClientA", "--environment", "Production",
             "--output", outputPath
-        }, stdout, stderr);
+        }, stdout, stderr, workspace.RootPath);
 
         Assert.Equal(0, exitCode);
         Assert.True(File.Exists(outputPath));
         Assert.Contains("https://clienta.example.com", File.ReadAllText(outputPath));
 
-        var baseContent = File.ReadAllText(Path.Combine(workspace.RootPath, "Project", "App.config"));
+        var baseContent = File.ReadAllText(workspace.ProjectFilePath);
         Assert.Contains("https://dev.example.com", baseContent);
     }
 
     [Fact]
-    public void List_prints_available_environments_and_clients_without_client_or_environment_or_output()
-    {
-        using var workspace = new TempCliWorkspace();
-        var before = Snapshot(workspace.RootPath);
-
-        var stdout = new StringWriter();
-        var stderr = new StringWriter();
-
-        var exitCode = XmlCliRunner.Run(new[]
-        {
-            "--manifest", workspace.ManifestPath, "--list"
-        }, stdout, stderr);
-
-        Assert.Equal(0, exitCode);
-        Assert.Contains("App.config (xml)", stdout.ToString());
-        Assert.Contains("Production", stdout.ToString());
-        Assert.Contains("ClientA", stdout.ToString());
-        Assert.Equal(before, Snapshot(workspace.RootPath));
-        Assert.Empty(stderr.ToString());
-    }
-
-    [Fact]
-    public void Manifest_is_auto_discovered_when_omitted_and_exactly_one_candidate_exists()
+    public void Omitting_resource_processes_every_resource_the_layer_touches_for_dry_run()
     {
         using var workspace = new TempCliWorkspace();
 
@@ -125,31 +106,70 @@ public class XmlCliRunnerTests
         }, stdout, stderr, workspace.RootPath);
 
         Assert.Equal(0, exitCode);
+        Assert.Contains($"=== {workspace.ResourcePath} ===", stdout.ToString());
         Assert.Contains("https://clienta.example.com", stdout.ToString());
+    }
+
+    [Fact]
+    public void Omitting_resource_for_a_real_run_writes_one_file_per_resource_under_the_output_directory()
+    {
+        using var workspace = new TempCliWorkspace();
+        var outputDir = Path.Combine(workspace.RootPath, "publish");
+
+        var stdout = new StringWriter();
+        var stderr = new StringWriter();
+
+        var exitCode = XmlCliRunner.Run(new[]
+        {
+            "--client", "ClientA", "--environment", "Production", "--output", outputDir
+        }, stdout, stderr, workspace.RootPath);
+
+        Assert.Equal(0, exitCode);
+        var writtenPath = Path.Combine(outputDir, "Project", "App.config");
+        Assert.True(File.Exists(writtenPath));
+        Assert.Contains("https://clienta.example.com", File.ReadAllText(writtenPath));
+    }
+
+    [Fact]
+    public void List_shows_the_layers_resources_and_what_it_inherits_via_extends()
+    {
+        using var workspace = new TempCliWorkspace();
+        var before = Snapshot(workspace.RootPath);
+
+        var stdout = new StringWriter();
+        var stderr = new StringWriter();
+
+        var exitCode = XmlCliRunner.Run(new[]
+        {
+            "--list", "--client", "ClientA", "--environment", "Production"
+        }, stdout, stderr, workspace.RootPath);
+
+        Assert.Equal(0, exitCode);
+        var output = stdout.ToString();
+        Assert.Contains("extends:", output);
+        Assert.Contains(workspace.ResourcePath, output);
+        Assert.Contains("patched here:", output);
+        Assert.Equal(before, Snapshot(workspace.RootPath));
         Assert.Empty(stderr.ToString());
     }
 
     [Fact]
-    public void Missing_manifest_and_no_dot_configtransform_directory_fails_with_an_actionable_error()
+    public void List_with_resource_is_a_reverse_lookup_across_the_whole_tree()
     {
-        var emptyDir = Directory.CreateTempSubdirectory("configtransform-cli-tests-empty-").FullName;
-        try
-        {
-            var stdout = new StringWriter();
-            var stderr = new StringWriter();
+        using var workspace = new TempCliWorkspace();
 
-            var exitCode = XmlCliRunner.Run(new[]
-            {
-                "--client", "ClientA", "--environment", "Production", "--dry-run"
-            }, stdout, stderr, emptyDir);
+        var stdout = new StringWriter();
+        var stderr = new StringWriter();
 
-            Assert.Equal(1, exitCode);
-            Assert.Contains("--manifest/-m", stderr.ToString());
-        }
-        finally
+        var exitCode = XmlCliRunner.Run(new[]
         {
-            Directory.Delete(emptyDir, recursive: true);
-        }
+            "--list", "--resource", workspace.ResourcePath
+        }, stdout, stderr, workspace.RootPath);
+
+        Assert.Equal(0, exitCode);
+        var output = stdout.ToString();
+        Assert.Contains("Environments/Production/configtransform.json", output);
+        Assert.Contains("Clients/ClientA/Production/configtransform.json", output);
     }
 
     [Fact]
@@ -162,8 +182,8 @@ public class XmlCliRunnerTests
 
         var exitCode = XmlCliRunner.Run(new[]
         {
-            "-m", workspace.ManifestPath, "-c", "ClientA", "-e", "Production", "--diff"
-        }, stdout, stderr);
+            "-r", workspace.ResourcePath, "-c", "ClientA", "-e", "Production", "--diff"
+        }, stdout, stderr, workspace.RootPath);
 
         Assert.Equal(0, exitCode);
         Assert.Contains("clienta.example.com", stdout.ToString());

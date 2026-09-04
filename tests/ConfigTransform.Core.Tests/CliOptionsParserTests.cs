@@ -9,15 +9,13 @@ public class CliOptionsParserTests
     {
         var options = CliOptionsParser.Parse(new[]
         {
-            "--manifest", "manifest.json",
-            "--file", "App.config",
+            "--resource", "Project/App.config",
             "--client", "ClientA",
             "--environment", "Production",
             "--output", "out.config"
         });
 
-        Assert.Equal("manifest.json", options.ManifestPath);
-        Assert.Equal("App.config", options.File);
+        Assert.Equal("Project/App.config", options.Resource);
         Assert.Equal("ClientA", options.Client);
         Assert.Equal("Production", options.Environment);
         Assert.Equal("out.config", options.Output);
@@ -26,28 +24,14 @@ public class CliOptionsParserTests
     }
 
     [Fact]
-    public void File_is_optional()
+    public void Resource_is_optional_for_a_real_run_meaning_every_resource_the_layer_touches()
     {
         var options = CliOptionsParser.Parse(new[]
         {
-            "--manifest", "manifest.json",
-            "--client", "ClientA",
-            "--environment", "Production",
-            "--output", "out.config"
+            "--client", "ClientA", "--environment", "Production", "--output", "out/"
         });
 
-        Assert.Null(options.File);
-    }
-
-    [Fact]
-    public void Missing_manifest_leaves_ManifestPath_null_for_CliRunner_to_auto_discover()
-    {
-        var options = CliOptionsParser.Parse(new[]
-        {
-            "--client", "ClientA", "--environment", "Production", "--output", "out.config"
-        });
-
-        Assert.Null(options.ManifestPath);
+        Assert.Null(options.Resource);
     }
 
     [Fact]
@@ -55,15 +39,13 @@ public class CliOptionsParserTests
     {
         var options = CliOptionsParser.Parse(new[]
         {
-            "-m", "manifest.json",
-            "-f", "App.config",
+            "-r", "Project/App.config",
             "-c", "ClientA",
             "-e", "Production",
             "-o", "out.config"
         });
 
-        Assert.Equal("manifest.json", options.ManifestPath);
-        Assert.Equal("App.config", options.File);
+        Assert.Equal("Project/App.config", options.Resource);
         Assert.Equal("ClientA", options.Client);
         Assert.Equal("Production", options.Environment);
         Assert.Equal("out.config", options.Output);
@@ -72,8 +54,8 @@ public class CliOptionsParserTests
     [Fact]
     public void Short_flag_missing_its_value_throws_naming_the_short_flag()
     {
-        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { "-m" }));
-        Assert.Contains("-m", ex.Message);
+        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { "-r" }));
+        Assert.Contains("-r", ex.Message);
     }
 
     [Fact]
@@ -81,7 +63,7 @@ public class CliOptionsParserTests
     {
         Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
         {
-            "--manifest", "manifest.json", "--environment", "Production", "--output", "out.config"
+            "--environment", "Production", "--output", "out.config"
         }));
     }
 
@@ -90,7 +72,7 @@ public class CliOptionsParserTests
     {
         Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
         {
-            "--manifest", "manifest.json", "--client", "ClientA", "--output", "out.config"
+            "--client", "ClientA", "--output", "out.config"
         }));
     }
 
@@ -99,7 +81,7 @@ public class CliOptionsParserTests
     {
         Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
         {
-            "--manifest", "manifest.json", "--client", "ClientA", "--environment", "Production"
+            "--client", "ClientA", "--environment", "Production"
         }));
     }
 
@@ -108,7 +90,7 @@ public class CliOptionsParserTests
     {
         var options = CliOptionsParser.Parse(new[]
         {
-            "--manifest", "manifest.json", "--client", "ClientA", "--environment", "Production", "--dry-run"
+            "--client", "ClientA", "--environment", "Production", "--dry-run"
         });
 
         Assert.True(options.DryRun);
@@ -120,33 +102,69 @@ public class CliOptionsParserTests
     {
         var options = CliOptionsParser.Parse(new[]
         {
-            "--manifest", "manifest.json", "--client", "ClientA", "--environment", "Production", "--diff"
+            "--client", "ClientA", "--environment", "Production", "--diff"
         });
 
         Assert.True(options.Diff);
     }
 
     [Fact]
-    public void List_needs_only_manifest()
+    public void List_accepts_environment_alone()
     {
-        var options = CliOptionsParser.Parse(new[] { "--manifest", "manifest.json", "--list" });
+        var options = CliOptionsParser.Parse(new[] { "--list", "--environment", "Production" });
 
         Assert.True(options.List);
         Assert.Null(options.Client);
-        Assert.Null(options.Environment);
+        Assert.Equal("Production", options.Environment);
         Assert.Null(options.Output);
     }
 
     [Fact]
-    public void List_still_accepts_an_optional_file_filter()
+    public void List_accepts_client_and_environment()
     {
         var options = CliOptionsParser.Parse(new[]
         {
-            "--manifest", "manifest.json", "--file", "App.config", "--list"
+            "--list", "--client", "Acme", "--environment", "Production"
         });
 
         Assert.True(options.List);
-        Assert.Equal("App.config", options.File);
+        Assert.Equal("Acme", options.Client);
+        Assert.Equal("Production", options.Environment);
+    }
+
+    [Fact]
+    public void List_accepts_resource_alone_as_a_reverse_lookup()
+    {
+        var options = CliOptionsParser.Parse(new[] { "--list", "--resource", "Project/App.config" });
+
+        Assert.True(options.List);
+        Assert.Equal("Project/App.config", options.Resource);
+        Assert.Null(options.Client);
+        Assert.Null(options.Environment);
+    }
+
+    [Fact]
+    public void List_with_neither_resource_nor_environment_throws()
+    {
+        Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { "--list" }));
+    }
+
+    [Fact]
+    public void List_rejects_combining_resource_with_client_or_environment()
+    {
+        Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
+        {
+            "--list", "--resource", "Project/App.config", "--environment", "Production"
+        }));
+    }
+
+    [Fact]
+    public void List_rejects_client_without_environment()
+    {
+        Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
+        {
+            "--list", "--client", "Acme"
+        }));
     }
 
     [Fact]
@@ -158,7 +176,7 @@ public class CliOptionsParserTests
     [Fact]
     public void Flag_missing_its_value_throws()
     {
-        Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { "--manifest" }));
+        Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { "--resource" }));
     }
 
     [Fact]
@@ -166,7 +184,7 @@ public class CliOptionsParserTests
     {
         var options = CliOptionsParser.Parse(new[]
         {
-            "set", "--manifest", "manifest.json", "--match", "key=ApiUrl", "--set", "value=X"
+            "set", "--resource", "Project/App.config", "--match", "key=ApiUrl", "--set", "value=X"
         });
 
         Assert.True(options.Set);
@@ -179,7 +197,7 @@ public class CliOptionsParserTests
     {
         var options = CliOptionsParser.Parse(new[]
         {
-            "set", "--manifest", "manifest.json",
+            "set", "--resource", "Project/App.config",
             "--match", "name=Prod", "--match", "env=Production",
             "--set", "connectionString=X", "--set", "providerName=Y"
         });
@@ -189,11 +207,20 @@ public class CliOptionsParserTests
     }
 
     [Fact]
+    public void Set_verb_requires_resource()
+    {
+        Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
+        {
+            "set", "--match", "key=ApiUrl", "--set", "value=X"
+        }));
+    }
+
+    [Fact]
     public void Set_verb_requires_at_least_one_match()
     {
         Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
         {
-            "set", "--manifest", "manifest.json", "--set", "value=X"
+            "set", "--resource", "Project/App.config", "--set", "value=X"
         }));
     }
 
@@ -202,7 +229,7 @@ public class CliOptionsParserTests
     {
         Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
         {
-            "set", "--manifest", "manifest.json", "--match", "key=ApiUrl"
+            "set", "--resource", "Project/App.config", "--match", "key=ApiUrl"
         }));
     }
 
@@ -211,7 +238,7 @@ public class CliOptionsParserTests
     {
         var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
         {
-            "set", "--manifest", "manifest.json", "--client", "ClientA",
+            "set", "--resource", "Project/App.config", "--client", "ClientA",
             "--match", "key=ApiUrl", "--set", "value=X"
         }));
         Assert.Contains("--client requires --environment", ex.Message);
@@ -222,7 +249,7 @@ public class CliOptionsParserTests
     {
         Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
         {
-            "set", "--manifest", "manifest.json", "--output", "out.config",
+            "set", "--resource", "Project/App.config", "--output", "out.config",
             "--match", "key=ApiUrl", "--set", "value=X"
         }));
     }
@@ -232,7 +259,7 @@ public class CliOptionsParserTests
     {
         Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
         {
-            "set", "--manifest", "manifest.json", "--list",
+            "set", "--resource", "Project/App.config", "--list",
             "--match", "key=ApiUrl", "--set", "value=X"
         }));
     }
@@ -240,10 +267,13 @@ public class CliOptionsParserTests
     [Fact]
     public void The_set_verb_is_only_recognized_as_the_very_first_argument()
     {
-        // A literal "set" elsewhere (e.g. as a --manifest value) is just a normal string, not
+        // A literal "set" elsewhere (e.g. as a --resource value) is just a normal string, not
         // the verb -- only args[0] is checked.
-        var options = CliOptionsParser.Parse(new[] { "--manifest", "set", "--list" });
+        var options = CliOptionsParser.Parse(new[]
+        {
+            "--resource", "set", "--client", "ClientA", "--environment", "Production", "--output", "out.config"
+        });
         Assert.False(options.Set);
-        Assert.Equal("set", options.ManifestPath);
+        Assert.Equal("set", options.Resource);
     }
 }

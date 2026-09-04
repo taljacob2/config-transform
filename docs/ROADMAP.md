@@ -145,7 +145,7 @@ the wrong thing. Target-file resolution (base/Environment/Client) extracted to
 XML's existing tests before adding JSON's). 33 new tests (`JsonFieldAuthorTests`,
 `JsonSetCommandCliTests`), including a regression test for a real bug caught during manual
 smoke-testing: a base-target write was dropping the rest of the document instead of updating it
-in place. See `docs/CHANGELOG.md`'s `[Unreleased]` section and `docs/USAGE.md`'s `set` section
+in place. See `docs/CHANGELOG.md`'s `[0.6.0-alpha]` section and `docs/USAGE.md`'s `set` section
 for the full reference on both.
 
 **Closed JSON's array-of-objects gap**, the one flagged as a real, previously-undesigned problem
@@ -168,12 +168,79 @@ section for worked examples. 41 new tests: `JsonElemMatchResolverTests` (new, 17
 additions to `JsonFieldAuthorTests`/`JsonSetCommandCliTests` (11 combined, net of two tests that
 pinned the old "rejected outright" behavior and were rewritten to match the new one).
 
+**`0.6.0-alpha` is live**: the repo owner tagged it directly from `main` (everything above since
+`0.5.0-alpha` — both `set` implementations and the `$elemMatch` gap closure), without first
+following `docs/RELEASING.md`'s step 1 (moving `docs/CHANGELOG.md`'s `[Unreleased]` content into
+a versioned section before tagging) — the same kind of drift already flagged for `0.4.1` above,
+here reconciled directly since the intent was unambiguous (the tag points at the exact commit
+that content was merged at): `docs/CHANGELOG.md` now has a proper `## [0.6.0-alpha]` section
+covering it, backfilled after the fact rather than left undocumented.
+
+**Added `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`, now fully decided** — replace `manifest.json`
+and the fixed base→Environments→Clients rule (`CONFIG_MANAGEMENT.md` §9) with a Kustomize-style
+self-describing `configtransform.json` per layer directory, declaring `resources` (each pairing a
+project's real repo-root-relative path with its own optional `patch`, same convention) plus an
+optional `extends` naming the layer to inherit from. Raised directly by the repo owner, and every
+design question it originally opened is now settled: JSON, not YAML (no new dependency for a
+config file this tool doesn't merge); one file spans every project/format a client×environment
+touches, accepting that `ConfigTransform.Xml`/`ConfigTransform.Json` likely unify into one CLI
+dispatcher as a first-class, separately-scoped consequence; each resource carries its own patch
+directly rather than two lists cross-referenced by convention, which needed the new `extends`
+field (flagged as new, not silently folded in) to stay unambiguous when a layer inherits from
+another spanning multiple projects; every path — `extends`, `path`, `patch` alike — is
+repo-root-relative uniformly, no same-directory exception for `patch` (two real inconsistencies
+in the first pass, caught by the repo owner and corrected in favor of one predictable rule over a
+little repetition); `manifest.json` is fully replaced, a clean break, no coexistence period; and
+`set` gains a new `--resource <path>` targeting flag plus rules for creating/updating a layer's
+`resources` entries and patch files as needed, while its actual field-authoring logic
+(`XmlFieldAuthor`/`JsonFieldAuthor`, `$elemMatch`, verified defaults) stays untouched. Nothing
+design-level remains open — see "Next up" below for what's left, which is implementation
+planning, not more design.
+
 One operational note worth carrying forward: this session's GitHub credentials can push
 branches but not tags (a real `403`, confirmed via verbose tracing, not a bug) — cutting the
 `0.1.0-alpha`, `0.1.0-alpha2`, `0.2.0-alpha`, `0.3.0-alpha`, `0.4.0-alpha`, and `0.5.0-alpha`
 tags all required the repo owner to push them manually (`0.4.1` too, going by its publish date,
 though not part of this session's own release work). Expect the same for any future release
 tag.
+
+**Self-describing overlays (`configtransform.json`) implemented** — `docs/SELF_DESCRIBING_
+OVERLAYS_DESIGN.md`'s fully-decided design is now real code, not just a plan. `manifest.json` and
+`ManifestLoader`/`ManifestDiscovery`/`ManifestEntrySelector`/`ManifestLister`/`LayerResolution`
+are deleted, replaced by `LayerManifest`/`LayerManifestLoader`/`LayerPathResolver`/`LayerChain`/
+`LayerLister` (`ConfigTransform.Core`). `XmlLayerMerger`/`JsonLayerMerger` now take an
+arbitrary-length ordered patch chain instead of a fixed base+environment+client two-slot
+signature — `JsonLayerMerger`'s `$elemMatch` progressive resolution folds over the whole chain
+(verified with a genuine 3-deep chain test, not just the old 2-hop case). `--manifest`/`--file`
+are gone; `--resource <repo-root-relative path>` is the tool-wide targeting flag everywhere
+(`--dry-run`/`--diff`/a real run/`--list`/`set`), and omitting it processes every resource the
+resolved layer touches, in this tool's own format, in one call (mixed-format layers are fine — the
+other tool's resources are skipped with a stderr note, not silently dropped or an error; true
+single-binary dispatch across formats is the separately-scoped CLI-unification pass below, still
+not started). `set` creates a missing `configtransform.json` on first write, defaulting a Client
+layer's `extends` to the matching Environment layer even if that file doesn't exist yet — its
+actual field-authoring logic (`XmlFieldAuthor`/`JsonFieldAuthor`, `$elemMatch`) is untouched, as
+designed. A real bug caught only by manual smoke-testing (not the unit suite): `set` was writing
+an *absolute* path into a newly-created layer's `extends` field instead of repo-root-relative,
+violating the design's own "every path is repo-root-relative, no exceptions" rule — fixed, with
+the fix's regression coverage tightened from a loose substring check to exact-value assertions so
+the same class of bug can't silently pass again. All fixture trees (`DotNetFramework`,
+`GenericXml`, `IisWebConfig`, `DotNetCore` (+`ElemMatch`), `GenericJson` (+`ElemMatch`)) migrated
+to the new `.configtransform/Environments/<Env>/`+`.configtransform/Clients/<Client>/<Env>/` shape;
+`TempCliWorkspace` (both test projects) rebuilt around a synthetic repo root. Docs rewritten in the
+same change: `CLAUDE.md`, `MANIFEST_SCHEMA.md` (content now describes `configtransform.json`, kept
+its filename), `GETTING_STARTED.md`, `ONBOARDING.md`, `USAGE.md`, `CONFIG_MANAGEMENT.md` §3/§4/
+§5.1/§9, and `docs/INDEX.md`. 177 tests passing solution-wide.
+
+**Versioned as `0.7.0-alpha`, a breaking pre-1.0 change** — `manifest.json` support and
+`--manifest`/`--file` are removed outright, no coexistence period, so this needs its own version
+bump before merging to `main`. Follows this repo's own precedent for a breaking pre-1.0 change
+(`0.2.0-alpha`'s manifest-schema rename) rather than jumping to `1.0.0`: `CONFIG_MANAGEMENT.md`
+§10.8 ties dropping `-alpha` to real-content validation, not to how large a breaking change is,
+and that gate hasn't moved — confirmed directly with the repo owner rather than assumed.
+`docs/CHANGELOG.md`'s `[Unreleased]` content moved into a `## [0.7.0-alpha]` section as part of
+this same change (`docs/RELEASING.md` step 1) — the owner still needs to tag and push it
+(`git push origin 0.7.0-alpha`) once this PR merges to `main`, same as every prior release.
 
 ## Next up
 
@@ -196,6 +263,23 @@ default next step.
      existing* array item is mechanically answerable the same way an XML element match already
      is, so this could in principle be implemented independently of `Insert` — not done only for
      lack of time, not a design blocker. See `docs/FIELD_AUTHORING_DESIGN.md`'s "Open items".
+- **CLI unification (`ConfigTransform.Xml`/`ConfigTransform.Json` merging into one dispatcher)** —
+  the one piece of `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md` deliberately left out of the
+  implementation above, per that document's own "Open items for implementation": since a single
+  `configtransform.json` can list resources of both formats, and dispatch is per-resource by file
+  extension, a genuinely single "process every resource, regardless of format, in one call"
+  experience needs one CLI entry point instead of two. Today's interim behavior (each tool skips
+  the other format's resources with a stderr note) works but isn't that end state. No design work
+  needed first — the design doc already confirms this is a first-class, accepted consequence, not
+  an open question — but it needs its own implementation pass: a new consolidated project/binary
+  (name not yet chosen), `XmlLayerMerger`/`JsonLayerMerger` staying as internal engines either way,
+  and a decision on how `set`'s engine selection (today inferred from `--resource`'s extension
+  inside each tool) carries over to one dispatcher choosing between them.
+- **`docs/MANIFEST_SCHEMA.md`'s filename vs. its content** — now describes the
+  `configtransform.json` schema in full (the self-describing-overlays implementation above), but
+  kept its old filename to avoid a large cross-reference rename across `docs/`. Worth revisiting
+  as a pure rename (e.g. `LAYER_SCHEMA.md`) if the mismatch causes real confusion — not urgent,
+  purely cosmetic.
 - **Solution-repo pilot, first round complete** — `config-transform-pilot` (synthetic, three
   projects at varying nesting depth, one per config format) validated the core design claims
   end to end and found/fixed one real bug (see "Current state" above and the pilot's
@@ -204,7 +288,11 @@ default next step.
   rotation, per-client key splitting, YAML/`.env` formats. A pilot against the *actual*
   employer-owned multi-client repo this design targets still needs a separate session in that
   organization's own Claude Code environment — this repo's own conversations can't touch that
-  repo directly.
+  repo directly. **Needs migrating off `manifest.json` once `0.7.0-alpha` is tagged**: its
+  `.config/dotnet-tools.json` is pinned to `0.5.0-alpha`, and its `.configtransform/` trees still
+  use the old `manifest.json`+`Environments/`/`Clients/` shape this release removes entirely —
+  `MANIFEST_SCHEMA.md` has the new schema and worked example to migrate against. Not done in this
+  change: separate repo, separate session.
 - **Deployment transport mechanism** (self-hosted runner vs. WinRM vs. Octopus Deploy) — not
   this repo's concern directly, but blocks the consuming architecture's
   `build-transformed.yml`. `CONFIG_MANAGEMENT.md` §8.3.

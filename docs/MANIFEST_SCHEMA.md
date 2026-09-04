@@ -1,17 +1,23 @@
-# Manifest schema
+# Layer schema (`configtransform.json`)
 
-Authoritative reference for `manifest.json` — the tool's own input contract. One manifest per
-project, at `.configtransform/<Project>/manifest.json` in a consuming repository (the
-`.configtransform/` root name is itself configurable per repo; see [`CONFIG_MANAGEMENT.md`](CONFIG_MANAGEMENT.md)
-§10.5).
+Authoritative field-by-field reference for `configtransform.json` — the self-describing overlay
+file this tool reads (`docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md` has the full design and rationale;
+this document is the schema reference, kept in sync with it). One per **layer directory** under
+`.configtransform/` (the `.configtransform/` root name is itself configurable per repo; see
+[`CONFIG_MANAGEMENT.md`](CONFIG_MANAGEMENT.md) §10.5) — `.configtransform/Environments/<Env>/
+configtransform.json` and `.configtransform/Clients/<Client>/<Env>/configtransform.json`.
+
+This filename predates the design it now describes — `manifest.json` (one per project, a
+`directory` + `files[]` declaration) has been fully replaced, not kept alongside; there's nothing
+called a "manifest" left in the tool's own vocabulary.
 
 ## Shape
 
 ```json
 {
-  "directory": "services/billing/ProjectB.Core",
-  "files": [
-    { "relativeToDirectory": "appsettings.json", "type": "json" }
+  "extends": ".configtransform/Environments/Production/configtransform.json",
+  "resources": [
+    { "path": "OrderProcessor.Framework/App.config", "patch": ".configtransform/Clients/Acme/Production/patch-OrderProcessor.Framework-App.config.xml" }
   ]
 }
 ```
@@ -20,121 +26,105 @@ project, at `.configtransform/<Project>/manifest.json` in a consuming repository
 
 | Field | Required | Description |
 |---|---|---|
-| `directory` | yes | Repo-relative path to the directory holding the project's config file(s), wherever it actually is in the repo. No assumption about a `src/` convention or any particular directory layout. |
-| `files` | yes | Array of config files belonging to this project that this tool manages. |
-| `files[].relativeToDirectory` | yes | Path to the base config file, relative to `directory`. Resolved case-insensitively at runtime — this value does not need to match the real file's exact casing. |
-| `files[].type` | yes | `"xml"` or `"json"` — selects which tool (`ConfigTransform.Xml` or `ConfigTransform.Json`) handles this entry. `"yaml"` and `"env"` are reserved for future use (not yet implemented — see the design doc's "future extensibility" notes). |
-| `files[].name` | no | Overlay subfolder name under `.configtransform/<Project>/`. When omitted (the normal case), derived automatically from `relativeToDirectory`'s own filename — `App.config` → `App.config/`, `appsettings.json` → `appsettings.json/`. Only needed to disambiguate the rare case of two base files sharing a filename in different subdirectories of the same project, where auto-derivation would otherwise collide. |
+| `extends` | no | The layer to start from — another `configtransform.json`'s own fully-resolved output becomes this layer's starting point instead of the raw base files. An Environment layer has no `extends`; a Client layer typically `extends` the matching `Environments/<Env>/configtransform.json`, though nothing enforces that beyond `set`'s own default when it creates a new Client layer. Applies to the whole file, not per-resource. |
+| `resources` | yes | What **this layer itself** adds on top of `extends` (or the raw base files, with no `extends`) — one entry per project this layer actually touches. Can be empty (`[]`) — a layer that only exists to declare `extends`, with nothing of its own to add, is a real and expected shape (see "The accepted cost" below). |
+| `resources[].path` | yes | The project's real config file, **repo-root-relative** — the same identity at every layer, `extends` or not. This is what a resource is addressed by everywhere: `--resource`, `--list --resource`'s reverse lookup, every `resources[]` entry across the whole tree. |
+| `resources[].patch` | no | The overlay file that overrides this specific resource at this layer — a real overlay file, same format/semantics as this tool has always used (an XDT transform for XML, plain or `$elemMatch`-bearing JSON for JSON). **Repo-root-relative**, the same convention as `extends`/`path`, even though in practice it almost always lives in the same directory as the `configtransform.json` referencing it — see "Path convention" below. Omitted entirely for a resource this layer doesn't touch; it just passes through untouched (from `extends`, or from the raw base file if there's no `extends`). |
 
-## `directory` is not a `.csproj` reference — it's just a path
+## Path convention: everything is repo-root-relative, no exceptions
 
-Earlier revisions of this schema called the field `project` and described it as "the path to
-the `.csproj`". That was never accurate to what the tool actually does with it: `directory`'s
-value is never opened, parsed, or validated as a project file of any kind — the tool only ever
-takes it as-is and resolves `relativeToDirectory` against it (`CliRunner`, in
-`ConfigTransform.Core`). Nothing about the manifest, the CLI, or either merge engine
-(`Microsoft.Web.Xdt` for XML, `Microsoft.Extensions.Configuration` for JSON) knows or cares that
-a `.csproj` exists at all.
+`extends`, `resources[].path`, and `resources[].patch` are **all** resolved against the repo
+root (the tool's working directory) — not against the `configtransform.json` file's own
+directory. This is a deliberate, explicit design decision
+(`docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`'s "Settled decisions" #4): a `patch` field almost
+always names a file sitting right next to the `configtransform.json` referencing it, and it would
+be shorter to write as just a filename — that was rejected specifically because "some fields work
+one way, others work another" is a real cognitive tax on whoever reads or writes the file, more
+costly than the repetition it would have saved. This still avoids the long, fragile `../../../../`
+chains a file-relative convention (Kustomize's own) accumulates in a deep tree — repo-root-relative
+gets full consistency *and* short paths.
 
-Concretely, this means:
+## Which engine handles a resource
 
-- **`directory` should point at the directory itself**, not at a project file inside it — e.g.
-  `"services/billing/ProjectB.Core"`, not `"services/billing/ProjectB.Core/ProjectB.Core.csproj"`.
-  (Earlier examples in this repo's history used the `.csproj`-suffixed form; that was cosmetic,
-  never a real requirement, and the field is renamed specifically so the shape now matches what
-  it means.)
-- **No `TargetFramework` coupling** — a `directory` pointing at a net35, net48, or net8.0 project
-  behaves identically, since the tool never touches the project file or the consuming project's
-  own build output. See `CLAUDE.md`'s "Core concepts" for the fuller version of this claim and
-  how it's verified.
-- **No C#/.NET coupling at all, beyond the config file format.** `directory` can point at any
-  directory in the repo — a Flutter package, a Node.js/Angular/React app, anything — as long as
-  the config file it points at via `relativeToDirectory` is XML or JSON (the two formats this
-  tool currently merges). For example, a Node.js app's custom JSON config:
-  ```json
-  {
-    "directory": "frontend/checkout-app",
-    "files": [
-      { "relativeToDirectory": "src/config/app-config.json", "type": "json" }
-    ]
-  }
-  ```
-  works exactly the same way as a `.csproj`-anchored `appsettings.json` — same layering, same
-  CLI, same tool. What doesn't yet work is a config file in YAML or `.env` format (Flutter's
-  typical `.env`-based config, for instance) — those formats are confirmed compatible with the
-  existing design without a redesign, but not yet implemented; see
-  [`CONFIG_MANAGEMENT.md`](CONFIG_MANAGEMENT.md) §5.5.
+Inferred from `resources[].path`'s file extension — `.config`/`.xml` → `ConfigTransform.Xml`,
+`.json` → `ConfigTransform.Json` — never a declared field. Consistent with this tool's existing
+stance that format is the only real constraint, never redundantly declared (`CLAUDE.md`'s "Core
+concepts"). A `configtransform.json` can freely mix resources of both formats in one file; each
+tool just processes the resources in its own format and skips the rest (see `USAGE.md`'s
+"Multi-resource" section) until the two tools unify into one dispatcher (a separate, not-yet-
+implemented pass).
 
-## Pointing `directory` at the repo root itself
+## Full worked example: two projects, one client
 
-`directory` doesn't have to name a subdirectory — `"."` works, and resolves to the repo root
-exactly like any other relative path does, for a config file that genuinely lives at the top
-level of the repo rather than inside a project subfolder:
+```
+.configtransform/
+  Environments/
+    Production/
+      configtransform.json
+      patch-OrderProcessor.Framework-App.config.xml
+      patch-BillingApi.Core-appsettings.json.json
+  Clients/
+    Acme/
+      Production/
+        configtransform.json
+        patch-OrderProcessor.Framework-App.config.xml   # only Acme overrides this in Production
+```
 
 ```json
+// .configtransform/Environments/Production/configtransform.json
 {
-  "directory": ".",
-  "files": [
-    { "relativeToDirectory": "appsettings.json", "type": "json" }
+  "resources": [
+    { "path": "OrderProcessor.Framework/App.config", "patch": ".configtransform/Environments/Production/patch-OrderProcessor.Framework-App.config.xml" },
+    { "path": "BillingApi.Core/appsettings.json", "patch": ".configtransform/Environments/Production/patch-BillingApi.Core-appsettings.json.json" }
   ]
 }
 ```
 
-There's no separate "root" keyword or special case in the schema for this — `directory`'s value
-is passed through `Path.GetFullPath` (`CliRunner`, in `ConfigTransform.Core`) exactly as written,
-and `.` is just an ordinary relative path that means "here." The `.configtransform/<Name>/`
-folder holding this manifest can be named anything, including `root` — that name is purely an
-organizational label for humans, never parsed or given meaning by the tool (see the "not a
-`.csproj` reference" section above for the same point about `directory` generally).
-
-One real caveat: `Path.GetFullPath` resolves against the CLI process's *working directory*, not
-the manifest file's own location. `"."` means "repo root" specifically because every documented
-invocation (`SECRETS_AND_LOCAL_SETUP.md`, every `build-transformed.yml`-style workflow) runs
-`dotnet tool run configtransform-*` from the repo root. Running the same manifest from a
-different working directory would resolve `"."` to that directory instead — the same is true of
-every other `directory` value, this isn't unique to `"."`, but it's easy to miss precisely
-because `"."` looks like it should mean something absolute.
-
-**Encryption at rest is unaffected by any of this.** `config-transform` never encrypts anything
-itself — a consuming repo's git-crypt `.gitattributes` rule (`CONFIG_MANAGEMENT.md` §7.1) is a
-single glob, `.configtransform/** filter=git-crypt diff=git-crypt`, covering the whole
-`.configtransform/` tree unconditionally. It has nothing to do with what any manifest's
-`directory` resolves to. So a root-pointing manifest's `Environments`/`Clients` overlays under
-`.configtransform/root/appsettings.json/` (or whatever the folder is named) are encrypted
-automatically, the same as every other project's — nothing extra to configure. The one thing
-git-crypt does *not* encrypt is the actual base file at the real path `directory` +
-`relativeToDirectory` resolves to (here, the real `./appsettings.json` at the repo root) — that's
-true for every project's base file, not specific to pointing `directory` at the root.
-
-## Example: a project with multiple config files
-
 ```json
+// .configtransform/Clients/Acme/Production/configtransform.json
 {
-  "directory": "ProjectA.Framework",
-  "files": [
-    { "relativeToDirectory": "App.config", "type": "xml" },
-    { "relativeToDirectory": "NLog.config", "type": "xml" }
+  "extends": ".configtransform/Environments/Production/configtransform.json",
+  "resources": [
+    { "path": "OrderProcessor.Framework/App.config", "patch": ".configtransform/Clients/Acme/Production/patch-OrderProcessor.Framework-App.config.xml" }
   ]
 }
 ```
 
-Produces the overlay tree:
+`BillingApi.Core/appsettings.json` isn't named anywhere in Acme's file — it passes through with
+just the Environment layer's own change, exactly like "missing overlay ≠ error"
+(`CONFIG_MANAGEMENT.md` §5.1) — nothing about this design changes that rule.
 
-```
-.configtransform/ProjectA.Framework/
-  manifest.json
-  App.config/
-    Environments/
-    Clients/
-  NLog.config/
-    Environments/
-    Clients/
-```
+## The accepted cost: "no override" is no longer free
+
+Named explicitly in `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`, since it's the direct trade for
+the discoverability win this design brings: under the old `manifest.json`-based fixed rule, a
+client with no override for some environment was pure silence — no file, nothing to write,
+nothing to read, and the Environment layer's content still applied automatically. Under this
+design, a Client layer that should inherit the Environment layer's content but has nothing of its
+own to add still needs its own `configtransform.json` on disk — even one whose `resources` list is
+empty, just declaring `extends` — because something has to say the chain exists and where it
+starts. A Client layer file that's missing *entirely* falls through to nothing (the raw base
+file), not to the Environment layer, even if the Environment layer itself has real content for
+that resource. `set` handles the common case of this automatically (creating that file, with the
+right `extends`, the first time it writes anything for a client/environment combination), but a
+client that genuinely has zero overrides of its own and was never `set` against still needs this
+file created by hand (or scripted) if it should inherit the Environment layer.
+
+## No coupling to any language, ecosystem, or `TargetFramework`
+
+Nothing in this schema — or anywhere else in this tool — assumes a `.csproj`, a specific
+`TargetFramework`, or even a .NET project. `resources[].path` is genuinely just a path to a real
+XML or JSON file; the tool never opens, parses, or validates anything about the project that file
+belongs to (`CliRunner`/`LayerChain`, in `ConfigTransform.Core`). A `.NET` project on net35 works
+exactly the same as one on net8.0 — and the same is true for a Node.js, Angular, React, or Flutter
+project's own JSON config, since `resources[].path` can point anywhere in the repo. The only real
+constraint is the config file's *format*: XML or JSON today, not the ecosystem or TFM it happens
+to live in. See `CLAUDE.md`'s "Core concepts" for the fuller version of this claim.
 
 ## Web.config
 
-No special handling — Web.config is XML, resolved through the same `"type": "xml"` engine as
-App.config. See [`CONFIG_MANAGEMENT.md`](CONFIG_MANAGEMENT.md) §5.2 for the one real caveat: on
-ASP.NET Web Application projects with an existing native MSBuild Web.config transform
-(`Web.Debug.config`/`Web.Release.config`), this tool's step must run *after* that native
-pipeline step in the deploy workflow.
+No special handling — Web.config is XML, resolved through the same engine as App.config. See
+[`CONFIG_MANAGEMENT.md`](CONFIG_MANAGEMENT.md) §5.2 for the one real caveat: on ASP.NET Web
+Application projects with an existing native MSBuild Web.config transform
+(`Web.Debug.config`/`Web.Release.config`), this tool's step must run *after* that native pipeline
+step in the deploy workflow.

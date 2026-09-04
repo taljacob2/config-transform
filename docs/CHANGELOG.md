@@ -6,6 +6,83 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.7.0-alpha] - 2026-09-04
+
+Breaking, following this repo's own precedent for a pre-1.0 breaking change (`0.2.0-alpha`'s
+manifest-schema rename): a MINOR bump, not a jump to `1.0.0` — see `CONFIG_MANAGEMENT.md` §10.8,
+unchanged by this release. `1.0.0` stays reserved for real-content validation, not for the size
+of a breaking change; this redesign hasn't cleared that bar any more than `0.6.0-alpha` had.
+
+### Changed
+
+- **Breaking: `manifest.json` and `--manifest`/`--file` are gone, replaced by self-describing
+  `configtransform.json` layers.** `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`'s fully-decided
+  design (see the entry below) is now real code. One `configtransform.json` per layer directory
+  (`.configtransform/Environments/<Env>/` and `.configtransform/Clients/<Client>/<Env>/`)
+  declares an optional `extends` and a `resources[]` list, each entry pairing a project's
+  repo-root-relative path with its own optional `patch` — no separate project-declaration file;
+  `resources[].path` points straight at the real config file.
+  `Manifest`/`ManifestLoader`/`ManifestDiscovery`/`ManifestEntrySelector`/`ManifestLister`/
+  `LayerResolution` (`ConfigTransform.Core`) are deleted, replaced by `LayerManifest`/
+  `LayerManifestLoader`/`LayerPathResolver`/`LayerChain`/`LayerLister`. `XmlLayerMerger`/
+  `JsonLayerMerger.Merge` take an arbitrary-length ordered patch chain instead of a fixed
+  base+environment+client two-slot signature; `JsonLayerMerger`'s `$elemMatch` progressive
+  resolution now folds over the whole chain (verified with a genuine 3-deep chain test, not just
+  the old 2-hop case).
+  **CLI**: `--manifest`/`--file` are gone; `--resource <repo-root-relative path>` is the tool-wide
+  targeting flag for a resolve/`--dry-run`/`--diff`/a real run/`--list`/`set`. Omitting it
+  processes every resource the resolved layer touches, in that tool's own format, in one call — a
+  real run then requires `--output <directory>` and writes one file per resource; a resource in
+  the other tool's format is skipped with a stderr note, not an error or silent drop (true
+  single-binary dispatch across formats is a separate, not-yet-started pass). `--list` shows one
+  layer's resources and `extends` (or, given `--resource` instead, a tree-wide reverse lookup —
+  every layer that patches one project, closing a real ergonomic gap the new tree creates).
+  **`set`**: now targets a resource by its own path; creates a missing `configtransform.json` on
+  first write, defaulting a Client layer's `extends` to the matching Environment layer even if
+  that file doesn't exist yet (a missing `extends` target is "nothing to inherit," not an error) —
+  its actual field-authoring logic is untouched. A real bug caught only by manual smoke-testing,
+  not the unit suite: `set` was writing an *absolute* path into a newly-created layer's `extends`
+  field instead of repo-root-relative, violating the design's own "every path is repo-root-relative,
+  no exceptions" rule — fixed, with the regression coverage tightened from a loose substring check
+  to exact-value assertions.
+  **Migration**: every consuming repo's `.configtransform/<Project>/manifest.json` +
+  `Environments/`/`Clients/` tree needs converting to the new
+  `.configtransform/Environments/<Env>/configtransform.json` +
+  `.configtransform/Clients/<Client>/<Env>/configtransform.json` shape (`docs/MANIFEST_SCHEMA.md`
+  has the full field reference and worked example) — no coexistence period, no automated
+  migration tool (no real solution repo has adopted the old schema in production yet, so there's
+  no live migration to script for). Every CI/CD invocation using `--manifest`/`--file` needs
+  updating to `--resource`.
+  All fixture trees migrated to the new tree shape; `TempCliWorkspace` (both test projects)
+  rebuilt around a synthetic repo root; `CLAUDE.md`/`MANIFEST_SCHEMA.md`/`GETTING_STARTED.md`/
+  `ONBOARDING.md`/`USAGE.md`/`CONFIG_MANAGEMENT.md` §3/§4/§5.1/§9 rewritten in the same change.
+  CLI unification (`ConfigTransform.Xml`/`ConfigTransform.Json` merging into one dispatcher)
+  remains the one deliberately deferred piece — see `docs/ROADMAP.md`'s "Next up".
+
+### Added
+
+- `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`: **now fully decided** — replaces `manifest.json` and
+  the fixed base→Environments→Clients rule with a Kustomize-style self-describing
+  `configtransform.json` per layer directory, raised directly by the repo owner. Every design
+  question it originally opened is settled: file format (JSON, not YAML — no new dependency for a
+  config file this tool doesn't merge); scope (one file spans every project/format a
+  client×environment touches, not just one project — accepting `ConfigTransform.Xml`/
+  `ConfigTransform.Json` likely unifying into one CLI dispatcher as a first-class consequence);
+  patch-to-resource matching (each `resources` entry pairs its own `path` with an optional `patch`
+  field directly, requested by the repo owner over the document's own earlier filename-convention
+  proposal — needed a new `extends` field to keep that unambiguous when a layer inherits from
+  another multi-project layer); path convention (`extends`, `path`, and `patch` all
+  repo-root-relative, uniformly — the document's first pass special-cased `patch` as a
+  same-directory filename and gave `extends` a different anchor than `path`, both real
+  inconsistencies caught and corrected, prioritizing one predictable rule over the repetition it
+  costs); `manifest.json`'s fate (fully replaced, a clean break, no coexistence period); and
+  `set`'s redesign (a new `--resource <path>` targeting flag, rules for creating/updating a
+  layer's `resources` entries and patch files, while the actual field-authoring logic —
+  `XmlFieldAuthor`/`JsonFieldAuthor`, `$elemMatch`, verified defaults — stays untouched). See
+  `docs/ROADMAP.md`'s "Next up" for what's left, which is implementation planning, not more design.
+
+## [0.6.0-alpha] - 2026-09-03
+
 ### Added
 
 - **`set` support for JSON array-of-objects matching, via a `$elemMatch` overlay syntax** —

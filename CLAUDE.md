@@ -33,22 +33,31 @@ here.
 
 `config-transform` resolves per-client, per-environment configuration overrides for .NET
 projects — App.config, Web.config, appsettings.json, and eventually other formats — by
-layering **base → Environments → Clients** overlays through a manifest-driven model. It's one
-piece of a larger architecture; the full "why" lives in
+layering **base → Environments → Clients** overlays through self-describing `configtransform.json`
+layers, each declaring what it extends and which resources it patches. It's one piece of a larger
+architecture; the full "why" lives in
 [`docs/CONFIG_MANAGEMENT.md`](docs/CONFIG_MANAGEMENT.md) — read that before assuming something
 here is accidental rather than deliberate.
 
 ## Core concepts — read before touching code
 
-- **Manifest** ([`docs/MANIFEST_SCHEMA.md`](docs/MANIFEST_SCHEMA.md), implemented in
-  `src/ConfigTransform.Core/Manifest.cs`): one per project. Declares the project's `directory`
-  explicitly — never assume a `src/` layout, repos vary. `directory` is genuinely just a path;
-  the tool never opens or validates anything at it, only resolves `relativeToDirectory` against
-  it (`CliRunner`). Don't add code that assumes it points at a `.csproj` — it doesn't have to.
-- **Layering, fixed order**: base file → `Environments/<Env>.<ext>` (optional) →
-  `Clients/<Client>/<Env>.<ext>` (optional) → merged result. The order is a rule inside the
-  tool, not declared per-file — there is no per-overlay manifest to read, unlike Kustomize
-  (see `docs/CONFIG_MANAGEMENT.md` §9 for that comparison).
+- **Self-describing layers** ([`docs/MANIFEST_SCHEMA.md`](docs/MANIFEST_SCHEMA.md), implemented in
+  `src/ConfigTransform.Core/LayerManifest.cs`/`LayerChain.cs`): one `configtransform.json` per
+  layer directory under `.configtransform/` — `.configtransform/Environments/<Env>/` and
+  `.configtransform/Clients/<Client>/<Env>/` — not one manifest per project. Each declares an
+  optional `extends` (the layer it inherits from) and a `resources[]` list, each entry pairing a
+  project's real, repo-root-relative `path` with its own optional `patch`. There is no separate
+  project-declaration file — `resources[].path` points straight at the real config file. Don't
+  add code that assumes a `.csproj` or any particular directory layout — `path` is genuinely just
+  a path; the tool never opens or validates anything about the project it belongs to, only
+  resolves it against the repo root (`LayerChain`).
+- **Layering via `extends`, not a fixed rule**: an Environment layer has no `extends`; a Client
+  layer typically `extends` the matching Environment layer, but this is a declared reference in
+  the file itself (`LayerChain.Build` walks it), not a hardcoded base→Environments→Clients rule
+  baked into the tool the way it used to be (see `docs/CONFIG_MANAGEMENT.md` §9 and
+  `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md` for that history and the full design). A chain can be
+  deeper than the traditional two hops — `LayerChain`/the merge engines never assume a fixed
+  depth.
 - **Format-generic by design.** `ConfigTransform.Xml` (via `Microsoft.Web.Xdt`) treats
   App.config, Web.config, NLog.config, or any other XML file identically — there is no
   App.config-specific logic anywhere in it. `ConfigTransform.Json` is the same for JSON via
@@ -61,8 +70,8 @@ here is accidental rather than deliberate.
   A `.NET` project on net35, net40, net45, or net472 works exactly the same as one on net48 or
   net8.0 (confirmed via `config-transform-pilot`'s `LegacyGateway.Framework`, a deliberately
   vanilla net35 project) — and the same is true for a Node.js, Angular, React, or Flutter
-  project's own JSON config, since `directory` is just a path (see the Manifest bullet above).
-  The only real constraint is the config file's *format*: XML or JSON today, not the ecosystem
+  project's own JSON config, since `resources[].path` is just a path (see the Self-describing
+  layers bullet above). The only real constraint is the config file's *format*: XML or JSON today, not the ecosystem
   or TFM it happens to live in. Don't add anything here that assumes a specific TFM, language,
   or the consuming project's own SDK/build tooling.
 - **Case-insensitive file resolution** (`FileResolver`, in Core). Exists because CI
@@ -76,9 +85,9 @@ here is accidental rather than deliberate.
 
 ## Repo structure — where to look
 
-- `src/ConfigTransform.Core/` — shared, format-agnostic logic (manifest parsing, file
-  resolution, layer-resolution reporting). Change here first for anything that should behave
-  identically across XML and JSON.
+- `src/ConfigTransform.Core/` — shared, format-agnostic logic (`configtransform.json` parsing,
+  `extends`-chain resolution, file resolution, layer-resolution reporting). Change here first for
+  anything that should behave identically across XML and JSON.
 - `src/ConfigTransform.Xml/`, `src/ConfigTransform.Json/` — thin CLI front-ends, one per
   format, each wrapping a different merge engine.
 - `tests/*/Fixtures/` — real-shaped fixture files per scenario: `DotNetFramework`,
@@ -101,12 +110,24 @@ here is accidental rather than deliberate.
 See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the current plan (this is the doc rule #1 above
 points at) and [`docs/CHANGELOG.md`](docs/CHANGELOG.md) for exactly what's implemented so far.
 Short version as of the last update here: `ConfigTransform.Xml` and `ConfigTransform.Json` are
-both fully implemented, tested, and released (`0.1.0-alpha`, published to GitHub Packages).
-Both tools also now have a `set` command (docs/FIELD_AUTHORING_DESIGN.md): XML authors an
-overlay field's `SetAttributes` operation mechanically (updating an existing key/attribute;
-creating a brand-new one, `Insert`, is not implemented), JSON writes a nested key directly
-(covers both updating and creating) and now also matches or creates an item inside an array of
-objects via a `$elemMatch` overlay syntax (`JsonElemMatchResolver`) — the one real design gap
-found during implementation, for JSON, is closed; XML's own array-of-objects matching remains
-open, alongside `Insert`. See `docs/ROADMAP.md`'s "Next up" for what's actionable now versus what
-needs either a solution repo that doesn't exist yet or an owner decision.
+both fully implemented, tested, and released. `manifest.json` and the fixed base→Environments→
+Clients rule are gone — replaced by self-describing `configtransform.json` layers
+(`docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`, fully implemented). `--resource` is the tool-wide
+targeting flag; omitting it processes every resource a layer touches, in this tool's own format,
+in one call (a mixed-format layer is fine — the *other* tool's resources are skipped with a
+stderr note, not silently dropped; true single-binary dispatch across both formats is a separate,
+not-yet-implemented pass). `--list` shows one layer's resources (or, given `--resource` instead,
+a tree-wide reverse lookup).
+
+Both tools also have a `set` command (docs/FIELD_AUTHORING_DESIGN.md), now targeting a resource
+by its own repo-root-relative path and creating a missing `configtransform.json` layer (with the
+right `extends`) on first write: XML authors an overlay field's `SetAttributes` operation
+mechanically (updating an existing key/attribute; creating a brand-new one, `Insert`, is not
+implemented), JSON writes a nested key directly (covers both updating and creating) and also
+matches or creates an item inside an array of objects via a `$elemMatch` overlay syntax
+(`JsonElemMatchResolver`) — the one real design gap found during implementation, for JSON, is
+closed; XML's own array-of-objects matching remains open, alongside `Insert`. See
+`docs/ROADMAP.md`'s "Next up" for what's actionable now versus what needs either a solution repo
+that doesn't exist yet or an owner decision — including CLI unification (`ConfigTransform.Xml`/
+`ConfigTransform.Json` merging into one dispatcher), a deliberately separate, not-yet-started
+pass.

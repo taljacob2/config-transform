@@ -13,15 +13,13 @@ namespace ConfigTransform.Xml.Tests;
 public class XmlLayerMergerIisWebConfigTests
 {
     private static string FixturesRoot => Path.Combine(AppContext.BaseDirectory, "Fixtures", "IisWebConfig");
+    private const string ResourcePath = "Project/Web.config";
 
     [Fact]
     public void Merges_environment_and_client_layers_including_location_wrapped_elements()
     {
-        var projectDir = Path.Combine(FixturesRoot, "Project");
-        var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
-
-        var resolution = LayerResolution.Resolve(projectDir, "Web.config", overlayRoot, "ClientA", "Production");
-        var merged = XmlLayerMerger.Merge(resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
+        var resolved = Resolve("ClientA", "Production");
+        var merged = XmlLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
         var doc = XDocument.Parse(merged);
 
@@ -44,14 +42,12 @@ public class XmlLayerMergerIisWebConfigTests
     [Fact]
     public void Environment_layer_alone_does_not_touch_the_location_wrapped_authorization()
     {
-        var projectDir = Path.Combine(FixturesRoot, "Project");
-        var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
+        // ClientB's own configtransform.json declares only `extends` (no resources of its own)
+        // -- see XmlLayerMergerTests's identical comment for why this file still needs to exist.
+        var resolved = Resolve("ClientB", "Production");
+        Assert.Single(resolved.PatchPathsInOrder);
 
-        // ClientB has no override — only the environment-wide Production layer applies.
-        var resolution = LayerResolution.Resolve(projectDir, "Web.config", overlayRoot, "ClientB", "Production");
-        var merged = XmlLayerMerger.Merge(resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
-
-        Assert.Null(resolution.ClientOverlayPath);
+        var merged = XmlLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
         var doc = XDocument.Parse(merged);
         var authorization = doc.Root!.Elements("location")
@@ -60,5 +56,11 @@ public class XmlLayerMergerIisWebConfigTests
 
         Assert.Empty(authorization.Elements("allow"));
         Assert.Single(authorization.Elements("deny"));
+    }
+
+    private static ResolvedResource Resolve(string client, string environment)
+    {
+        var chain = LayerChain.Build(FixturesRoot, LayerPathResolver.Resolve(FixturesRoot, client, environment));
+        return LayerChain.ResolveResource(FixturesRoot, chain, ResourcePath);
     }
 }

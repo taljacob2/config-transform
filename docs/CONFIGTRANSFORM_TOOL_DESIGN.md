@@ -4,9 +4,8 @@ Companion document to [`CONFIG_MANAGEMENT.md`](CONFIG_MANAGEMENT.md) §10 (Tool 
 versioning). That document describes how solution repos *consume* this tool; this document
 describes the tool repo's own internal structure and test strategy.
 
-Status: this repo (`taljacob2/config-transform`) now exists, with a scaffold in place — see
-[`CHANGELOG.md`](CHANGELOG.md) for exactly what's implemented so far. The detailed test matrix
-below is still design-only until each fixture set is actually written.
+Status: both tools and the full fixture-set-driven test matrix described below are implemented —
+see [`CHANGELOG.md`](CHANGELOG.md) for exactly what's shipped, release by release.
 
 ## 1. Repository structure
 
@@ -16,9 +15,9 @@ ConfigTransform/                              (repo root)
 ├── Directory.Build.props                     # shared TargetFramework, Nullable, LangVersion
 ├── src/
 │   ├── ConfigTransform.Core/                 # shared logic, no CLI — see §2
-│   │   ├── Manifest.cs
+│   │   ├── LayerManifest.cs                  # configtransform.json shape (extends + resources[])
 │   │   ├── FileResolver.cs                   # case-insensitive resolution, §5.4 of the spec
-│   │   ├── LayerResolution.cs                # found/not-found reporting, §5.1
+│   │   ├── LayerChain.cs                     # extends-chain resolution, found/not-found reporting, §5.1
 │   │   └── ConfigTransform.Core.csproj
 │   ├── ConfigTransform.Xml/                  # CLI front-end wrapping Microsoft.Web.Xdt
 │   │   ├── Program.cs
@@ -27,7 +26,7 @@ ConfigTransform/                              (repo root)
 │       ├── Program.cs
 │       └── ConfigTransform.Json.csproj
 ├── tests/
-│   ├── ConfigTransform.Core.Tests/           # manifest parsing, resolver, reporting — format-agnostic
+│   ├── ConfigTransform.Core.Tests/           # configtransform.json parsing, resolver, reporting — format-agnostic
 │   ├── ConfigTransform.Xml.Tests/
 │   │   └── Fixtures/
 │   │       ├── DotNetFramework/              # App.config-shaped fixtures
@@ -43,7 +42,7 @@ ConfigTransform/                              (repo root)
 │       └── publish.yml                       # dotnet pack + nuget push, on tagged release only
 ├── docs/
 │   ├── USAGE.md                              # full CLI reference: every flag, both tools
-│   ├── MANIFEST_SCHEMA.md                    # authoritative manifest.json schema reference —
+│   ├── MANIFEST_SCHEMA.md                    # authoritative configtransform.json schema reference —
 │   │                                          # the tool's own input contract, kept here rather
 │   │                                          # than only in a consuming repo's docs
 │   └── CHANGELOG.md                          # per-version history, keyed to the SemVer policy
@@ -54,13 +53,13 @@ ConfigTransform/                              (repo root)
 
 ## 2. Why a shared `ConfigTransform.Core`
 
-Manifest parsing, case-insensitive file resolution, and found/not-found reporting (spec §4,
-§5.1, §5.4) are identical regardless of whether the file being merged is XML or JSON — only the
-actual merge engine differs (`Microsoft.Web.Xdt` vs `Microsoft.Extensions.Configuration`).
-Keeping that shared logic in one library tested once, rather than duplicated (and drifting)
-between `ConfigTransform.Xml` and `ConfigTransform.Json`, is the same reuse principle the rest
-of this design has followed throughout — one manifest schema, one resolution rule, two thin
-format-specific engines on top.
+`configtransform.json` parsing, `extends`-chain resolution, case-insensitive file resolution, and
+found/not-found reporting (spec §4, §5.1, §5.4) are identical regardless of whether the file
+being merged is XML or JSON — only the actual merge engine differs (`Microsoft.Web.Xdt` vs
+`Microsoft.Extensions.Configuration`). Keeping that shared logic in one library tested once,
+rather than duplicated (and drifting) between `ConfigTransform.Xml` and `ConfigTransform.Json`,
+is the same reuse principle the rest of this design has followed throughout — one layer schema,
+one resolution rule, two thin format-specific engines on top.
 
 ## 3. Test matrix
 
@@ -174,16 +173,16 @@ proving `JsonElemMatchResolver` has no hardcoded key names or assumed nesting de
 - **UTF-8 BOM handling**: Visual Studio commonly saves XML/JSON with a byte-order mark — a
   realistic fixture with a BOM must round-trip correctly, not get corrupted or silently
   stripped in a way that changes the file's encoding declaration.
-- **Manifest validation**: malformed JSON, a `directory` pointing at a location with no base
-  file present, a `relativeToDirectory` pointing at a non-existent file — each producing a
-  clear, specific error rather than a generic crash.
+- **Layer validation**: malformed `configtransform.json`, a `resources[].path` pointing at a
+  non-existent base file, a declared `resources[].patch` pointing at a non-existent patch file,
+  and a cycle in `extends` — each producing a clear, specific error rather than a generic crash.
 
 ### 3.4 `ConfigTransform.Core.Tests`
 
-Format-agnostic unit tests for the shared library in isolation — manifest parsing, the
-case-insensitive resolver, and found/not-found reporting — independent of either CLI front-end,
-so a regression here is caught once rather than needing to be independently rediscovered by
-both the XML and JSON test suites.
+Format-agnostic unit tests for the shared library in isolation — `configtransform.json` parsing,
+`extends`-chain resolution, the case-insensitive resolver, and found/not-found reporting —
+independent of either CLI front-end, so a regression here is caught once rather than needing to
+be independently rediscovered by both the XML and JSON test suites.
 
 ### 3.5 Platform coverage
 
@@ -204,6 +203,7 @@ platform.
 
 ## 5. Open items
 
-- Repo created (`taljacob2/config-transform`), scaffolded (solution, project stubs, CI
-  skeletons, `Manifest` model). The fixture-set-driven test matrix in §3 is not yet
-  implemented — current test coverage is scaffold-only, see `CHANGELOG.md`.
+Both tools and the fixture-set-driven test matrix in §3 are fully implemented — see
+`docs/ROADMAP.md` for what's actually next (the single source of truth this repo's own
+`CLAUDE.md` rule #1 points at) and `docs/CHANGELOG.md` for exactly what's shipped, release by
+release.

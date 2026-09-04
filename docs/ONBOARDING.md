@@ -94,25 +94,27 @@ base64 -d key.b64 > key   # Linux/macOS/Git Bash
 
 ## 6. Confirm it works
 
-Always run from the repo root — every path (`--manifest`, the manifest's own `directory`) is
-resolved relative to your current directory, same as CI.
+Always run from the repo root — every path (`--resource`, and everything a `configtransform.json`
+itself declares) is resolved relative to your current directory, same as CI.
 
-See what a manifest actually has, with no risk of writing anything:
+See what one layer actually has, with no risk of writing anything (pick a real client/environment
+this repo already uses):
 ```bash
-dotnet tool run configtransform-xml -- --list
+dotnet tool run configtransform-xml -- --list --client <Client> --environment <Environment>
 ```
-`--manifest`/`-m` is optional when the repo root has exactly one
-`.configtransform/*/manifest.json` — the tool finds it for you. If this repo has more than one
-project under `.configtransform/`, that command fails naming every candidate it found; pass
-`--manifest`/`-m .configtransform/<ProjectName>/manifest.json` explicitly to pick one.
+Or, given a resource's own path, see every layer in the tree that patches it:
+```bash
+dotnet tool run configtransform-xml -- --list --resource <path/to/App.config>
+```
 
 Then see a real merge:
 ```bash
-dotnet tool run configtransform-xml -- -c <Client> -e <Environment> --diff
+dotnet tool run configtransform-xml -- -r <path/to/App.config> -c <Client> -e <Environment> --diff
 ```
-(`-c`/`-e` are short for `--client`/`--environment` — handy for typing interactively; `-m`,
-`-f`/`--file`, and `-o`/`--output` work the same way. Use `configtransform-json` instead of
-`configtransform-xml` for a `.json`-based project.)
+(`-r`/`-c`/`-e` are short for `--resource`/`--client`/`--environment` — handy for typing
+interactively; `-o`/`--output` works the same way. Use `configtransform-json` instead of
+`configtransform-xml` for a `.json`-based project. Omit `--resource` entirely to see every
+resource this layer touches, in one call.)
 
 If that prints a diff (or `(no changes)`), you're set up correctly. Done.
 
@@ -121,9 +123,8 @@ If that prints a diff (or `(no changes)`), you're set up correctly. Done.
 | Symptom | Cause | Fix |
 |---|---|---|
 | `git-crypt unlock: <path>: not a valid git-crypt key file` | The key file you pointed at is the base64-encoded text, not the decoded binary key | Decode it first — step 5 |
-| The tool's error says a manifest is "still git-crypt encrypted" | git-crypt isn't unlocked in this working copy | Run `git-crypt unlock` from the repo root — step 5 |
-| `Manifest not found: '...'` | The command isn't being run from the repo root | `cd` to the repo root and retry — step 6 |
-| `--manifest/-m was not given and ...` (no `.configtransform` found, or more than one manifest found) | You dropped `--manifest`/`-m` but the repo either has no `.configtransform` folder at your current directory or has more than one project under it | Pass `--manifest`/`-m .configtransform/<ProjectName>/manifest.json` explicitly — the error message lists every candidate it found |
+| The tool's error says a configtransform.json is "still git-crypt encrypted" | git-crypt isn't unlocked in this working copy | Run `git-crypt unlock` from the repo root — step 5 |
+| `Resource base file not found: '...'` | The command isn't being run from the repo root, or `--resource`'s path is wrong | `cd` to the repo root and retry — step 6 |
 | `NU1301 ... doesn't exist` on `dotnet tool restore`/`dotnet build` | The three env vars from step 3 aren't set in *this* shell session | Re-run the `export`/`$env:`/`set` lines — they don't persist across sessions unless added to a shell profile |
 | `dotnet tool restore` fails with 401/403 | The PAT is missing `read:packages`, expired, or wasn't picked up as `GITHUB_TOKEN` | Mint a fresh one — step 2 — and confirm the env var is actually set (`echo $GITHUB_TOKEN` / `echo $env:GITHUB_TOKEN`) |
 
@@ -137,4 +138,5 @@ out.
   checklist is distilled from.
 - [`GETTING_STARTED.md`](GETTING_STARTED.md) — day-to-day usage once you're set up: the
   layering model, and how to add a field.
-- [`MANIFEST_SCHEMA.md`](MANIFEST_SCHEMA.md) — what `manifest.json` actually declares.
+- [`MANIFEST_SCHEMA.md`](MANIFEST_SCHEMA.md) — what a `configtransform.json` layer actually
+  declares.

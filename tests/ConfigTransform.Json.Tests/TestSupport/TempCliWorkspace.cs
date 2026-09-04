@@ -1,45 +1,58 @@
 namespace ConfigTransform.Json.Tests.TestSupport;
 
 /// <summary>
-/// Builds a realistic .configtransform-shaped temp workspace (manifest + project + overlay
-/// tree) for exercising JsonCliRunner end-to-end, independent of the test process's current
-/// working directory. All paths embedded in the generated manifest.json are absolute, so
-/// resolution is identical regardless of where the test runner's CWD happens to be. The manifest
-/// itself lives at the real repo convention's path,
-/// "&lt;RootPath&gt;/.configtransform/ProjectA/manifest.json" (docs/GETTING_STARTED.md) — which
-/// also means RootPath is directly usable as the working directory for manifest auto-discovery
-/// (ManifestDiscovery) tests, since it holds exactly one candidate.
+/// Builds a realistic .configtransform-shaped temp workspace (base project + Environment +
+/// Client configtransform.json layers, docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md) for exercising
+/// JsonCliRunner end-to-end, independent of the test process's current working directory.
+/// <see cref="RootPath"/> is the synthetic repo root every path in the generated
+/// configtransform.json files is relative to, and doubles as the working directory a test passes
+/// to <c>JsonCliRunner.Run</c>. <see cref="ResourcePath"/> ("Project/appsettings.json") is what a
+/// test passes as --resource.
 /// </summary>
 internal sealed class TempCliWorkspace : IDisposable
 {
     public string RootPath { get; } = Directory.CreateTempSubdirectory("configtransform-cli-tests-").FullName;
-    public string ManifestPath { get; }
+    public string ResourcePath => "Project/appsettings.json";
+    public string ProjectFilePath { get; }
+    public string EnvironmentLayerPath { get; }
+    public string ClientLayerPath { get; }
 
     public TempCliWorkspace()
     {
         var projectDir = Path.Combine(RootPath, "Project");
-        var configTransformDir = Path.Combine(RootPath, ".configtransform", "ProjectA");
-        var overlayRoot = Path.Combine(configTransformDir, "appsettings.json"); // must match the derived OverlayFolderName
+        var environmentDir = Path.Combine(RootPath, ".configtransform", "Environments", "Production");
+        var clientDir = Path.Combine(RootPath, ".configtransform", "Clients", "ClientA", "Production");
         Directory.CreateDirectory(projectDir);
-        Directory.CreateDirectory(Path.Combine(overlayRoot, "Environments"));
-        Directory.CreateDirectory(Path.Combine(overlayRoot, "Clients", "ClientA"));
+        Directory.CreateDirectory(environmentDir);
+        Directory.CreateDirectory(clientDir);
 
-        File.WriteAllText(Path.Combine(projectDir, "appsettings.json"), """
+        ProjectFilePath = Path.Combine(projectDir, "appsettings.json");
+        File.WriteAllText(ProjectFilePath, """
             { "ApiUrl": "https://dev.example.com" }
             """);
 
-        File.WriteAllText(Path.Combine(overlayRoot, "Environments", "Production.json"), """
+        var environmentPatchPath = Path.Combine(environmentDir, "patch-Project-appsettings.json.json");
+        File.WriteAllText(environmentPatchPath, """
             { "ApiUrl": "https://prod.example.com" }
             """);
 
-        File.WriteAllText(Path.Combine(overlayRoot, "Clients", "ClientA", "Production.json"), """
+        EnvironmentLayerPath = Path.Combine(environmentDir, "configtransform.json");
+        File.WriteAllText(EnvironmentLayerPath, """
+            { "resources": [ { "path": "Project/appsettings.json", "patch": ".configtransform/Environments/Production/patch-Project-appsettings.json.json" } ] }
+            """);
+
+        var clientPatchPath = Path.Combine(clientDir, "patch-Project-appsettings.json.json");
+        File.WriteAllText(clientPatchPath, """
             { "ApiUrl": "https://clienta.example.com" }
             """);
 
-        ManifestPath = Path.Combine(configTransformDir, "manifest.json");
-        var projectDirPath = projectDir.Replace('\\', '/');
-        File.WriteAllText(ManifestPath,
-            $$"""{ "directory": "{{projectDirPath}}", "files": [ { "relativeToDirectory": "appsettings.json", "type": "json" } ] }""");
+        ClientLayerPath = Path.Combine(clientDir, "configtransform.json");
+        File.WriteAllText(ClientLayerPath, """
+            {
+              "extends": ".configtransform/Environments/Production/configtransform.json",
+              "resources": [ { "path": "Project/appsettings.json", "patch": ".configtransform/Clients/ClientA/Production/patch-Project-appsettings.json.json" } ]
+            }
+            """);
     }
 
     public void Dispose()

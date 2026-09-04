@@ -7,15 +7,13 @@ namespace ConfigTransform.Xml.Tests;
 public class XmlLayerMergerTests
 {
     private static string FixturesRoot => Path.Combine(AppContext.BaseDirectory, "Fixtures", "DotNetFramework");
+    private const string ResourcePath = "Project/App.config";
 
     [Fact]
     public void Merges_base_environment_and_client_layers_end_to_end()
     {
-        var projectDir = Path.Combine(FixturesRoot, "Project");
-        var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
-
-        var resolution = LayerResolution.Resolve(projectDir, "App.config", overlayRoot, "ClientA", "Production");
-        var merged = XmlLayerMerger.Merge(resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
+        var resolved = Resolve("ClientA", "Production");
+        var merged = XmlLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
         var doc = XDocument.Parse(merged);
         var appSettings = doc.Root!.Element("appSettings")!;
@@ -32,16 +30,11 @@ public class XmlLayerMergerTests
     [Fact]
     public void Applies_only_base_when_no_overlays_match()
     {
-        var projectDir = Path.Combine(FixturesRoot, "Project");
-        var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
+        // Neither Environments/Staging nor Clients/ClientB/Staging exist.
+        var resolved = Resolve("ClientB", "Staging");
+        Assert.Empty(resolved.PatchPathsInOrder);
 
-        // Neither Environments/Staging.config nor Clients/ClientB/Staging.config exist.
-        var resolution = LayerResolution.Resolve(projectDir, "App.config", overlayRoot, "ClientB", "Staging");
-        var merged = XmlLayerMerger.Merge(resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
-
-        Assert.Null(resolution.EnvironmentOverlayPath);
-        Assert.Null(resolution.ClientOverlayPath);
-
+        var merged = XmlLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
         var doc = XDocument.Parse(merged);
         var appSettings = doc.Root!.Element("appSettings")!;
 
@@ -52,16 +45,14 @@ public class XmlLayerMergerTests
     [Fact]
     public void Applies_environment_layer_only_when_client_has_no_override()
     {
-        var projectDir = Path.Combine(FixturesRoot, "Project");
-        var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
+        // ClientB's own configtransform.json declares only `extends` (no resources of its own)
+        // -- the "accepted cost" workaround the design doc names explicitly: unlike the old
+        // fixed base->Environments->Clients rule, a Client layer must still exist on disk (even
+        // resource-less) for the Environment layer's content to flow through to it at all.
+        var resolved = Resolve("ClientB", "Production");
+        Assert.Single(resolved.PatchPathsInOrder);
 
-        // Environments/Production.config exists; Clients/ClientB/Production.config does not.
-        var resolution = LayerResolution.Resolve(projectDir, "App.config", overlayRoot, "ClientB", "Production");
-        var merged = XmlLayerMerger.Merge(resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
-
-        Assert.NotNull(resolution.EnvironmentOverlayPath);
-        Assert.Null(resolution.ClientOverlayPath);
-
+        var merged = XmlLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
         var doc = XDocument.Parse(merged);
         var appSettings = doc.Root!.Element("appSettings")!;
 
@@ -81,11 +72,8 @@ public class XmlLayerMergerTests
         // consumer reads those bytes back. Reproduce that here: write to a real file and load
         // it with XDocument.Load(path), which does honor the declared encoding, the same way
         // any standards-compliant XML parser reading the file from disk would.
-        var projectDir = Path.Combine(FixturesRoot, "Project");
-        var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
-
-        var resolution = LayerResolution.Resolve(projectDir, "App.config", overlayRoot, "ClientA", "Production");
-        var merged = XmlLayerMerger.Merge(resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
+        var resolved = Resolve("ClientA", "Production");
+        var merged = XmlLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
         var tempPath = Path.GetTempFileName();
         try
@@ -103,4 +91,10 @@ public class XmlLayerMergerTests
 
     private static string GetAppSetting(XElement appSettings, string key) =>
         appSettings.Elements("add").Single(e => (string)e.Attribute("key")! == key).Attribute("value")!.Value;
+
+    private static ResolvedResource Resolve(string client, string environment)
+    {
+        var chain = LayerChain.Build(FixturesRoot, LayerPathResolver.Resolve(FixturesRoot, client, environment));
+        return LayerChain.ResolveResource(FixturesRoot, chain, ResourcePath);
+    }
 }

@@ -7,7 +7,8 @@ auto-`--diff`). `ConfigTransform.Json`'s `set` covers a single key path — both
 existing key *and* creating a brand-new one, since JSON has no `Insert`-style gap — **and now also
 covers matching/creating an item inside an array of objects**, via a `$elemMatch`-style overlay
 syntax (see "JSON / YAML" below). See `docs/USAGE.md`'s `set` section and `docs/CHANGELOG.md`'s
-`[Unreleased]` entries for exactly what's live and where. **Not yet implemented**: XML's `Insert`
+`[0.6.0-alpha]`/`[0.7.0-alpha]` entries for exactly what's live and where. **Not yet
+implemented**: XML's `Insert`
 case (a genuinely brand-new element), and XML's array-of-objects matching (see "Open items" below
 for both — JSON's version of the array-of-objects gap, once a real, previously-undesigned problem
 found during implementation, is now closed). This document otherwise still reflects the original
@@ -44,8 +45,8 @@ ship a change that's silently wrong.
 ## Command shape
 
 ```
-configtransform-xml  set --manifest ... --client <C> --environment <E> --match <attr>=<value> [--match ...] --set <attr>=<value> [--set ...]
-configtransform-json set --manifest ... --client <C> --environment <E> --match <attr>=<value> [--match ...] --set <attr>=<value> [--set ...]
+configtransform-xml  set --resource <path> --client <C> --environment <E> --match <attr>=<value> [--match ...] --set <attr>=<value> [--set ...]
+configtransform-json set --resource <path> --client <C> --environment <E> --match <attr>=<value> [--match ...] --set <attr>=<value> [--set ...]
 ```
 
 Identical shape across `ConfigTransform.Xml` and `ConfigTransform.Json` — same principle

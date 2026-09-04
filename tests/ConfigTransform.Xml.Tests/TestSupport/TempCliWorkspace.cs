@@ -1,30 +1,33 @@
 namespace ConfigTransform.Xml.Tests.TestSupport;
 
 /// <summary>
-/// Builds a realistic .configtransform-shaped temp workspace (manifest + project + overlay
-/// tree) for exercising XmlCliRunner end-to-end, independent of the test process's current
-/// working directory. All paths embedded in the generated manifest.json are absolute, so
-/// resolution is identical regardless of where the test runner's CWD happens to be. The manifest
-/// itself lives at the real repo convention's path,
-/// "&lt;RootPath&gt;/.configtransform/ProjectA/manifest.json" (docs/GETTING_STARTED.md) — which
-/// also means RootPath is directly usable as the working directory for manifest auto-discovery
-/// (ManifestDiscovery) tests, since it holds exactly one candidate.
+/// Builds a realistic .configtransform-shaped temp workspace (base project + Environment +
+/// Client configtransform.json layers, docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md) for exercising
+/// XmlCliRunner end-to-end, independent of the test process's current working directory.
+/// <see cref="RootPath"/> is the synthetic repo root every path in the generated
+/// configtransform.json files is relative to, and doubles as the working directory a test passes
+/// to <c>XmlCliRunner.Run</c>. <see cref="ResourcePath"/> ("Project/App.config") is what a test
+/// passes as --resource.
 /// </summary>
 internal sealed class TempCliWorkspace : IDisposable
 {
     public string RootPath { get; } = Directory.CreateTempSubdirectory("configtransform-cli-tests-").FullName;
-    public string ManifestPath { get; }
+    public string ResourcePath => "Project/App.config";
+    public string ProjectFilePath { get; }
+    public string EnvironmentLayerPath { get; }
+    public string ClientLayerPath { get; }
 
     public TempCliWorkspace()
     {
         var projectDir = Path.Combine(RootPath, "Project");
-        var configTransformDir = Path.Combine(RootPath, ".configtransform", "ProjectA");
-        var overlayRoot = Path.Combine(configTransformDir, "App.config"); // must match the derived OverlayFolderName
+        var environmentDir = Path.Combine(RootPath, ".configtransform", "Environments", "Production");
+        var clientDir = Path.Combine(RootPath, ".configtransform", "Clients", "ClientA", "Production");
         Directory.CreateDirectory(projectDir);
-        Directory.CreateDirectory(Path.Combine(overlayRoot, "Environments"));
-        Directory.CreateDirectory(Path.Combine(overlayRoot, "Clients", "ClientA"));
+        Directory.CreateDirectory(environmentDir);
+        Directory.CreateDirectory(clientDir);
 
-        File.WriteAllText(Path.Combine(projectDir, "App.config"), """
+        ProjectFilePath = Path.Combine(projectDir, "App.config");
+        File.WriteAllText(ProjectFilePath, """
             <?xml version="1.0" encoding="utf-8"?>
             <configuration>
               <appSettings>
@@ -33,7 +36,8 @@ internal sealed class TempCliWorkspace : IDisposable
             </configuration>
             """);
 
-        File.WriteAllText(Path.Combine(overlayRoot, "Environments", "Production.config"), """
+        var environmentPatchPath = Path.Combine(environmentDir, "patch-Project-App.config.xml");
+        File.WriteAllText(environmentPatchPath, """
             <?xml version="1.0" encoding="utf-8"?>
             <configuration xmlns:xdt="http://schemas.microsoft.com/XML-Document-Transform">
               <appSettings>
@@ -42,7 +46,13 @@ internal sealed class TempCliWorkspace : IDisposable
             </configuration>
             """);
 
-        File.WriteAllText(Path.Combine(overlayRoot, "Clients", "ClientA", "Production.config"), """
+        EnvironmentLayerPath = Path.Combine(environmentDir, "configtransform.json");
+        File.WriteAllText(EnvironmentLayerPath, """
+            { "resources": [ { "path": "Project/App.config", "patch": ".configtransform/Environments/Production/patch-Project-App.config.xml" } ] }
+            """);
+
+        var clientPatchPath = Path.Combine(clientDir, "patch-Project-App.config.xml");
+        File.WriteAllText(clientPatchPath, """
             <?xml version="1.0" encoding="utf-8"?>
             <configuration xmlns:xdt="http://schemas.microsoft.com/XML-Document-Transform">
               <appSettings>
@@ -51,10 +61,13 @@ internal sealed class TempCliWorkspace : IDisposable
             </configuration>
             """);
 
-        ManifestPath = Path.Combine(configTransformDir, "manifest.json");
-        var projectDirPath = projectDir.Replace('\\', '/');
-        File.WriteAllText(ManifestPath,
-            $$"""{ "directory": "{{projectDirPath}}", "files": [ { "relativeToDirectory": "App.config", "type": "xml" } ] }""");
+        ClientLayerPath = Path.Combine(clientDir, "configtransform.json");
+        File.WriteAllText(ClientLayerPath, """
+            {
+              "extends": ".configtransform/Environments/Production/configtransform.json",
+              "resources": [ { "path": "Project/App.config", "patch": ".configtransform/Clients/ClientA/Production/patch-Project-App.config.xml" } ]
+            }
+            """);
     }
 
     public void Dispose()
