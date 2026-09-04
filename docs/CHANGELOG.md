@@ -6,6 +6,34 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.7.0-alpha2] - 2026-09-04
+
+Corrects a partial release, not a code or schema change — no `src/` changes in this entry. See
+`docs/RELEASING.md`'s documented failure-recovery policy (packages already pushed to GitHub
+Packages can never be un-published or overwritten; a corrected re-attempt must be a new version
+tag) and its own precedent, `0.1.0-alpha` → `0.1.0-alpha2`.
+
+### Fixed
+
+- **`scripts/smoke-test-published-tool.sh` still used the removed `--manifest`/`manifest.json`
+  CLI shape**, a gap left over from `0.7.0-alpha`'s own implementation work: every other
+  `--manifest`-referencing doc and script was swept and updated at the time, but this one was
+  missed. `publish.yml` runs this script immediately after pushing packages to GitHub Packages
+  and gates GitHub Release creation on it passing — so `0.7.0-alpha`'s packages went live, but
+  the smoke-test step failed with `Error: Unrecognized argument: '--manifest'.` and no GitHub
+  Release was ever created for it.
+  Rewritten to build a real 2-layer `configtransform.json` chain (`Environments/Smoke` →
+  `Clients/SmokeClient/Smoke`) and invoke `--resource <path> --client SmokeClient --environment
+  Smoke --dry-run` from inside it, asserting the merged value appears in the output — a stronger
+  check than the old script's "exit code 0," which asserted nothing about the actual result.
+  Verified locally against real builds of both `ConfigTransform.Xml`/`ConfigTransform.Json`
+  before this release, resolving correctly through `extends`+`resources`+`patch`.
+- `0.7.0-alpha`'s packages themselves needed no changes — the CLI behavior they shipped was
+  already correct (verified via extensive manual smoke-testing during that release's own
+  implementation, see its changelog entry below); only the *release-verification script* was
+  broken. This tag exists solely to get an accompanying GitHub Release created against a package
+  set that has now actually passed its own gate.
+
 ## [0.7.0-alpha] - 2026-09-04
 
 Breaking, following this repo's own precedent for a pre-1.0 breaking change (`0.2.0-alpha`'s
