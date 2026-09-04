@@ -362,15 +362,17 @@ default next step.
   redesign, see `docs/CONFIG_MANAGEMENT.md` §5.5. Not needed yet.
 - **A real (non-`-alpha`) `1.0.0` release** — once the solution-repo pilot validates the design
   against real content, worth promoting out of pre-release.
-- **A `configtransform init` command** — investigate once a few solution repos have actually
-  gone through the manual setup in `docs/GETTING_STARTED.md` ("Setting up a project from
-  scratch"). Deliberately not built now: the manual setup is small, and no real repo has
-  validated the design yet, so an `init` command today would risk baking in wrong defaults
-  (folder names, file-type detection, "typical" manifest shape). **Trigger to actually pick
-  this up:** the same setup steps get repeated identically, with no real per-repo variation,
-  across multiple onboardings — that repetition is the signal the automation would earn its
-  complexity, not a fixed timeline. See `docs/GETTING_STARTED.md`'s "Should there be an `init`
-  command?" section for the full reasoning.
+- **A `configtransform init` command — designed, not implemented.** Full design at
+  `docs/INIT_COMMAND_DESIGN.md`: an interactive form (plain sequential `Console.ReadLine()`
+  prompts, deliberately no TUI) or a fully flag-driven quiet mode, either way scanning the repo
+  for existing `.config`/`.xml`/`.json` files to suggest as resources, plus a `--template
+  hello-world` canned starter tree. This is a deliberate, named exception to this bullet's own
+  original "wait for a few solution repos" gate, made by the repo owner with that gate's
+  reasoning fully in view — the same kind of exception `docs/FIELD_AUTHORING_DESIGN.md` already
+  made for `set` against this same gate (see the new doc's "Why this exists, and why now" for the
+  full argument for why this doesn't need the same real-usage validation a TUI/GUI's workflow
+  design would). `docs/GETTING_STARTED.md`'s "Should there be an `init` command?" section is
+  updated to match — implementation is the next actionable step, not a further design pass.
 - **A TUI (`configtransform-tui`) and/or a cross-platform GUI (`configtransform-gui`)** —
   investigated, not started. Two separate blockers, not one:
   1. There's no CLI-level field-authoring feature to build a UI around yet. Today every overlay
