@@ -1,26 +1,31 @@
 namespace ConfigTransform.Core;
 
 /// <summary>
-/// Shared CLI orchestration for both ConfigTransform.Xml and ConfigTransform.Json: parse args,
-/// resolve the target layer's `extends` chain (docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md), and
-/// either print (--dry-run/--diff) or write (--output) the result — for one resource
-/// (--resource given) or every resource the layer touches in this tool's own format (omitted).
-/// --list is a separate, earlier branch handled by <see cref="LayerLister"/>. This class knows
-/// nothing about XML or JSON specifically — only the shape both tools share; <paramref
-/// name="merge"/> and <paramref name="ownedExtensions"/> are what a caller supplies to make it
-/// format-specific.
+/// Shared CLI orchestration for the `configtransform` dispatcher: parse args, resolve the target
+/// layer's `extends` chain (docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md), and either print
+/// (--dry-run/--diff) or write (--output) the result — for one resource (--resource given) or
+/// every resource the layer touches, across every registered format, in one call (omitted).
+/// --list is a separate, earlier branch handled by <see cref="LayerLister"/>; `set` is handled by
+/// <see cref="SetRunner"/>. This class knows nothing about XML or JSON specifically — only the
+/// shape every format shares; <paramref name="engines"/> is what the caller (the CLI entry point)
+/// supplies to make it concrete.
 /// </summary>
 public static class CliRunner
 {
     public static int Run(
-        string[] args, TextWriter stdout, TextWriter stderr,
-        Func<string, IReadOnlyList<string>, string> merge, IReadOnlyList<string> ownedExtensions,
+        string[] args, TextWriter stdout, TextWriter stderr, FormatEngineRegistry engines,
         string? workingDirectory = null)
     {
         try
         {
             var options = CliOptionsParser.Parse(args);
             var root = workingDirectory ?? Directory.GetCurrentDirectory();
+
+            if (options.Set)
+            {
+                SetRunner.Run(options, root, engines, stdout);
+                return 0;
+            }
 
             if (options.List)
             {
@@ -36,11 +41,11 @@ public static class CliRunner
 
             if (options.Resource is not null)
             {
-                RunOneResource(options, root, chain, merge, ownedExtensions, stdout);
+                RunOneResource(options, root, chain, engines, stdout);
                 return 0;
             }
 
-            RunEveryResource(options, root, chain, merge, ownedExtensions, stdout, stderr);
+            RunEveryResource(options, root, chain, engines, stdout, stderr);
             return 0;
         }
         catch (Exception ex)
@@ -52,19 +57,19 @@ public static class CliRunner
 
     private static void RunOneResource(
         CliOptions options, string root, IReadOnlyList<ResolvedLayer> chain,
-        Func<string, IReadOnlyList<string>, string> merge, IReadOnlyList<string> ownedExtensions, TextWriter stdout)
+        FormatEngineRegistry engines, TextWriter stdout)
     {
-        RequireOwnedExtension(options.Resource!, ownedExtensions);
+        var engine = engines.Require(options.Resource!);
 
         var resolved = LayerChain.ResolveResource(root, chain, options.Resource!);
         foreach (var line in resolved.Report)
             stdout.WriteLine(line);
 
-        var merged = merge(resolved.BasePath, resolved.PatchPathsInOrder);
+        var merged = engine.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
         if (options.Diff)
         {
-            var baseOnly = merge(resolved.BasePath, []);
+            var baseOnly = engine.Merge(resolved.BasePath, []);
             var diff = GitDiff.Render(baseOnly, merged);
             stdout.WriteLine(string.IsNullOrWhiteSpace(diff) ? "(no changes)" : diff);
             return;
@@ -87,31 +92,31 @@ public static class CliRunner
     }
 
     /// <summary>
-    /// Omitting --resource processes every resource the resolved layer touches, in this tool's
-    /// own format only — a resource in the other format is skipped with a stderr note, not
-    /// silently dropped or an error (docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md "Open items for
-    /// implementation" defers true mixed-format single-binary dispatch to the separate CLI-
-    /// unification pass; this is the two-tool interim behavior).
+    /// Omitting --resource processes every resource the resolved layer touches, across every
+    /// registered format, in one call — the real capability CLI unification delivers
+    /// (docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md "Settled decisions" #2/#7). A resource whose
+    /// extension no registered engine handles is skipped with a stderr note, not silently
+    /// dropped or an error — the only remaining skip case, and the seam a future format (e.g.
+    /// YAML, docs/CONFIG_MANAGEMENT.md §5.5) plugs into with no orchestration changes.
     /// </summary>
     private static void RunEveryResource(
         CliOptions options, string root, IReadOnlyList<ResolvedLayer> chain,
-        Func<string, IReadOnlyList<string>, string> merge, IReadOnlyList<string> ownedExtensions,
-        TextWriter stdout, TextWriter stderr)
+        FormatEngineRegistry engines, TextWriter stdout, TextWriter stderr)
     {
         var allResources = LayerChain.ResolveAllResources(chain);
-        var owned = allResources.Where(r => IsOwnedExtension(r, ownedExtensions)).ToList();
+        var owned = allResources.Where(r => engines.Find(r) is not null).ToList();
         var skipped = allResources.Count - owned.Count;
 
         if (skipped > 0)
         {
             stderr.WriteLine(
-                $"Skipped {skipped} resource(s) not in this tool's format ({string.Join(", ", ownedExtensions)}); " +
-                "run the matching tool for those.");
+                $"Skipped {skipped} resource(s) with no registered format handler; " +
+                $"supported formats: {engines.SupportedExtensions}.");
         }
 
         if (owned.Count == 0)
         {
-            stdout.WriteLine("(no resources of this tool's format at this layer)");
+            stdout.WriteLine("(no resources with a registered format handler at this layer)");
             return;
         }
 
@@ -122,8 +127,9 @@ public static class CliRunner
 
             foreach (var resourcePath in owned)
             {
+                var engine = engines.Require(resourcePath);
                 var resolved = LayerChain.ResolveResource(root, chain, resourcePath);
-                var merged = merge(resolved.BasePath, resolved.PatchPathsInOrder);
+                var merged = engine.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
                 var outPath = Path.Combine(outputRoot, resourcePath.Replace('/', Path.DirectorySeparatorChar));
                 var outDir = Path.GetDirectoryName(outPath);
@@ -139,14 +145,15 @@ public static class CliRunner
 
         foreach (var resourcePath in owned)
         {
+            var engine = engines.Require(resourcePath);
             var resolved = LayerChain.ResolveResource(root, chain, resourcePath);
-            var merged = merge(resolved.BasePath, resolved.PatchPathsInOrder);
+            var merged = engine.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
             stdout.WriteLine($"=== {resourcePath} ===");
 
             if (options.Diff)
             {
-                var baseOnly = merge(resolved.BasePath, []);
+                var baseOnly = engine.Merge(resolved.BasePath, []);
                 var diff = GitDiff.Render(baseOnly, merged);
                 stdout.WriteLine(string.IsNullOrWhiteSpace(diff) ? "(no changes)" : diff);
             }
@@ -158,15 +165,4 @@ public static class CliRunner
             stdout.WriteLine();
         }
     }
-
-    private static void RequireOwnedExtension(string resourcePath, IReadOnlyList<string> ownedExtensions)
-    {
-        if (!IsOwnedExtension(resourcePath, ownedExtensions))
-            throw new ArgumentException(
-                $"'{resourcePath}' has an extension this tool doesn't handle (expected one of: " +
-                $"{string.Join(", ", ownedExtensions)}) -- run the matching tool for this resource.");
-    }
-
-    private static bool IsOwnedExtension(string resourcePath, IReadOnlyList<string> ownedExtensions) =>
-        ownedExtensions.Contains(Path.GetExtension(resourcePath), StringComparer.OrdinalIgnoreCase);
 }

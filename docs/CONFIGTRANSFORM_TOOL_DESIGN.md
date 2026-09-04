@@ -19,12 +19,14 @@ ConfigTransform/                              (repo root)
 │   │   ├── FileResolver.cs                   # case-insensitive resolution, §5.4 of the spec
 │   │   ├── LayerChain.cs                     # extends-chain resolution, found/not-found reporting, §5.1
 │   │   └── ConfigTransform.Core.csproj
-│   ├── ConfigTransform.Xml/                  # CLI front-end wrapping Microsoft.Web.Xdt
-│   │   ├── Program.cs
+│   ├── ConfigTransform.Xml/                  # merge engine wrapping Microsoft.Web.Xdt — internal library, no CLI
 │   │   └── ConfigTransform.Xml.csproj
-│   └── ConfigTransform.Json/                 # CLI front-end wrapping Microsoft.Extensions.Configuration
+│   ├── ConfigTransform.Json/                 # merge engine wrapping Microsoft.Extensions.Configuration — internal library, no CLI
+│   │   └── ConfigTransform.Json.csproj
+│   └── ConfigTransform.Cli/                  # the actual CLI — registers both engines above into Core's dispatcher
 │       ├── Program.cs
-│       └── ConfigTransform.Json.csproj
+│       ├── FormatEngines.cs
+│       └── ConfigTransform.Cli.csproj
 ├── tests/
 │   ├── ConfigTransform.Core.Tests/           # configtransform.json parsing, resolver, reporting — format-agnostic
 │   ├── ConfigTransform.Xml.Tests/
@@ -32,16 +34,18 @@ ConfigTransform/                              (repo root)
 │   │       ├── DotNetFramework/              # App.config-shaped fixtures
 │   │       ├── IisWebConfig/                 # Web.config-shaped fixtures
 │   │       └── GenericXml/                   # arbitrary, non-standard XML — proves no hardcoding
-│   └── ConfigTransform.Json.Tests/
-│       └── Fixtures/
-│           ├── DotNetCore/                   # appsettings.json-shaped fixtures
-│           └── GenericJson/                  # arbitrary, non-standard JSON
+│   ├── ConfigTransform.Json.Tests/
+│   │   └── Fixtures/
+│   │       ├── DotNetCore/                   # appsettings.json-shaped fixtures
+│   │       └── GenericJson/                  # arbitrary, non-standard JSON
+│   └── ConfigTransform.Cli.Tests/            # CLI-orchestration tests against the real FormatEngines.All registry,
+│                                              # including mixed-format-in-one-call coverage
 ├── .github/
 │   └── workflows/
 │       ├── build.yml                         # build + test, every push/PR
 │       └── publish.yml                       # dotnet pack + nuget push, on tagged release only
 ├── docs/
-│   ├── USAGE.md                              # full CLI reference: every flag, both tools
+│   ├── USAGE.md                              # full CLI reference: every flag, the unified tool
 │   ├── MANIFEST_SCHEMA.md                    # authoritative configtransform.json schema reference —
 │   │                                          # the tool's own input contract, kept here rather
 │   │                                          # than only in a consuming repo's docs
@@ -59,7 +63,9 @@ being merged is XML or JSON — only the actual merge engine differs (`Microsoft
 `Microsoft.Extensions.Configuration`). Keeping that shared logic in one library tested once,
 rather than duplicated (and drifting) between `ConfigTransform.Xml` and `ConfigTransform.Json`,
 is the same reuse principle the rest of this design has followed throughout — one layer schema,
-one resolution rule, two thin format-specific engines on top.
+one resolution rule, two thin format-specific engines underneath, dispatched to by one CLI
+(`ConfigTransform.Cli`, `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`'s CLI-unification pass) via
+Core's own `FormatEngine`/`FormatEngineRegistry` types.
 
 ## 3. Test matrix
 

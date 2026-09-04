@@ -48,18 +48,19 @@ flowchart LR
 2. Install the tool once per repo:
    ```bash
    dotnet new tool-manifest   # if the repo doesn't already have one
-   dotnet tool install --local ConfigTransform.Xml --version <latest>
-   dotnet tool install --local ConfigTransform.Json --version <latest>   # if you have JSON projects too
+   dotnet tool install --local ConfigTransform.Cli --version <latest>
    ```
-   These packages are published to a **private-by-default** GitHub Packages feed — the install
-   above fails with a 401/403 until `nuget.config` and a `read:packages` credential are set up.
-   See [`SECRETS_AND_LOCAL_SETUP.md`](SECRETS_AND_LOCAL_SETUP.md) §1 for the one-time setup
-   (CI secret + `nuget.config` + local env vars, with Windows/macOS/Linux instructions) — do
-   that first if this repo hasn't already.
+   One package covers both XML and JSON projects — `configtransform` dispatches each resource to
+   the right merge engine by its own file extension, so there's nothing extra to install even if
+   the repo has both. This package is published to a **private-by-default** GitHub Packages
+   feed — the install above fails with a 401/403 until `nuget.config` and a `read:packages`
+   credential are set up. See [`SECRETS_AND_LOCAL_SETUP.md`](SECRETS_AND_LOCAL_SETUP.md) §1 for
+   the one-time setup (CI secret + `nuget.config` + local env vars, with Windows/macOS/Linux
+   instructions) — do that first if this repo hasn't already.
 3. Author the first override with `set` rather than hand-writing a `configtransform.json` and a
    patch file — it creates both, correctly, in one step:
    ```bash
-   dotnet tool run configtransform-xml -- set \
+   dotnet tool run configtransform -- set \
      --resource path/to/YourProject/App.config \
      --client ClientA --environment Production \
      --match ApiUrl --set https://clienta.example.com
@@ -73,7 +74,7 @@ flowchart LR
    for the full flag reference.
 4. Preview before committing anything:
    ```bash
-   dotnet tool run configtransform-xml -- \
+   dotnet tool run configtransform -- \
      --resource path/to/YourProject/App.config \
      --client ClientA --environment Production --diff
    ```

@@ -114,7 +114,7 @@ project-to-directory indirection to maintain separately the way `manifest.json`'
 field once was; see §4 and `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md` for the full design and why
 it replaced that indirection.
 
-Note: the transform tool itself (`ConfigTransform.Xml` / `ConfigTransform.Json`) does **not**
+Note: the transform tool itself (`configtransform`, `ConfigTransform.Cli`) does **not**
 live in this repo. It lives in its own dedicated repository and is consumed as a versioned
 `dotnet tool` — see §11.
 
@@ -252,7 +252,10 @@ two formats that may come up later, without requiring a redesign when that happe
   reusing the exact same build-time flatten-and-merge approach as `ConfigTransform.Json`
   (§5.3). Recognized by `resources[].path`'s own `.yaml`/`.yml` extension — consistent with how
   XML/JSON dispatch already works (`MANIFEST_SCHEMA.md`'s "Which engine handles a resource"),
-  never a separately declared field.
+  never a separately declared field. Would register as one more `FormatEngine` in
+  `ConfigTransform.Cli`'s `FormatEngineRegistry` (`docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`'s
+  CLI-unification pass) — no orchestration changes needed, purely a new registration plus the
+  merge engine itself.
 - **`.env`**: flat `KEY=VALUE` pairs, no nesting — actually *simpler* to merge than JSON, just
   a dictionary union where later layers override matching keys. Recognized by its own `.env`
   extension the same way.
@@ -265,7 +268,9 @@ the need is actually confirmed by real project content. Not being built now; rec
 
 ## 6. Transform tool CLI
 
-Both `ConfigTransform.Xml` and `ConfigTransform.Json` share the same CLI shape:
+One tool, `configtransform` (`ConfigTransform.Cli`), shares the same CLI shape across both
+formats — it dispatches each resource to the right merge engine by its own file extension, so a
+mixed-format layer resolves in a single call:
 
 ```
 --resource <repo-root-relative path>   optional — omit for every resource the layer touches
@@ -285,17 +290,17 @@ Example:
 
 ```bash
 # Preview what ClientA actually gets in Production
-dotnet run --project tools/ConfigTransform.Xml -- \
+dotnet tool run configtransform -- \
   --resource ProjectA.Framework/App.config \
   --client ClientA --environment Production --dry-run
 
 # See exactly what ClientA's overrides change vs. the unpatched chain
-dotnet run --project tools/ConfigTransform.Xml -- \
+dotnet tool run configtransform -- \
   --resource ProjectA.Framework/App.config \
   --client ClientA --environment Production --diff
 
 # Real run, as CI invokes it
-dotnet run --project tools/ConfigTransform.Xml -- \
+dotnet tool run configtransform -- \
   --resource ProjectA.Framework/App.config \
   --client ClientA --environment Production \
   --output publish/App.config
@@ -502,8 +507,9 @@ What actually carried over from Kustomize, and what didn't:
 
 ### 10.1 Where the tool lives
 
-`ConfigTransform.Xml` and `ConfigTransform.Json` live in their **own dedicated repository**,
-separate from every solution repo that consumes them. Rationale in §2: with multiple solution
+`configtransform` (`ConfigTransform.Cli`, plus its two internal merge-engine libraries
+`ConfigTransform.Xml`/`ConfigTransform.Json`) lives in its **own dedicated repository**,
+separate from every solution repo that consumes it. Rationale in §2: with multiple solution
 repos consuming the same tool, copying its source into each one means manually propagating
 every fix or feature into every consumer; a single shared repo avoids that duplication at the
 cost of a real publish step, which is an acceptable trade-off at this point.
@@ -532,8 +538,7 @@ One-time setup per consuming repo:
 
 ```bash
 dotnet new tool-manifest
-dotnet tool install --local ConfigTransform.Xml --version 1.0.0
-dotnet tool install --local ConfigTransform.Json --version 1.0.0
+dotnet tool install --local ConfigTransform.Cli --version 1.0.0
 ```
 
 This creates `.config/dotnet-tools.json`, committed to git:
@@ -543,11 +548,13 @@ This creates `.config/dotnet-tools.json`, committed to git:
   "version": 1,
   "isRoot": true,
   "tools": {
-    "configtransform.xml":  { "version": "1.0.0", "commands": ["configtransform-xml"] },
-    "configtransform.json": { "version": "1.0.0", "commands": ["configtransform-json"] }
+    "configtransform.cli": { "version": "1.0.0", "commands": ["configtransform"] }
   }
 }
 ```
+
+One tool covers both XML and JSON projects — `configtransform` dispatches each resource to the
+right engine by its own file extension, so there's nothing extra to install for a repo with both.
 
 Anyone who clones the repo — developer or CI — runs once:
 
@@ -555,8 +562,8 @@ Anyone who clones the repo — developer or CI — runs once:
 dotnet tool restore
 ```
 
-and thereafter invokes the pinned version as `dotnet configtransform-xml ...` /
-`dotnet configtransform-json ...`. Upgrading a repo to a newer tool version is a one-line
+and thereafter invokes the pinned version as `dotnet configtransform ...`. Upgrading a repo to a
+newer tool version is a one-line
 change to that repo's own manifest in its own PR, with no effect on any other consuming repo.
 
 ### 10.4 Feed authentication

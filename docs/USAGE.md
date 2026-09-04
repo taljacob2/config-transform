@@ -1,13 +1,16 @@
 # CLI usage
 
-`ConfigTransform.Xml` and `ConfigTransform.Json` share the same CLI shape for resolving/
-previewing/writing a merged result, built around self-describing `configtransform.json` layers
+`configtransform` (the `ConfigTransform.Cli` dotnet tool) resolves/previews/writes a merged
+result, built around self-describing `configtransform.json` layers
 (`docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`) — one per layer directory under `.configtransform/`,
 addressed by `--client`/`--environment`, spanning every resource (project config file) that layer
-touches. Each tool processes only the resources in its own format; a mixed-format layer is fine,
-each tool just skips what isn't its format (see "Multi-resource: omitting `--resource`" below).
-The `set` verb (below) is implemented for both too, though what it actually supports differs by
-format for reasons that come from the format itself, not an arbitrary gap.
+touches, in **any** registered format, in one call. Each resource is dispatched to the right merge
+engine by its own file extension — `.config`/`.xml` via `Microsoft.Web.Xdt`, `.json` via
+`Microsoft.Extensions.Configuration` — so a mixed-format layer resolves with no skipping and no
+separate tool invocation per format; a resource whose extension no registered engine handles is
+reported, not silently dropped (see "Single resource vs. every resource" below). The `set` verb
+(below) works the same way, dispatching by the *target* resource's own extension; what it actually
+supports differs by format for reasons that come from the format itself, not an arbitrary gap.
 
 ```
 --resource, -r <repo-root-relative path>   optional for a resolve/--list — omit for every resource the layer touches; required for `set`
@@ -50,17 +53,21 @@ missing overlay *file* did under the old fixed rule.
 
 `--resource <path>` (repeatable? no — exactly one) names a project directly, by the same
 repo-root-relative path its `configtransform.json` entries use everywhere else. Omitting it
-processes **every resource the resolved layer's chain touches, in this tool's own format**, in one
-invocation:
+processes **every resource the resolved layer's chain touches, across every registered format**,
+in one invocation:
 
 - `--dry-run`/`--diff` print each resource's own result, labeled `=== <path> ===`.
 - A real run requires `--output <directory>` (not a file) and writes one file per resource, each
   resource's own repo-root-relative path mirrored under that directory.
-- A resource whose extension isn't this tool's format is skipped with a note on stderr (e.g.
-  "Skipped 1 resource(s) not in this tool's format (.json); run the matching tool for those.") —
-  not an error, and not silently dropped. True single-binary dispatch across both formats in one
-  call is a separate, not-yet-implemented pass (`docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`'s "Open
-  items for implementation").
+- A resource whose extension no registered format engine handles is skipped with a note on stderr
+  (e.g. "Skipped 1 resource(s) with no registered format handler; supported formats: .config,
+  .xml, .json.") — not an error, and not silently dropped. This is the only remaining skip case:
+  every currently-supported format resolves in the same call, with no note at all, which is the
+  actual capability CLI unification delivers over the old two-tool split.
+
+Naming that one exact resource with `--resource` instead is always an error if no engine handles
+its extension (rather than a stderr note) — you named that exact file, so silently producing
+nothing would be worse than failing loudly.
 
 ## `--list`
 
@@ -86,39 +93,40 @@ builds — `OrderProcessor.Framework/App.config` (XML) and `BillingApi.Core/apps
 
 ```bash
 # Preview what Acme gets for OrderProcessor.Framework/App.config in Production
-dotnet run --project src/ConfigTransform.Xml -- \
+dotnet run --project src/ConfigTransform.Cli -- \
   --resource OrderProcessor.Framework/App.config \
   --client Acme --environment Production --dry-run
 
 # See exactly what Acme's overrides change vs. the unpatched chain
-dotnet run --project src/ConfigTransform.Xml -- \
+dotnet run --project src/ConfigTransform.Cli -- \
   --resource OrderProcessor.Framework/App.config \
   --client Acme --environment Production --diff
 
 # Real run, one resource, as CI invokes it
-dotnet run --project src/ConfigTransform.Xml -- \
+dotnet run --project src/ConfigTransform.Cli -- \
   --resource OrderProcessor.Framework/App.config \
   --client Acme --environment Production --output publish/App.config
 
-# Every XML resource this layer touches, one call, --output as a directory
-dotnet run --project src/ConfigTransform.Xml -- \
-  --client Acme --environment Production --output publish/
-
-# ConfigTransform.Json — identical shape, a JSON project instead
-dotnet run --project src/ConfigTransform.Json -- \
+# BillingApi.Core/appsettings.json — same tool, dispatched to the JSON engine by its extension
+dotnet run --project src/ConfigTransform.Cli -- \
   --resource BillingApi.Core/appsettings.json \
   --client Acme --environment Production --diff
 
+# Every resource this layer touches, ANY format, one call, --output as a directory --
+# the real capability CLI unification delivers over the old per-format tool split
+dotnet run --project src/ConfigTransform.Cli -- \
+  --client Acme --environment Production --output publish/
+
 # --list for one layer — resources, extends, and what's patched here vs. inherited
-dotnet run --project src/ConfigTransform.Xml -- \
+dotnet run --project src/ConfigTransform.Cli -- \
   --list --client Acme --environment Production
 
 # --list --resource — reverse lookup: every layer in the tree that patches this one project
-dotnet run --project src/ConfigTransform.Xml -- \
+dotnet run --project src/ConfigTransform.Cli -- \
   --list --resource OrderProcessor.Framework/App.config
 
 # Short flags, for typing out by hand
-dotnet run --project src/ConfigTransform.Json -- -r BillingApi.Core/appsettings.json -c Acme -e Production --diff
+dotnet run --project src/ConfigTransform.Cli -- -r BillingApi.Core/appsettings.json -c Acme -e Production --diff
 ```
 
 On every single-resource run, the tool prints an explicit found/not-found line for the base file
@@ -129,7 +137,7 @@ different case — an explicit, broken reference — and is always an error, the
 base file is.
 
 `--dry-run` and `--diff` never write to the base file's own location, or anywhere else on
-disk — verified directly by `XmlCliRunnerTests`/`JsonCliRunnerTests`, not just by code
+disk — verified directly by `ConfigTransform.Cli.Tests`' `CliRunnerTests`, not just by code
 inspection. `--diff` prints `(no changes)` rather than an empty diff when the resolved chain has
 nothing to apply.
 
@@ -137,7 +145,8 @@ nothing to apply.
 
 Writes a field directly — no hand-written XDT for XML, no hand-edited nested JSON for JSON — see
 `docs/FIELD_AUTHORING_DESIGN.md` for the full design and why it works this way. The flag shape is
-identical for both tools:
+the same regardless of the target resource's format — `set` dispatches to the right authoring
+engine by `--resource`'s own extension, the same way every other command dispatches its merge:
 
 ```
 set --resource, -r <repo-root-relative path>   required — names the project directly
@@ -160,20 +169,23 @@ error). **When the resource isn't listed there yet**, `set` appends a `resources
 at a newly-authored patch file, named `patch-<resource path, "/" replaced with "-">.<xml|json>`
 (the patch extension always reflects the *transform's own* format — `.xml` for an XDT transform
 regardless of the base resource's own extension, `.json` for JSON) sitting alongside the
-`configtransform.json` that references it. **When it's already listed with a `patch`**,
-re-running `set` for the same `--match` updates that existing patch file in place rather than
-duplicating it or creating a second one — idempotent, same as before.
+`configtransform.json` that references it — a single shared `configtransform.json` can (and
+routinely will) end up listing both an `.xml`-patched and a `.json`-patched resource side by side,
+each authored by its own engine, entirely independently. **When it's already listed with a
+`patch`**, re-running `set` for the same `--match` updates that existing patch file in place
+rather than duplicating it or creating a second one — idempotent, same as before.
 
 **What's actually supported differs by format, in ways that come from the format itself, not an
 arbitrary implementation gap** — see `docs/FIELD_AUTHORING_DESIGN.md`'s "Open items" for the
 full reasoning behind each:
 
-- **`ConfigTransform.Xml`**: covers updating a field that already exists somewhere in the
-  resolved document — the common case (overriding an existing value for one environment/client).
-  Creating a genuinely new element (`Insert`) is not implemented: `--match`/`--set` don't carry
-  the new element's tag name or parent location, and there's nothing in an existing document to
-  derive them from for a true insert, so `set` refuses rather than guessing.
-- **`ConfigTransform.Json`**: covers a single key path (nested or top-level) — both updating an
+- **XML** (`.config`/`.xml` resources): covers updating a field that already exists somewhere in
+  the resolved document — the common case (overriding an existing value for one
+  environment/client). Creating a genuinely new element (`Insert`) is not implemented:
+  `--match`/`--set` don't carry the new element's tag name or parent location, and there's nothing
+  in an existing document to derive them from for a true insert, so `set` refuses rather than
+  guessing.
+- **JSON** (`.json` resources): covers a single key path (nested or top-level) — both updating an
   existing key *and* creating a brand-new one, since JSON has no XDT-style Transform/Locator
   distinction to make (any layer can introduce a key; `set` just writes it) — **and matching or
   creating an item inside an array of objects**, via a `$elemMatch`-style overlay (below).
@@ -185,63 +197,63 @@ full reasoning behind each:
 ```bash
 # XML, appSettings — the simple case: one identity attribute, one value attribute.
 # Bare --match/--set default to key=/value=, verified against the real file before being used.
-dotnet run --project src/ConfigTransform.Xml -- set \
+dotnet run --project src/ConfigTransform.Cli -- set \
   --resource OrderProcessor.Framework/App.config \
   --client Acme --environment Production --match ApiUrl --set https://acme.example.com
 
 # XML, connectionStrings — one identity attribute (name), two value attributes at once.
-dotnet run --project src/ConfigTransform.Xml -- set \
+dotnet run --project src/ConfigTransform.Cli -- set \
   --resource OrderProcessor.Framework/App.config \
   --client Acme --environment Production \
   --match name=Prod --set connectionString="Data Source=prod;..." --set providerName=System.Data.SqlClient
 
 # XML, no --client/--environment: edits the base file directly, no xdt: anything.
-dotnet run --project src/ConfigTransform.Xml -- set \
+dotnet run --project src/ConfigTransform.Cli -- set \
   --resource OrderProcessor.Framework/App.config \
   --match key=ApiUrl --set value=https://new-default.example.com
 
 # JSON — a nested key, ':'-separated (matches Microsoft.Extensions.Configuration's own
 # flattening convention, and ASP.NET Core's own command-line config override syntax) — not '.',
 # since dots commonly appear literally in real setting names ("api.timeout.ms"-style).
-dotnet run --project src/ConfigTransform.Json -- set \
+dotnet run --project src/ConfigTransform.Cli -- set \
   --resource BillingApi.Core/appsettings.json \
   --client Acme --environment Production \
   --match key=Logging:LogLevel:Default --set value=Warning
 
 # JSON — creating a brand-new key: works the same as updating one (no Insert-style gap for JSON).
-dotnet run --project src/ConfigTransform.Json -- set \
+dotnet run --project src/ConfigTransform.Cli -- set \
   --resource BillingApi.Core/appsettings.json \
   --client Acme --environment Production --match key=Features:EnableBeta --set value=true
 
 # JSON — a key that itself contains a literal ':' (rare, but real): --match literal-key=...
 # instead of key=..., so it's matched as one property name, not split into path segments.
-dotnet run --project src/ConfigTransform.Json -- set \
+dotnet run --project src/ConfigTransform.Cli -- set \
   --resource BillingApi.Core/appsettings.json \
   --match literal-key=Logging:LogLevel:Default --set value=Warning
 
 # JSON — array of objects: --match key=<array> locates the array, any further --match
 # <field>=<value> (not key=/literal-key=) becomes an $elemMatch condition on the item.
-dotnet run --project src/ConfigTransform.Json -- set \
+dotnet run --project src/ConfigTransform.Cli -- set \
   --resource BillingApi.Core/appsettings.json \
   --client Acme --environment Production \
   --match key=ConnectionStrings --match name=Prod --set connectionString="Data Source=new;..."
 
 # JSON — compound conditions (more than one field needed to identify the item uniquely).
-dotnet run --project src/ConfigTransform.Json -- set \
+dotnet run --project src/ConfigTransform.Cli -- set \
   --resource BillingApi.Core/appsettings.json \
   --client Acme --environment Production \
   --match key=Rules --match role=Admin --match env=Production --set enabled=true
 
 # JSON — a second call against the same array, different conditions, same overlay file: appends
 # a second $elemMatch patch rather than colliding with the first (see FIELD_AUTHORING_DESIGN.md).
-dotnet run --project src/ConfigTransform.Json -- set \
+dotnet run --project src/ConfigTransform.Cli -- set \
   --resource BillingApi.Core/appsettings.json \
   --client Acme --environment Production \
   --match key=Rules --match role=Viewer --set enabled=true
 
 # JSON — no match found: creates a new item instead of erroring (an upsert, Mongo's own term for
 # the same idea) -- the new item's identity comes from the --match conditions themselves.
-dotnet run --project src/ConfigTransform.Json -- set \
+dotnet run --project src/ConfigTransform.Cli -- set \
   --resource BillingApi.Core/appsettings.json \
   --client Acme --environment Production \
   --match key=Rules --match role=Auditor --set enabled=true
@@ -260,7 +272,9 @@ narrow it down. Implemented in `src/ConfigTransform.Xml/XmlFieldAuthor.cs`,
 `src/ConfigTransform.Json/JsonFieldAuthor.cs`, and (JSON array-of-objects resolution specifically,
 shared between `set`'s eager check and `JsonLayerMerger`'s authoritative merge-time resolution)
 `src/ConfigTransform.Json/JsonElemMatchResolver.cs`; shared target-layer resolution in
-`src/ConfigTransform.Core/SetTargetResolver.cs`; orchestration in each tool's own `CliRunner.cs`.
+`src/ConfigTransform.Core/SetTargetResolver.cs`; the dispatcher orchestration that picks between
+them by extension is `src/ConfigTransform.Core/SetRunner.cs`, with the actual format→engine
+registration in `src/ConfigTransform.Cli/FormatEngines.cs`.
 
 ## What "merge" means
 
@@ -283,8 +297,16 @@ documented in full in `src/ConfigTransform.Json/JsonLayerMerger.cs`:
   `$elemMatch` entries against the *accumulated* merge of every prior patch (not the base alone);
   every other merge takes the original, unmodified code path.
 
+**Dispatch, for both the read path and `set`**: `ConfigTransform.Cli/FormatEngines.cs` registers
+one `FormatEngine` per format (extensions owned, merge function, field-author function, patch-file
+extension) into a `FormatEngineRegistry`; `ConfigTransform.Core/CliRunner.cs` picks the matching
+engine for a given resource by its own file extension, for both a single `--resource` and the
+omitted-`--resource` case (routing each resource in the union independently — see "Single resource
+vs. every resource" above). `ConfigTransform.Core/SetRunner.cs` does the same for `set`. Neither
+`CliRunner` nor `SetRunner` knows anything about XML or JSON specifically — `XmlLayerMerger`/
+`JsonLayerMerger`/`XmlFieldAuthor`/`JsonFieldAuthor` are unchanged internal engines, exactly as
+before unification; only how they're selected and invoked moved into one shared dispatcher.
+
 For `--diff`, the same base file is also rendered with *no* patches applied (through the identical
 merge code path, to avoid spurious serialization-only differences) and the two are compared via
-`GitDiff` (`ConfigTransform.Core`). See `src/ConfigTransform.Xml/XmlCliRunner.cs`,
-`src/ConfigTransform.Json/JsonCliRunner.cs`, and the shared orchestration in
-`src/ConfigTransform.Core/CliRunner.cs`.
+`GitDiff` (`ConfigTransform.Core`).

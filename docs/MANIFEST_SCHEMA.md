@@ -46,13 +46,14 @@ gets full consistency *and* short paths.
 
 ## Which engine handles a resource
 
-Inferred from `resources[].path`'s file extension — `.config`/`.xml` → `ConfigTransform.Xml`,
-`.json` → `ConfigTransform.Json` — never a declared field. Consistent with this tool's existing
-stance that format is the only real constraint, never redundantly declared (`CLAUDE.md`'s "Core
-concepts"). A `configtransform.json` can freely mix resources of both formats in one file; each
-tool just processes the resources in its own format and skips the rest (see `USAGE.md`'s
-"Multi-resource" section) until the two tools unify into one dispatcher (a separate, not-yet-
-implemented pass).
+Inferred from `resources[].path`'s file extension — `.config`/`.xml` → the XML engine
+(`ConfigTransform.Xml`), `.json` → the JSON engine (`ConfigTransform.Json`) — never a declared
+field. Consistent with this tool's existing stance that format is the only real constraint, never
+redundantly declared (`CLAUDE.md`'s "Core concepts"). A `configtransform.json` can freely mix
+resources of both formats in one file — the unified `configtransform` CLI (`ConfigTransform.Cli`)
+dispatches each one to the right engine and resolves the whole layer in a single call; a resource
+whose extension no registered engine handles is reported and skipped, never silently dropped (see
+`USAGE.md`'s "Single resource vs. every resource" section).
 
 ## Full worked example: two projects, one client
 
