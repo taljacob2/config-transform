@@ -6,6 +6,13 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.8.0-alpha] - 2026-09-04
+
+Breaking, following this repo's own precedent for a pre-1.0 breaking change (`0.2.0-alpha`'s
+manifest-schema rename, `0.7.0-alpha`'s manifest.json removal): a MINOR bump, not a jump to
+`1.0.0` — `CONFIG_MANAGEMENT.md` §10.8 ties dropping `-alpha` to real-content validation, not to
+breaking-change size, unchanged by this release.
+
 ### Added
 
 - **`help` command, and the default when the tool is run with no arguments at all.** New
@@ -22,13 +29,6 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   validation error (a bare `--client` with no `--environment` now shows help instead of
   "--environment is required."). `CliOptions` gains a `Help` field; `CliRunner.Run` checks it
   first, before even resolving a working directory.
-
-## [0.8.0-alpha] - 2026-09-04
-
-Breaking, following this repo's own precedent for a pre-1.0 breaking change (`0.2.0-alpha`'s
-manifest-schema rename, `0.7.0-alpha`'s manifest.json removal): a MINOR bump, not a jump to
-`1.0.0` — `CONFIG_MANAGEMENT.md` §10.8 ties dropping `-alpha` to real-content validation, not to
-breaking-change size, unchanged by this release.
 
 ### Changed
 

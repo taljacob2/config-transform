@@ -286,9 +286,10 @@ command), reachable via no arguments, a leading bare `help`, or `--help`/`-h` an
 position — all of which win over every other flag, including what would otherwise be a
 validation error. Supported extensions are read from the real `FormatEngineRegistry`, not
 hardcoded, so the page can't drift from what the binary actually handles. 200 tests passing
-solution-wide. See `docs/CHANGELOG.md`'s `[Unreleased]` section — not yet cut as its own version,
-since this addition is purely additive (no existing valid invocation's behavior changes; only
-the previously-error-only empty invocation now succeeds).
+solution-wide. Folded into the still-unpushed `[0.8.0-alpha]` CHANGELOG section (rather than its
+own version) since `ConfigTransform.Cli` has no published version yet to be additive *relative
+to* — one clean first release covers both the CLI unification and this. See
+`docs/CHANGELOG.md`'s `[0.8.0-alpha]` entry.
 
 ## Next up
 
