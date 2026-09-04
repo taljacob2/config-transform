@@ -168,6 +168,14 @@ section for worked examples. 41 new tests: `JsonElemMatchResolverTests` (new, 17
 additions to `JsonFieldAuthorTests`/`JsonSetCommandCliTests` (11 combined, net of two tests that
 pinned the old "rejected outright" behavior and were rewritten to match the new one).
 
+**`0.6.0-alpha` is live**: the repo owner tagged it directly from `main` (everything above since
+`0.5.0-alpha` — both `set` implementations and the `$elemMatch` gap closure), without first
+following `docs/RELEASING.md`'s step 1 (moving `docs/CHANGELOG.md`'s `[Unreleased]` content into
+a versioned section before tagging) — the same kind of drift already flagged for `0.4.1` above,
+here reconciled directly since the intent was unambiguous (the tag points at the exact commit
+that content was merged at): `docs/CHANGELOG.md` now has a proper `## [0.6.0-alpha]` section
+covering it, backfilled after the fact rather than left undocumented.
+
 **Added `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`, now fully decided** — replace `manifest.json`
 and the fixed base→Environments→Clients rule (`CONFIG_MANAGEMENT.md` §9) with a Kustomize-style
 self-describing `configtransform.json` per layer directory, declaring `resources` (each pairing a
@@ -221,8 +229,18 @@ the same class of bug can't silently pass again. All fixture trees (`DotNetFrame
 to the new `.configtransform/Environments/<Env>/`+`.configtransform/Clients/<Client>/<Env>/` shape;
 `TempCliWorkspace` (both test projects) rebuilt around a synthetic repo root. Docs rewritten in the
 same change: `CLAUDE.md`, `MANIFEST_SCHEMA.md` (content now describes `configtransform.json`, kept
-its filename), `GETTING_STARTED.md`, `ONBOARDING.md`, `USAGE.md`; `CONFIG_MANAGEMENT.md` and
-`docs/INDEX.md` still need their own pass (see "Next up"). 177 tests passing solution-wide.
+its filename), `GETTING_STARTED.md`, `ONBOARDING.md`, `USAGE.md`, `CONFIG_MANAGEMENT.md` §3/§4/
+§5.1/§9, and `docs/INDEX.md`. 177 tests passing solution-wide.
+
+**Versioned as `0.7.0-alpha`, a breaking pre-1.0 change** — `manifest.json` support and
+`--manifest`/`--file` are removed outright, no coexistence period, so this needs its own version
+bump before merging to `main`. Follows this repo's own precedent for a breaking pre-1.0 change
+(`0.2.0-alpha`'s manifest-schema rename) rather than jumping to `1.0.0`: `CONFIG_MANAGEMENT.md`
+§10.8 ties dropping `-alpha` to real-content validation, not to how large a breaking change is,
+and that gate hasn't moved — confirmed directly with the repo owner rather than assumed.
+`docs/CHANGELOG.md`'s `[Unreleased]` content moved into a `## [0.7.0-alpha]` section as part of
+this same change (`docs/RELEASING.md` step 1) — the owner still needs to tag and push it
+(`git push origin 0.7.0-alpha`) once this PR merges to `main`, same as every prior release.
 
 ## Next up
 
@@ -262,11 +280,6 @@ default next step.
   kept its old filename to avoid a large cross-reference rename across `docs/`. Worth revisiting
   as a pure rename (e.g. `LAYER_SCHEMA.md`) if the mismatch causes real confusion — not urgent,
   purely cosmetic.
-- **`docs/CONFIG_MANAGEMENT.md` §3/§4/§9 and `docs/INDEX.md`'s own descriptions** still describe
-  (or point at docs describing) the old `manifest.json`/fixed-layering model in places the
-  self-describing-overlays implementation above didn't reach in its own change — needs a follow-up
-  pass so `CONFIG_MANAGEMENT.md` (the primary "why" document) doesn't contradict what `CLAUDE.md`/
-  `MANIFEST_SCHEMA.md`/`GETTING_STARTED.md`/`ONBOARDING.md`/`USAGE.md` now say.
 - **Solution-repo pilot, first round complete** — `config-transform-pilot` (synthetic, three
   projects at varying nesting depth, one per config format) validated the core design claims
   end to end and found/fixed one real bug (see "Current state" above and the pilot's
@@ -275,7 +288,11 @@ default next step.
   rotation, per-client key splitting, YAML/`.env` formats. A pilot against the *actual*
   employer-owned multi-client repo this design targets still needs a separate session in that
   organization's own Claude Code environment — this repo's own conversations can't touch that
-  repo directly.
+  repo directly. **Needs migrating off `manifest.json` once `0.7.0-alpha` is tagged**: its
+  `.config/dotnet-tools.json` is pinned to `0.5.0-alpha`, and its `.configtransform/` trees still
+  use the old `manifest.json`+`Environments/`/`Clients/` shape this release removes entirely —
+  `MANIFEST_SCHEMA.md` has the new schema and worked example to migrate against. Not done in this
+  change: separate repo, separate session.
 - **Deployment transport mechanism** (self-hosted runner vs. WinRM vs. Octopus Deploy) — not
   this repo's concern directly, but blocks the consuming architecture's
   `build-transformed.yml`. `CONFIG_MANAGEMENT.md` §8.3.

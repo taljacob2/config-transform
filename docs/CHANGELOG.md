@@ -6,14 +6,22 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
-### Added
+## [0.7.0-alpha] - 2026-09-04
 
-- **Self-describing overlays (`configtransform.json`) implemented** —
-  `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`'s fully-decided design (see the entry below) is now
-  real code. `manifest.json` and the fixed base→Environments→Clients rule are gone: one
-  `configtransform.json` per layer directory (`.configtransform/Environments/<Env>/` and
-  `.configtransform/Clients/<Client>/<Env>/`) declares an optional `extends` and a `resources[]`
-  list, each entry pairing a project's repo-root-relative path with its own optional `patch`.
+Breaking, following this repo's own precedent for a pre-1.0 breaking change (`0.2.0-alpha`'s
+manifest-schema rename): a MINOR bump, not a jump to `1.0.0` — see `CONFIG_MANAGEMENT.md` §10.8,
+unchanged by this release. `1.0.0` stays reserved for real-content validation, not for the size
+of a breaking change; this redesign hasn't cleared that bar any more than `0.6.0-alpha` had.
+
+### Changed
+
+- **Breaking: `manifest.json` and `--manifest`/`--file` are gone, replaced by self-describing
+  `configtransform.json` layers.** `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`'s fully-decided
+  design (see the entry below) is now real code. One `configtransform.json` per layer directory
+  (`.configtransform/Environments/<Env>/` and `.configtransform/Clients/<Client>/<Env>/`)
+  declares an optional `extends` and a `resources[]` list, each entry pairing a project's
+  repo-root-relative path with its own optional `patch` — no separate project-declaration file;
+  `resources[].path` points straight at the real config file.
   `Manifest`/`ManifestLoader`/`ManifestDiscovery`/`ManifestEntrySelector`/`ManifestLister`/
   `LayerResolution` (`ConfigTransform.Core`) are deleted, replaced by `LayerManifest`/
   `LayerManifestLoader`/`LayerPathResolver`/`LayerChain`/`LayerLister`. `XmlLayerMerger`/
@@ -37,11 +45,21 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   field instead of repo-root-relative, violating the design's own "every path is repo-root-relative,
   no exceptions" rule — fixed, with the regression coverage tightened from a loose substring check
   to exact-value assertions.
+  **Migration**: every consuming repo's `.configtransform/<Project>/manifest.json` +
+  `Environments/`/`Clients/` tree needs converting to the new
+  `.configtransform/Environments/<Env>/configtransform.json` +
+  `.configtransform/Clients/<Client>/<Env>/configtransform.json` shape (`docs/MANIFEST_SCHEMA.md`
+  has the full field reference and worked example) — no coexistence period, no automated
+  migration tool (no real solution repo has adopted the old schema in production yet, so there's
+  no live migration to script for). Every CI/CD invocation using `--manifest`/`--file` needs
+  updating to `--resource`.
   All fixture trees migrated to the new tree shape; `TempCliWorkspace` (both test projects)
   rebuilt around a synthetic repo root; `CLAUDE.md`/`MANIFEST_SCHEMA.md`/`GETTING_STARTED.md`/
   `ONBOARDING.md`/`USAGE.md`/`CONFIG_MANAGEMENT.md` §3/§4/§5.1/§9 rewritten in the same change.
   CLI unification (`ConfigTransform.Xml`/`ConfigTransform.Json` merging into one dispatcher)
   remains the one deliberately deferred piece — see `docs/ROADMAP.md`'s "Next up".
+
+### Added
 
 - `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`: **now fully decided** — replaces `manifest.json` and
   the fixed base→Environments→Clients rule with a Kustomize-style self-describing
@@ -62,6 +80,10 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   layer's `resources` entries and patch files, while the actual field-authoring logic —
   `XmlFieldAuthor`/`JsonFieldAuthor`, `$elemMatch`, verified defaults — stays untouched). See
   `docs/ROADMAP.md`'s "Next up" for what's left, which is implementation planning, not more design.
+
+## [0.6.0-alpha] - 2026-09-03
+
+### Added
 
 - **`set` support for JSON array-of-objects matching, via a `$elemMatch` overlay syntax** —
   closes the gap flagged below as "not implemented". `--match key=<array>` locates the array, one
