@@ -301,12 +301,16 @@ default next step.
   rotation, per-client key splitting, YAML/`.env` formats. A pilot against the *actual*
   employer-owned multi-client repo this design targets still needs a separate session in that
   organization's own Claude Code environment — this repo's own conversations can't touch that
-  repo directly. **Migration off `manifest.json` in progress as of `0.7.0-alpha2`**: contrary to
-  the earlier assumption above, a session with access to both repos can drive this directly (git
-  mv preserves a git-crypt-encrypted patch file's ciphertext unchanged across a rename, since the
-  filter only runs at checkout/smudge time — the tree relocation needs no decryption; only the new
-  `configtransform.json` layer files, which carry no secrets, need authoring from scratch). See
-  `config-transform-pilot`'s own `FINDINGS.md` for the worked migration and what it found.
+  repo directly. **Migration off `manifest.json` complete as of `0.7.0-alpha2`**: contrary to
+  the earlier assumption above, a session with access to both repos could drive this directly
+  (`git mv` preserves a git-crypt-encrypted patch file's ciphertext unchanged across a rename,
+  since the filter only runs at checkout/smudge time — the tree relocation needed no decryption;
+  only the 8 new `configtransform.json` layer files, which carry no secrets, needed authoring
+  from scratch). Merged in `config-transform-pilot#1`. The golden-output diff, `--list` sanity
+  checks, and `workflow_dispatch` CI runs called for by the migration plan still need a session
+  with the repo's real git-crypt key to actually run (this repo's own sessions never have it) —
+  see `config-transform-pilot`'s own `FINDINGS.md` for the worked migration, what it found, and
+  what's still unexercised.
 - **Deployment transport mechanism** (self-hosted runner vs. WinRM vs. Octopus Deploy) — not
   this repo's concern directly, but blocks the consuming architecture's
   `build-transformed.yml`. `CONFIG_MANAGEMENT.md` §8.3.
