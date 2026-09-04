@@ -145,7 +145,7 @@ the wrong thing. Target-file resolution (base/Environment/Client) extracted to
 XML's existing tests before adding JSON's). 33 new tests (`JsonFieldAuthorTests`,
 `JsonSetCommandCliTests`), including a regression test for a real bug caught during manual
 smoke-testing: a base-target write was dropping the rest of the document instead of updating it
-in place. See `docs/CHANGELOG.md`'s `[Unreleased]` section and `docs/USAGE.md`'s `set` section
+in place. See `docs/CHANGELOG.md`'s `[0.6.0-alpha]` section and `docs/USAGE.md`'s `set` section
 for the full reference on both.
 
 **Closed JSON's array-of-objects gap**, the one flagged as a real, previously-undesigned problem

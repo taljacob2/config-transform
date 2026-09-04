@@ -298,8 +298,9 @@ workflow, which should never need the key at all, per §8.1):
    (or `base64 -d` on Linux/macOS/Git Bash) before pointing `git-crypt unlock` at it.
 
 Forgetting this step and running the CLI anyway is a common enough mistake that the tool
-detects it directly: it names the manifest file, says it's still git-crypt encrypted, and tells
-you to run `git-crypt unlock` — rather than surfacing a raw, confusing JSON parse error
+detects it directly: it names the `configtransform.json` file, says it's still git-crypt
+encrypted, and tells you to run `git-crypt unlock` — rather than surfacing a raw, confusing JSON
+parse error
 (`'0x00' is an invalid start of a value`) for what is actually just ciphertext, not malformed
 JSON.
 
