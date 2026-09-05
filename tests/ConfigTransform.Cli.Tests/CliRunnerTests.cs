@@ -265,6 +265,28 @@ public class CliRunnerTests
     }
 
     [Fact]
+    public void Omitting_resource_for_a_real_run_fails_clearly_when_output_is_an_existing_file()
+    {
+        using var workspace = new TempCliWorkspace();
+        var outputPath = Path.Combine(workspace.RootPath, "already-a-file.txt");
+        File.WriteAllText(outputPath, "pre-existing content");
+
+        var stderr = new StringWriter();
+        var exitCode = CliRunner.Run(new[]
+        {
+            "--client", "ClientA", "--environment", "Production", "--output", outputPath
+        }, new StringWriter(), stderr, FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(1, exitCode);
+        var error = stderr.ToString();
+        Assert.Contains("already exists as a file", error);
+        Assert.Contains("Try: add --resource", error);
+
+        // Never touched: the pre-check fires before any resource is written.
+        Assert.Equal("pre-existing content", File.ReadAllText(outputPath));
+    }
+
+    [Fact]
     public void Omitting_resource_diff_covers_both_formats_in_one_call()
     {
         using var workspace = new TempCliWorkspace();

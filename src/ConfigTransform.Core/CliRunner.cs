@@ -169,6 +169,15 @@ public static class CliRunner
             var outputRoot = options.Output
                 ?? throw new InvalidOperationException("--output was not set for a real run.");
 
+            if (File.Exists(outputRoot))
+            {
+                throw new ArgumentException(
+                    $"--output '{outputRoot}' already exists as a file, but --resource was omitted, so " +
+                    "--output must be a directory (one file is written per resource).\n" +
+                    $"Try: add --resource <path> to target and overwrite that one file directly, " +
+                    "or point --output at a different or empty directory.");
+            }
+
             foreach (var resourcePath in owned)
             {
                 var engine = engines.Require(resourcePath);

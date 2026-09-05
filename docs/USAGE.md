@@ -109,7 +109,14 @@ in one invocation:
 
 - `--dry-run`/`--diff` print each resource's own result, labeled `=== <path> ===`.
 - A real run requires `--output <directory>` (not a file) and writes one file per resource, each
-  resource's own repo-root-relative path mirrored under that directory.
+  resource's own repo-root-relative path mirrored under that directory. If `--output` already
+  exists as a plain file — most naturally when the layer has only one resource and it happens to
+  share that exact name — the run fails fast with `Error: --output '<path>' already exists as a
+  file, but --resource was omitted...` rather than a raw filesystem exception; the fix is either
+  `--resource <path>` (to target and overwrite that one file directly) or a different/empty
+  `--output` directory. This is deliberately not auto-detected from "only one resource found" —
+  that would make the same command's behavior depend on how many resources happen to be in the
+  layer at the time, silently changing the day a second resource is added.
 - A resource whose extension no registered format engine handles is skipped with a note on stderr
   (e.g. "Skipped 1 resource(s) with no registered format handler; supported formats: .config,
   .xml, .json.") — not an error, and not silently dropped. This is the only remaining skip case:

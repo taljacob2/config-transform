@@ -170,6 +170,11 @@ report — `init`'s scan surfacing `.config/dotnet-tools.json`/`nuget.config` as
 resources — is fixed too: `InitScanner` now excludes both by exact filename, a narrow named
 exception alongside its existing directory excludes (see `docs/INIT_COMMAND_DESIGN.md`'s
 "Scanning: directory filters, not content filters" for why this doesn't reopen the broader
-no-filename-heuristics rule). Not yet tagged. See `docs/ROADMAP.md`'s "Next up" for what's
-actionable now versus what needs either a solution repo that doesn't exist yet or an owner
-decision.
+no-filename-heuristics rule). A third: omitting `--resource` treats `--output` as a directory, so
+an existing file at that path (most naturally, a layer whose only resource shares its exact name)
+used to fail with a raw, OS-worded `IOException`; `RunEveryResource` now checks up front and
+fails with a real error plus a `Try: add --resource ...` hint — deliberately not an
+auto-detect-the-single-resource shortcut, since that would make behavior depend on how many
+resources happen to be in the layer right now. Not yet tagged. See `docs/ROADMAP.md`'s "Next up"
+for what's actionable now versus what needs either a solution repo that doesn't exist yet or an
+owner decision.

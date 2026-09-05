@@ -18,6 +18,18 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   (`tsconfig.json`, a stray `package.json`) that's still left to the checklist. See
   `docs/INIT_COMMAND_DESIGN.md`'s "Scanning: directory filters, not content filters" for why this
   doesn't reopen the broader rule against filename/schema heuristics.
+- **A clear error when `--output` collides with an existing file in multi-resource mode**,
+  reported against the published tool: omitting `--resource` treats `--output` as a directory
+  (one file written per resource), but a bare filename that happened to already exist there (a
+  layer's only resource shares its own name, or any other file at that exact path) used to throw
+  a raw, unhelpful `IOException` — `Cannot create '...' because a file or directory with the same
+  name already exists.` on Windows, `The file '...' already exists.` on Linux — with no
+  indication of why or what to do. `RunEveryResource` now checks for this up front and fails with
+  `Error: --output '<path>' already exists as a file, but --resource was omitted...` plus
+  `Try: add --resource <path> to target and overwrite that one file directly, or point --output
+  at a different or empty directory.` Deliberately **not** auto-detected from "only one resource
+  found" — that would make the same command's behavior depend on how many resources happen to be
+  in the layer *right now*, silently changing meaning the day a second resource is added to it.
 
 ## [0.12.0-alpha] - 2026-09-05
 
