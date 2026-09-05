@@ -398,6 +398,18 @@ per-client/per-environment resource in any repo — unlike something merely conf
 `docs/INIT_COMMAND_DESIGN.md`'s "Scanning: directory filters, not content filters" for why this
 doesn't reopen that broader rule. 280 tests passing solution-wide. Not yet tagged/released.
 
+**A clear error instead of a raw `IOException` when `--output` collides with an existing file
+in multi-resource mode** — also reported against the published tool, from the same session as
+the `init` scan fix above: omitting `--resource` treats `--output` as a directory (one file per
+resource), and a bare filename that happened to already exist there — most naturally, a layer
+whose only resource shares that exact name — used to fail with an unhelpful, OS-worded exception
+instead of a real error. `RunEveryResource` now checks up front and fails with a message plus a
+`Try:` hint pointing at `--resource`. A tempting alternative — auto-detect "only one resource
+found" and silently write to that file instead — was considered and rejected: it would make the
+same command's meaning depend on how many resources happen to sit in the layer *right now*, so
+adding a second resource to that layer later (a routine change) would silently change what an
+existing, working command does. 281 tests passing solution-wide. Not yet tagged/released.
+
 ## Next up
 
 One item below is now actionable purely within this repo (see the first bullet); every other
