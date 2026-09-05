@@ -53,6 +53,32 @@ public class InitScannerTests
         Assert.Equal(["Project/App.config"], candidates);
     }
 
+    [Theory]
+    [InlineData(".config/dotnet-tools.json")]
+    [InlineData("nuget.config")]
+    public void Excludes_universal_dotnet_tooling_manifests_by_name(string excludedFile)
+    {
+        using var root = new TempDirectory();
+        WriteFile(root.Path, "Project/App.config", "<configuration/>");
+        WriteFile(root.Path, excludedFile, "{}");
+
+        var candidates = InitScanner.Scan(root.Path, root.Path, Engines);
+
+        Assert.Equal(["Project/App.config"], candidates);
+    }
+
+    [Fact]
+    public void Excluded_file_names_are_case_insensitive()
+    {
+        using var root = new TempDirectory();
+        WriteFile(root.Path, "Project/App.config", "<configuration/>");
+        WriteFile(root.Path, "NuGet.Config", "{}");
+
+        var candidates = InitScanner.Scan(root.Path, root.Path, Engines);
+
+        Assert.Equal(["Project/App.config"], candidates);
+    }
+
     [Fact]
     public void Returns_repo_root_relative_paths_even_when_scan_root_is_a_subdirectory()
     {

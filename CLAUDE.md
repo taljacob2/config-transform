@@ -165,5 +165,11 @@ actually reaches `configtransform` (`dotnet tool run` intercepts it as its own o
 `docs/USAGE.md`'s "Getting help" section for the `--` workaround); and an unrecognized flag close
 to a known one (edit distance ≤2) now gets a specific `Try: did you mean --output?` instead of
 the generic hint, via a small hand-maintained Levenshtein-distance check against the flags the
-switch recognizes. See `docs/ROADMAP.md`'s "Next up" for what's actionable now versus what needs
-either a solution repo that doesn't exist yet or an owner decision.
+switch recognizes. `config-transform-pilot` is re-pinned to `0.12.0-alpha`. A further real-user
+report — `init`'s scan surfacing `.config/dotnet-tools.json`/`nuget.config` as candidate
+resources — is fixed too: `InitScanner` now excludes both by exact filename, a narrow named
+exception alongside its existing directory excludes (see `docs/INIT_COMMAND_DESIGN.md`'s
+"Scanning: directory filters, not content filters" for why this doesn't reopen the broader
+no-filename-heuristics rule). Not yet tagged. See `docs/ROADMAP.md`'s "Next up" for what's
+actionable now versus what needs either a solution repo that doesn't exist yet or an owner
+decision.
