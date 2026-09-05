@@ -150,7 +150,8 @@ what the underlying engine already supported. `--list` and the single-resource r
 by a real user against the published tool: both now show the resolved chain in real application
 order (`base` first, then every layer outermost-first, connected by `↓`) with uniform `patched
 in`/`not patched in` wording, the resolution report's paths are always repo-relative, and a blank
-line separates that report from the merged content/diff that follows. Not yet released — still in
-`[Unreleased]`. See
-`docs/ROADMAP.md`'s "Next up" for what's actionable now versus what needs either a solution repo
-that doesn't exist yet or an owner decision.
+line separates that report from the merged content/diff that follows. The `--client` fix and
+`init` command are tagged as `0.9.0-alpha`; the readability rework is `0.11.0-alpha` (`0.10.0-alpha`
+is a wasted duplicate tag of `0.9.0-alpha` — see `docs/ROADMAP.md`'s "Current state" for the full
+drift note). See `docs/ROADMAP.md`'s "Next up" for what's actionable now versus what needs either
+a solution repo that doesn't exist yet or an owner decision.
