@@ -410,6 +410,16 @@ same command's meaning depend on how many resources happen to sit in the layer *
 adding a second resource to that layer later (a routine change) would silently change what an
 existing, working command does. 281 tests passing solution-wide. Not yet tagged/released.
 
+**`--diff` no longer leaks git's own file-identity header lines** — another report from the same
+session: `GitDiff` shells out to `git diff --no-index` against two throwaway temp files, and
+git's own 4-line header (`diff --git a/... b/...`, `index ...`, `--- a/...`, `+++ b/...`) named
+those OS temp paths directly (e.g. a Windows `AppData\Local\Temp\tmpXXXX.tmp` path) — meaningless
+noise, not real file identity, given the CLI already prints the actual resource path right above
+the diff. `GitDiff.Render` now strips exactly those 4 lines (matched by prefix once
+`--color=always`'s ANSI codes are stripped, never confusable with real hunk content since every
+body line already starts with its own `+`/`-`/` `/`\` diff marker) before returning the output.
+283 tests passing solution-wide. Not yet tagged/released.
+
 ## Next up
 
 One item below is now actionable purely within this repo (see the first bullet); every other

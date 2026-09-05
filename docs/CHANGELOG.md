@@ -30,6 +30,16 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   at a different or empty directory.` Deliberately **not** auto-detected from "only one resource
   found" — that would make the same command's behavior depend on how many resources happen to be
   in the layer *right now*, silently changing meaning the day a second resource is added to it.
+- **`--diff` no longer prints git's own file-identity header lines**, reported against the
+  published tool: `git diff --no-index` (which `GitDiff` shells out to, comparing two throwaway
+  temp files) prefixes its actual hunk output with 4 lines identifying the compared files —
+  `diff --git a/... b/...`, `index ...`, `--- a/...`, `+++ b/...` — but since `a`/`b` here are
+  always OS temp file paths (e.g. `C:\Users\...\AppData\Local\Temp\tmpXXXX.tmp`), those lines are
+  meaningless noise, not real file identity; the CLI already shows the actual resource path right
+  above the diff (`Resolving '<path>'` for one resource, `=== <path> ===` for every resource).
+  `GitDiff.Render` now strips exactly those 4 meta lines (matched by prefix after stripping
+  `--color=always`'s ANSI codes, never mistaken for real content since every hunk-body line
+  already starts with a `+`/`-`/` `/`\` diff marker) before returning the output.
 
 ## [0.12.0-alpha] - 2026-09-05
 
