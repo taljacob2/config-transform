@@ -379,10 +379,13 @@ the problem, not just behind a flag they may not reach for. An unrecognized flag
 one (edit distance ≤2, e.g. `--otuput`, `--lsit`, `--dif`) now gets a specific
 `Try: did you mean --output?` instead of that generic hint — plain Levenshtein distance against a
 small hand-maintained list of the flags the switch recognizes, no new dependency. 277 tests
-passing solution-wide. Versioned as `0.12.0-alpha` (`docs/CHANGELOG.md` section moved out of
-`[Unreleased]` in the same change, per `docs/RELEASING.md` step 1) — the owner still needs to tag
-and push `0.12.0-alpha` from current `main`; `config-transform-pilot` should be re-pinned to it
-once that tag exists and `publish.yml` has run green.
+passing solution-wide. Versioned as `0.12.0-alpha` — but the owner tagged and pushed it against
+the #18 merge commit *before* the CHANGELOG-versioning PR (#19) had merged, so `publish.yml`'s
+release-notes step found no `## [0.12.0-alpha]` section yet and created a GitHub Release with an
+empty body (the package itself published and smoke-tested fine — see `docs/CHANGELOG.md`'s
+`[0.12.0-alpha]` entry for the full drift note and the manual fix). `config-transform-pilot`
+should still be re-pinned to it — the package is real and correct regardless of the release notes
+gap.
 
 ## Next up
 
