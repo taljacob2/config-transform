@@ -63,7 +63,7 @@ public static class CliRunner
                 return 0;
             }
 
-            RunEveryResource(options, root, chain, engines, stdout, stderr);
+            RunEveryResource(options, root, targetLayerPath, chain, engines, stdout, stderr);
             return 0;
         }
         catch (Exception ex)
@@ -144,7 +144,7 @@ public static class CliRunner
     /// YAML, docs/CONFIG_MANAGEMENT.md §5.5) plugs into with no orchestration changes.
     /// </summary>
     private static void RunEveryResource(
-        CliOptions options, string root, IReadOnlyList<ResolvedLayer> chain,
+        CliOptions options, string root, string? targetLayerPath, IReadOnlyList<ResolvedLayer> chain,
         FormatEngineRegistry engines, TextWriter stdout, TextWriter stderr)
     {
         var allResources = LayerChain.ResolveAllResources(chain);
@@ -160,7 +160,31 @@ public static class CliRunner
 
         if (owned.Count == 0)
         {
-            stdout.WriteLine("(no resources with a registered format handler at this layer)");
+            if (allResources.Count > 0)
+            {
+                stdout.WriteLine("(no resources with a registered format handler at this layer)");
+            }
+            else if (targetLayerPath is not null && chain.Count == 0)
+            {
+                // The target layer file itself is missing, not just empty -- distinct from "this
+                // layer legitimately has no resources," and worth calling out since it's usually a
+                // typo'd --client/--environment rather than an intentionally-unconfigured layer
+                // (missing overlays elsewhere in a chain stay silent per CONFIG_MANAGEMENT.md §5.1;
+                // this is the target itself, the one layer whose absence a real caller most likely
+                // didn't intend).
+                var expected = LayerChain.ToRepoRelative(root, Path.GetFullPath(targetLayerPath, root));
+                var target = options.Client is not null
+                    ? $"--client '{options.Client}' --environment '{options.Environment}'"
+                    : $"--environment '{options.Environment}'";
+                stdout.WriteLine(
+                    $"(no configtransform.json found for {target} -- expected at '{expected}'.\n" +
+                    "Try: check the spelling, or run 'configtransform init' to scaffold it.)");
+            }
+            else
+            {
+                stdout.WriteLine("(no resources with a registered format handler at this layer)");
+            }
+
             return;
         }
 
