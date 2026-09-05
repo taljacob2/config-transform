@@ -41,6 +41,46 @@ public class CliRunnerTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
+    public void DryRun_accepts_environment_alone_targeting_that_environment_layer_with_no_client(bool xml)
+    {
+        using var workspace = new TempCliWorkspace();
+        var resource = xml ? workspace.XmlResourcePath : workspace.JsonResourcePath;
+
+        var stdout = new StringWriter();
+        var exitCode = CliRunner.Run(new[]
+        {
+            "--resource", resource, "--environment", "Production", "--dry-run"
+        }, stdout, new StringWriter(), FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(0, exitCode);
+        // The Environment layer's own override, not the Client layer's (no --client given).
+        Assert.Contains("https://prod.example.com", stdout.ToString());
+        Assert.DoesNotContain("https://clienta.example.com", stdout.ToString());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void DryRun_accepts_neither_client_nor_environment_showing_the_raw_base_file(bool xml)
+    {
+        using var workspace = new TempCliWorkspace();
+        var resource = xml ? workspace.XmlResourcePath : workspace.JsonResourcePath;
+
+        var stdout = new StringWriter();
+        var exitCode = CliRunner.Run(new[]
+        {
+            "--resource", resource, "--dry-run"
+        }, stdout, new StringWriter(), FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("https://dev.example.com", stdout.ToString());
+        Assert.DoesNotContain("https://prod.example.com", stdout.ToString());
+        Assert.DoesNotContain("https://clienta.example.com", stdout.ToString());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
     public void Diff_prints_a_diff_and_writes_nothing_to_disk(bool xml)
     {
         using var workspace = new TempCliWorkspace();

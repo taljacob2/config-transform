@@ -14,8 +14,8 @@ supports differs by format for reasons that come from the format itself, not an 
 
 ```
 --resource, -r <repo-root-relative path>   optional for a resolve/--list — omit for every resource the layer touches; required for `set`
---client, -c <ClientName>                  required for a resolve; optional for --list/set
---environment, -e <EnvironmentName>        required for a resolve; optional for --list (with --resource) and set
+--client, -c <ClientName>                  optional everywhere — requires --environment (no client-only layer); see "Resolving" below
+--environment, -e <EnvironmentName>        optional everywhere — see "Resolving" below
 --output, -o <path>                        required for a real run (omit only with --dry-run/--diff) — a file with --resource, a directory without it
 --dry-run                                  print the fully merged result to stdout; nothing written to disk
 --diff                                     print a unified diff (unpatched vs. merged) via `git diff --no-index`; nothing written to disk
@@ -53,8 +53,13 @@ hardcoded copy — it can't drift from what the binary actually handles.
 
 ## Resolving `--client`/`--environment` to a layer
 
-- Neither given → the base file itself, no layer at all (only meaningful for `set`; every other
-  command requires both).
+Both are optional, uniformly across every command (a resolve/dry-run/diff/real-run, `--list`,
+`set`) — `--client` without `--environment` is the only combination that's ever an error (there's
+no client-only layer):
+
+- Neither given → the base file itself, no layer at all — its own real, meaningful case (e.g.
+  `configtransform --resource App.config --dry-run` shows the file completely unpatched), not
+  just an internal detail `set` happens to use.
 - `--environment` only → `.configtransform/Environments/<Environment>/configtransform.json`.
 - Both given → `.configtransform/Clients/<Client>/<Environment>/configtransform.json`, which
   typically (not necessarily) `extends` the matching Environment layer.

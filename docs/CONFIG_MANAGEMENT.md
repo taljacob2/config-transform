@@ -274,8 +274,8 @@ mixed-format layer resolves in a single call:
 
 ```
 --resource <repo-root-relative path>   optional — omit for every resource the layer touches
---client <ClientName>                  required
---environment <EnvironmentName>        required
+--client <ClientName>                  optional — requires --environment (no client-only layer)
+--environment <EnvironmentName>        optional — targets that Environment layer alone; neither given targets the base file directly
 --output <path>                        real runs only — where the merged result is written (CI passes the publish dir path; a directory when --resource is omitted)
 --dry-run                              print the fully merged result to stdout; nothing is written to disk
 --diff                                 print a unified diff (unpatched vs. fully merged) using `git diff --no-index`; nothing is written to disk except throwaway temp files, cleaned up immediately

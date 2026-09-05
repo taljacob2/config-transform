@@ -59,21 +59,37 @@ public class CliOptionsParserTests
     }
 
     [Fact]
-    public void Missing_client_throws()
+    public void A_real_run_accepts_environment_alone_targeting_that_environment_layer()
     {
-        Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
+        var options = CliOptionsParser.Parse(new[]
         {
             "--environment", "Production", "--output", "out.config"
-        }));
+        });
+
+        Assert.Null(options.Client);
+        Assert.Equal("Production", options.Environment);
     }
 
     [Fact]
-    public void Missing_environment_throws()
+    public void A_real_run_accepts_neither_client_nor_environment_targeting_the_base_file_directly()
     {
-        Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
+        var options = CliOptionsParser.Parse(new[]
+        {
+            "--resource", "Project/App.config", "--output", "out.config"
+        });
+
+        Assert.Null(options.Client);
+        Assert.Null(options.Environment);
+    }
+
+    [Fact]
+    public void A_real_run_rejects_client_without_environment()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
         {
             "--client", "ClientA", "--output", "out.config"
         }));
+        Assert.Contains("--client requires --environment", ex.Message);
     }
 
     [Fact]
