@@ -6,6 +6,8 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.13.0-alpha] - 2026-09-05
+
 ### Fixed
 
 - **`init`'s scan no longer suggests `dotnet-tools.json`/`nuget.config` as candidate resources.**
