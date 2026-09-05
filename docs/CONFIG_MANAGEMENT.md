@@ -177,12 +177,25 @@ indicates something is actually broken, not an intentional absence.
 The tool does not attempt to detect or guess typos (e.g. a `configtransform.json` under a
 misspelled `Environments/Prodution/` folder) — it isn't in a position to know intent, and
 shouldn't try. What it does instead: every single-resource run (`--dry-run`, `--diff`, and real
-runs alike) explicitly reports, for each layer in the resolved chain, whether the resource was
-listed and patched (e.g. `.configtransform/Environments/Production/configtransform.json:
-'ProjectA.Framework/App.config' patched, applying (...)`) or not (`not listed, skipping` /
-`listed with no patch, skipping`). This keeps a typo visible to a human reading the output —
-because the layer they expected to patch the resource is reported as not doing so — without the
-tool trying to be clever about whether an absence was intentional.
+runs alike) prints a `Resolving '<resource path>'` report before the merged content/diff, showing
+the resource's full chain in real application order — `base` first, then every layer
+outermost-first, each labeled `patched in: <path>` or `not patched in`, connected by `↓`, every
+path repo-relative and never abbreviated or omitted:
+```
+Resolving 'ProjectA.Framework/App.config'
+    base
+      ProjectA.Framework/App.config
+      ↓
+    .configtransform/Environments/Production/configtransform.json
+      patched in: .configtransform/Environments/Production/patch-ProjectA.Framework-App.config.xml
+      ↓
+    .configtransform/Clients/Acme/Production/configtransform.json
+      not patched in
+```
+This keeps a typo visible to a human reading the output — because the layer they expected to
+patch the resource is reported as not doing so — without the tool trying to be clever about
+whether an absence was intentional. A blank line always separates this report from the merged
+content or diff that follows it, so the two are never visually run together.
 
 ### 5.2 XML (.NET Framework)
 

@@ -331,6 +331,20 @@ across every mode. `docs/INIT_COMMAND_DESIGN.md`'s original three-invocation dem
 Environment-only, full chain) is restored, no correction needed anymore. 264 tests passing
 solution-wide. Not yet tagged/released — see `docs/RELEASING.md`.
 
+**Clearer chain output for `--list` and the single-resource resolution report** — reported
+against the published tool by a real user working against `config-transform-pilot`, worked out
+interactively into an agreed format. `--list` now walks the resolved chain in real application
+order (`base` first, then every layer outermost-first, connected by `↓`) instead of showing the
+target layer first and ancestors after; wording is uniformly `patched in`/`not patched in`
+everywhere (no more `patched here`/`also patched in`/`inherited from`/`using the base file
+directly`). The resolution report printed before every single-resource `--dry-run`/`--diff`/real
+run got the same base→arrow→layer shape, with a two-line entry per layer (label, then an indented
+`patched in: <path>`/`not patched in` detail line) since patch paths are too long to trail on the
+label line, every path shown repo-relative and never omitted, and a blank line now separates that
+report from the merged content/diff that follows. New `LayerChain.ChainStep`/
+`ResolvedResource.Steps` back the new display; `ResolvedResource.Report` is unchanged. 269 tests
+passing solution-wide. Not yet tagged/released — see `docs/RELEASING.md`.
+
 ## Next up
 
 One item below is now actionable purely within this repo (see the first bullet); every other

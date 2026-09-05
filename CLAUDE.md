@@ -145,6 +145,12 @@ override). Along the way, fixed a real patch-filename stutter shared with `set`
 (`PatchFileNaming`), and — reported independently by a real user against the published tool —
 fixed `--client`/`--environment` to be optional everywhere, uniformly (`--client` requires
 `--environment`; neither is otherwise required), matching what `--list`/`set` already allowed and
-what the underlying engine already supported. Not yet released — still in `[Unreleased]`. See
+what the underlying engine already supported. `--list` and the single-resource resolution report
+(printed before every `--dry-run`/`--diff`/real run) were also reworked for readability, reported
+by a real user against the published tool: both now show the resolved chain in real application
+order (`base` first, then every layer outermost-first, connected by `↓`) with uniform `patched
+in`/`not patched in` wording, the resolution report's paths are always repo-relative, and a blank
+line separates that report from the merged content/diff that follows. Not yet released — still in
+`[Unreleased]`. See
 `docs/ROADMAP.md`'s "Next up" for what's actionable now versus what needs either a solution repo
 that doesn't exist yet or an owner decision.

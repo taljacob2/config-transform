@@ -28,30 +28,21 @@ public static class LayerLister
             stdout.WriteLine();
             stdout.WriteLine($"  {resourcePath}");
 
-            var targetEntry = target.Manifest.Resources.FirstOrDefault(r => LayerChain.PathsEqual(root, r.Path, resourcePath));
-            var priorLayers = chain.Take(chain.Count - 1).ToList();
-
-            if (targetEntry?.Patch is not null)
+            var rows = new List<(string Label, string Status)> { ("base", "(always applied)") };
+            foreach (var layer in chain)
             {
-                stdout.WriteLine($"    patched here: {targetEntry.Patch}");
-
-                foreach (var layer in priorLayers)
-                {
-                    var entry = layer.Manifest.Resources.FirstOrDefault(r => LayerChain.PathsEqual(root, r.Path, resourcePath));
-                    if (entry?.Patch is not null)
-                        stdout.WriteLine($"    also patched in: {LayerChain.ToRepoRelative(root, layer.Path)}");
-                }
-
-                continue;
+                var entry = layer.Manifest.Resources.FirstOrDefault(r => LayerChain.PathsEqual(root, r.Path, resourcePath));
+                var status = entry?.Patch is not null ? "patched in" : "not patched in";
+                rows.Add((LayerChain.ToRepoRelative(root, layer.Path), status));
             }
 
-            var inheritedFrom = priorLayers.AsEnumerable().Reverse()
-                .FirstOrDefault(layer => layer.Manifest.Resources
-                    .Any(r => LayerChain.PathsEqual(root, r.Path, resourcePath) && r.Patch is not null));
-
-            stdout.WriteLine(inheritedFrom is null
-                ? "    not patched anywhere — using the base file directly"
-                : $"    not patched here — inherited from {LayerChain.ToRepoRelative(root, inheritedFrom.Path)}");
+            var width = rows.Max(row => row.Label.Length);
+            for (var i = 0; i < rows.Count; i++)
+            {
+                stdout.WriteLine($"    {rows[i].Label.PadRight(width)}  {rows[i].Status}");
+                if (i < rows.Count - 1)
+                    stdout.WriteLine("      ↓");
+            }
         }
     }
 

@@ -94,6 +94,12 @@ public class LayerChainTests
         Assert.EndsWith("env.xml", resolved.PatchPathsInOrder[0]);
         Assert.EndsWith("client.xml", resolved.PatchPathsInOrder[1]);
         Assert.All(resolved.Report, line => Assert.DoesNotContain("not listed", line));
+
+        Assert.Equal(2, resolved.Steps.Count);
+        Assert.Contains("Environments/Production/configtransform.json", resolved.Steps[0].Label);
+        Assert.EndsWith("env.xml", resolved.Steps[0].PatchPath);
+        Assert.Contains("Clients/Acme/Production/configtransform.json", resolved.Steps[1].Label);
+        Assert.EndsWith("client.xml", resolved.Steps[1].PatchPath);
     }
 
     [Fact]
@@ -148,6 +154,8 @@ public class LayerChainTests
 
         Assert.Empty(resolved.PatchPathsInOrder);
         Assert.Contains(resolved.Report, line => line.Contains("not listed"));
+        Assert.Single(resolved.Steps);
+        Assert.Null(resolved.Steps[0].PatchPath);
     }
 
     [Fact]
@@ -165,6 +173,8 @@ public class LayerChainTests
 
         Assert.Empty(resolved.PatchPathsInOrder);
         Assert.Contains(resolved.Report, line => line.Contains("listed with no patch"));
+        Assert.Single(resolved.Steps);
+        Assert.Null(resolved.Steps[0].PatchPath);
     }
 
     [Fact]

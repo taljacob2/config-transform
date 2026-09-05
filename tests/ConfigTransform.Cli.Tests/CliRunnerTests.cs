@@ -41,6 +41,67 @@ public class CliRunnerTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
+    public void DryRun_prints_a_resolution_report_with_a_blank_line_before_the_merged_content(bool xml)
+    {
+        using var workspace = new TempCliWorkspace();
+        var resource = xml ? workspace.XmlResourcePath : workspace.JsonResourcePath;
+
+        var stdout = new StringWriter();
+
+        var exitCode = CliRunner.Run(new[]
+        {
+            "--resource", resource,
+            "--client", "ClientA", "--environment", "Production", "--dry-run"
+        }, stdout, new StringWriter(), FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(0, exitCode);
+        var output = stdout.ToString();
+
+        Assert.Contains($"Resolving '{resource}'", output);
+        Assert.Contains("base", output);
+
+        var environmentIndex = output.IndexOf("Environments/Production/configtransform.json", StringComparison.Ordinal);
+        var clientIndex = output.IndexOf("Clients/ClientA/Production/configtransform.json", StringComparison.Ordinal);
+        Assert.True(environmentIndex >= 0 && clientIndex >= 0);
+        Assert.True(environmentIndex < clientIndex);
+
+        // A blank line separates the report from the merged content that follows.
+        var lines = output.Replace("\r\n", "\n").Split('\n');
+        var blankLineIndex = Array.FindIndex(lines, l => l.Length == 0);
+        Assert.True(blankLineIndex > 0);
+        Assert.Contains("clienta.example.com", string.Join('\n', lines.Skip(blankLineIndex + 1)));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Diff_prints_a_resolution_report_with_a_blank_line_before_the_diff(bool xml)
+    {
+        using var workspace = new TempCliWorkspace();
+        var resource = xml ? workspace.XmlResourcePath : workspace.JsonResourcePath;
+
+        var stdout = new StringWriter();
+
+        var exitCode = CliRunner.Run(new[]
+        {
+            "--resource", resource,
+            "--client", "ClientA", "--environment", "Production", "--diff"
+        }, stdout, new StringWriter(), FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(0, exitCode);
+        var output = stdout.ToString();
+
+        Assert.Contains($"Resolving '{resource}'", output);
+
+        var lines = output.Replace("\r\n", "\n").Split('\n');
+        var blankLineIndex = Array.FindIndex(lines, l => l.Length == 0);
+        Assert.True(blankLineIndex > 0);
+        Assert.Contains("clienta.example.com", string.Join('\n', lines.Skip(blankLineIndex + 1)));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
     public void DryRun_accepts_environment_alone_targeting_that_environment_layer_with_no_client(bool xml)
     {
         using var workspace = new TempCliWorkspace();
@@ -242,9 +303,35 @@ public class CliRunnerTests
         Assert.Contains("extends:", output);
         Assert.Contains(workspace.XmlResourcePath, output);
         Assert.Contains(workspace.JsonResourcePath, output);
-        Assert.Contains("patched here:", output);
+        Assert.Contains("patched in", output);
         Assert.Equal(before, Snapshot(workspace.RootPath));
         Assert.Empty(stderr.ToString());
+    }
+
+    [Fact]
+    public void List_shows_the_chain_in_real_application_order_base_then_environment_then_client()
+    {
+        using var workspace = new TempCliWorkspace();
+
+        var stdout = new StringWriter();
+
+        var exitCode = CliRunner.Run(new[]
+        {
+            "--list", "--client", "ClientA", "--environment", "Production"
+        }, stdout, new StringWriter(), FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(0, exitCode);
+        var output = stdout.ToString();
+
+        // Skip past the layer-level "extends:" header line, which names the Environment layer
+        // too -- the ordering under test is within a resource's own chain block, not the header.
+        var baseIndex = output.IndexOf("    base", StringComparison.Ordinal);
+        var environmentIndex = output.IndexOf("Environments/Production/configtransform.json", baseIndex, StringComparison.Ordinal);
+        var clientIndex = output.IndexOf("Clients/ClientA/Production/configtransform.json", baseIndex, StringComparison.Ordinal);
+
+        Assert.True(baseIndex >= 0 && environmentIndex >= 0 && clientIndex >= 0);
+        Assert.True(baseIndex < environmentIndex);
+        Assert.True(environmentIndex < clientIndex);
     }
 
     [Theory]
