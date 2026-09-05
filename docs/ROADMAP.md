@@ -329,7 +329,7 @@ tool (`--environment ... --resource ...` with no `--client`) and asked why. Fixe
 `--client` now requires `--environment` (no client-only layer), nothing else does — uniform
 across every mode. `docs/INIT_COMMAND_DESIGN.md`'s original three-invocation demo (base-only,
 Environment-only, full chain) is restored, no correction needed anymore. 264 tests passing
-solution-wide. Not yet tagged/released — see `docs/RELEASING.md`.
+solution-wide. Versioned as `0.9.0-alpha` (see below).
 
 **Clearer chain output for `--list` and the single-resource resolution report** — reported
 against the published tool by a real user working against `config-transform-pilot`, worked out
@@ -343,7 +343,22 @@ run got the same base→arrow→layer shape, with a two-line entry per layer (la
 label line, every path shown repo-relative and never omitted, and a blank line now separates that
 report from the merged content/diff that follows. New `LayerChain.ChainStep`/
 `ResolvedResource.Steps` back the new display; `ResolvedResource.Report` is unchanged. 269 tests
-passing solution-wide. Not yet tagged/released — see `docs/RELEASING.md`.
+passing solution-wide. Versioned as `0.11.0-alpha` — see the drift note right below for why it
+isn't `0.10.0-alpha`.
+
+**`0.9.0-alpha` is live; `0.10.0-alpha` is a wasted, identical re-tag; `0.11.0-alpha` is the real
+next version to pin to.** The owner tagged and pushed both `0.9.0-alpha` and `0.10.0-alpha`
+against the exact same commit (`de7e8c2`, the `--client`-optionality fix above) — 14 minutes
+apart, before this session's `--list`/resolution-report readability PR (`#16`) had merged to
+`main` — without first following `docs/RELEASING.md`'s step 1 either time, the same kind of drift
+already flagged for `0.4.1`/`0.6.0-alpha`. Both tags' `publish.yml` runs succeeded, so both are
+real, installable packages, but `0.10.0-alpha` has no code changes over `0.9.0-alpha` — a spent
+version number. Since a tag can't be moved once its packages are pushed (`docs/RELEASING.md`'s
+own recovery policy), the fix is a fresh tag: `docs/CHANGELOG.md` now has proper `## [0.9.0-alpha]`
+(the init command + `--client` fix), `## [0.10.0-alpha]` (backfilled drift note, points at the
+same commit as `0.9.0-alpha`), and `## [0.11.0-alpha]` (the `--list`/resolution-report work,
+`#16`) sections — the owner still needs to tag and push `0.11.0-alpha` from current `main`.
+`config-transform-pilot` should be pinned to `0.11.0-alpha` once that tag exists, not `0.10.0-alpha`.
 
 ## Next up
 
