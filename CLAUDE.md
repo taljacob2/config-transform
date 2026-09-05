@@ -175,6 +175,9 @@ an existing file at that path (most naturally, a layer whose only resource share
 used to fail with a raw, OS-worded `IOException`; `RunEveryResource` now checks up front and
 fails with a real error plus a `Try: add --resource ...` hint — deliberately not an
 auto-detect-the-single-resource shortcut, since that would make behavior depend on how many
-resources happen to be in the layer right now. Not yet tagged. See `docs/ROADMAP.md`'s "Next up"
-for what's actionable now versus what needs either a solution repo that doesn't exist yet or an
-owner decision.
+resources happen to be in the layer right now. A fourth: `--diff`'s output no longer leaks git's
+own file-identity header lines (`diff --git a/... b/...`, `index ...`, `--- a/...`, `+++ b/...`)
+that named the underlying OS temp files `GitDiff` diffs against — meaningless given the CLI
+already shows the real resource path above the diff; `GitDiff.Render` strips exactly those 4
+lines now. Not yet tagged. See `docs/ROADMAP.md`'s "Next up" for what's actionable now versus what
+needs either a solution repo that doesn't exist yet or an owner decision.

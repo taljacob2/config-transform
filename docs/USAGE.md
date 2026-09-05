@@ -437,4 +437,9 @@ before unification; only how they're selected and invoked moved into one shared 
 
 For `--diff`, the same base file is also rendered with *no* patches applied (through the identical
 merge code path, to avoid spurious serialization-only differences) and the two are compared via
-`GitDiff` (`ConfigTransform.Core`).
+`GitDiff` (`ConfigTransform.Core`), which shells out to `git diff --no-index` against two
+throwaway temp files. `GitDiff.Render` strips git's own 4-line file-identity header (`diff --git
+a/... b/...`, `index ...`, `--- a/...`, `+++ b/...`) from the output before returning it — those
+`a`/`b` paths are always OS temp file paths, meaningless to the end user and not real file
+identity, unlike the resource path the CLI already shows above the diff (`Resolving '<path>'` for
+one resource, `=== <path> ===` for every resource).
