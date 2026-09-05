@@ -248,18 +248,32 @@ to be split into its own separate change instead.
 ## Scanning: directory filters, not content filters
 
 The scan excludes only structural noise every project regardless of ecosystem would want excluded
-— `.git/`, `.configtransform/` itself, `bin/`, `obj/`, `node_modules/` — and nothing else. It does
-**not** try to guess which `.json`/`.config`/`.xml` files are "really" config (by name,
-by schema, by location) — `CLAUDE.md`'s own core-concepts rule is explicit that this tool never
-special-cases by filename or schema, and scanning is not exempt just because it isn't a merge
-operation. The numbered checklist is where that judgment call happens, made by the person running
-`init`, not guessed by the tool. This does mean a `--template`-free, `--yes`-free scan can surface
-files a human wouldn't consider "config" (a `tsconfig.json`, a `package.json` sitting outside
-`node_modules/`) — that's accepted; deselecting three extra checklist lines is a small, one-time
-cost, and it's strictly safer than a content heuristic silently missing a real resource because it
-didn't look "config-shaped" (e.g. `docs/CLAUDE.md`'s own `GenericJson`/`GenericXml` test fixtures
-exist specifically to prove this tool never assumes a schema — a smart-filter scan would
-contradict that same principle it's built next to).
+— `.git/`, `.configtransform/` itself, `bin/`, `obj/`, `node_modules/` — plus, as of a real user's
+report against the published tool, two exact filenames that are universal .NET/NuGet *tooling*
+manifests rather than application config: `dotnet-tools.json` (always the local tool manifest
+`dotnet new tool-manifest` creates, conventionally under `.config/`) and `nuget.config` (the
+package-source manifest). Beyond those two, it does **not** try to guess which `.json`/`.config`/
+`.xml` files are "really" config (by name, by schema, by location) — `CLAUDE.md`'s own
+core-concepts rule is explicit that this tool never special-cases by filename or schema, and
+scanning is not exempt just because it isn't a merge operation. The numbered checklist is where
+that judgment call happens, made by the person running `init`, not guessed by the tool. This does
+mean a `--template`-free, `--yes`-free scan can surface files a human wouldn't consider "config"
+(a `tsconfig.json`, a `package.json` sitting outside `node_modules/`) — that's accepted;
+deselecting a couple of extra checklist lines is a small, one-time cost, and it's strictly safer
+than a content heuristic silently missing a real resource because it didn't look "config-shaped"
+(e.g. `docs/CLAUDE.md`'s own `GenericJson`/`GenericXml` test fixtures exist specifically to prove
+this tool never assumes a schema — a smart-filter scan would contradict that same principle it's
+built next to).
+
+**Why `dotnet-tools.json`/`nuget.config` are a named exception, not a crack in that rule**: unlike
+a `tsconfig.json` or `package.json` — which *could* plausibly be a real resource in some repo, so
+guessing wrong either way carries real risk — these two are never a per-client/per-environment
+application resource in *any* repo; they configure the development toolchain itself (which dotnet
+tools are installed, which NuGet feeds to use), not anything a client or environment would ever
+need overridden. Excluding them by exact name has no "guessed wrong and silently missed a real
+resource" failure mode a schema/content heuristic would, so it doesn't reopen the door the
+directory-exclude precedent already establishes: both lists exclude by exact, hardcoded name, not
+by inferring intent from content or shape.
 
 ## Manifest shape
 
@@ -348,6 +362,7 @@ rather than a one-shot, destructive bootstrap.
 | Mode selection | Two hard modes (interactive / quiet), chosen up front by flag presence + TTY check | Flags pre-fill/skip individual prompts, blending both modes | Simpler to implement and reason about — each mode is one clean validation branch, matching how `CliOptionsParser` already keeps `set`/`--list`/real-run validation in separate branches rather than merging partial states. Progressive flag-prefill is a real usability win but genuinely separable; deferred, see "Open items." |
 | CI safety | Refuse to enter interactive mode (or continue mid-wizard) when stdin isn't a real terminal; error immediately instead | Silently read whatever's on redirected/empty stdin | Same concern already on record in `FIELD_AUTHORING_DESIGN.md` for why `set` has no prompt at all — a CI run must fail loud, not hang or apply blank answers. |
 | Scan filtering | Directory-level excludes only (`.git/`, `.configtransform/`, `bin/`, `obj/`, `node_modules/`) | Content/filename heuristics for "is this really a config file" | `CLAUDE.md`'s core-concepts rule: never special-case by filename or schema. The checklist is where human judgment belongs; the tool only excludes structural noise every project has regardless of ecosystem. |
+| Scan filtering, later addition | Also exclude two exact filenames — `dotnet-tools.json`, `nuget.config` | Leave them to the checklist, same as every other candidate | Reported against the published tool: `init` surfaced `.config/dotnet-tools.json` (this very repo's own tool manifest) as a checklist candidate. Unlike a `tsconfig.json`/`package.json` (which could plausibly be a real resource somewhere), these two are never a per-client/per-environment application resource in any repo — excluding them by exact name carries none of the "guessed wrong" risk a content/schema heuristic would, so it's a named exception to the row above, not a reversal of it. See "Scanning: directory filters, not content filters" for the full reasoning. |
 | Environment layer lists every selected resource, even with no `patch` | Yes, always | Leave resources unlisted until a real override exists via `set` | `LayerChain.ResolveAllResources`'s no-`--resource` union only sees resources actually present in some layer's `resources[]`; skipping this would make a freshly `init`'d tree resolve to nothing until `set` ran once per resource, defeating the point of scaffolding. |
 | Flag identity for environments/clients | Reuse `--environment/-e`/`--client/-c`, repeatable in `init` mode | New `--environments`/`--clients` plural flags | Keeps the flag vocabulary from growing for a mode-scoped arity difference — the same pattern `--match`/`--set` already use (repeatable, no separate plural sibling) rather than a new naming convention. |
 | Idempotent re-runs | Merge into existing manifests (mirrors `SetTargetResolver.EnsureResourceListed`) | Refuse if `.configtransform/` already has content, or always overwrite | Onboarding a second client, or a newly-added resource, later is a normal case, not an error — same convention `set` already established. |

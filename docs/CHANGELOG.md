@@ -6,6 +6,19 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+### Fixed
+
+- **`init`'s scan no longer suggests `dotnet-tools.json`/`nuget.config` as candidate resources.**
+  Reported against the published tool: a plain `configtransform init` in this very repo surfaced
+  `.config/dotnet-tools.json` (its own local tool manifest) and `nuget.config` on the checklist
+  alongside real application config. `InitScanner` excludes both by exact filename now, alongside
+  its existing directory-level excludes (`.git`, `.configtransform`, `bin`, `obj`,
+  `node_modules`) — a narrow, named exception since these two are never a legitimate
+  per-client/per-environment resource in any repo, unlike something merely config-*shaped*
+  (`tsconfig.json`, a stray `package.json`) that's still left to the checklist. See
+  `docs/INIT_COMMAND_DESIGN.md`'s "Scanning: directory filters, not content filters" for why this
+  doesn't reopen the broader rule against filename/schema heuristics.
+
 ## [0.12.0-alpha] - 2026-09-05
 
 **Tagged before this section existed on `main`.** The owner pushed the `0.12.0-alpha` tag against

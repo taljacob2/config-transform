@@ -383,9 +383,20 @@ passing solution-wide. Versioned as `0.12.0-alpha` — but the owner tagged and 
 the #18 merge commit *before* the CHANGELOG-versioning PR (#19) had merged, so `publish.yml`'s
 release-notes step found no `## [0.12.0-alpha]` section yet and created a GitHub Release with an
 empty body (the package itself published and smoke-tested fine — see `docs/CHANGELOG.md`'s
-`[0.12.0-alpha]` entry for the full drift note and the manual fix). `config-transform-pilot`
-should still be re-pinned to it — the package is real and correct regardless of the release notes
-gap.
+`[0.12.0-alpha]` entry for the full drift note; the release notes still need a manual paste from
+that entry, the one part of this drift that isn't yet closed). `config-transform-pilot` has been
+re-pinned to `0.12.0-alpha` and re-verified via a real dispatch (`config-transform-pilot#4`,
+merged).
+
+**`init`'s scan no longer suggests universal .NET/NuGet tooling manifests as candidate
+resources** — reported against the published tool: a plain `configtransform init` run in this
+very repo surfaced `.config/dotnet-tools.json` and `nuget.config` on the checklist alongside real
+application config. `InitScanner` gained a second, narrow named-exclude list (alongside its
+existing directory excludes) for exactly these two filenames, since neither is ever a legitimate
+per-client/per-environment resource in any repo — unlike something merely config-*shaped*
+(`tsconfig.json`, a stray `package.json`), which is deliberately still left to the checklist; see
+`docs/INIT_COMMAND_DESIGN.md`'s "Scanning: directory filters, not content filters" for why this
+doesn't reopen that broader rule. 280 tests passing solution-wide. Not yet tagged/released.
 
 ## Next up
 
