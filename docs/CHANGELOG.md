@@ -25,6 +25,12 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   (it's swallowed by `dotnet tool run`'s own argument parser; see `docs/USAGE.md`'s "Getting
   help" section for the documented `--` workaround), so a one-line, targeted hint at the point of
   the actual error is more likely to be seen than a pointer to `--help`.
+- **"Did you mean" suggestions for a mistyped flag.** An unrecognized argument within edit
+  distance 2 of a known flag (e.g. `--otuput`, `--lsit`, `--dif`) now gets
+  `Try: did you mean --output?` instead of the generic `Try: configtransform --help ...` hint;
+  anything farther off still falls back to the generic hint. Plain Levenshtein distance against
+  a small hand-maintained list of the flags `CliOptionsParser`'s switch recognizes — no new
+  dependency.
 
 ## [0.11.0-alpha] - 2026-09-05
 

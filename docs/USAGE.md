@@ -62,6 +62,11 @@ Error: --output is required for a real run (omit only with --dry-run or --diff).
 Try: add --output <path>, or pass --dry-run/--diff to preview instead of writing.
 ```
 
+An unrecognized flag gets the same treatment, but as a spelling suggestion when one fits: a typo
+within edit distance 2 of a known flag (e.g. `--otuput`, `--lsit`, `--dif`) prints
+`Try: did you mean --output?` instead of the generic hint; anything farther off falls back to
+`Try: configtransform --help to see every valid flag.`
+
 **Running via `dotnet tool run` swallows `--help`/`-h` before it reaches `configtransform`.**
 `dotnet tool run <name> [<toolArguments>...] [options]` treats `--help`/`-h`/`-?` as its *own*
 option (you'll see `dotnet`'s "Run a local tool" help instead of ours) — this is a `dotnet` CLI

@@ -375,8 +375,11 @@ the `--` separator workaround (`dotnet tool run configtransform -- --help`). Giv
 `--help` is easy to miss in practice, every CLI validation error now also gets a one-line `Try:`
 example specific to that mistake (e.g. missing `--output` on a real run suggests adding
 `--output <path>` or using `--dry-run`/`--diff`), so the fix is visible right where the user hit
-the problem, not just behind a flag they may not reach for. 272 tests passing solution-wide. Not
-yet tagged/released.
+the problem, not just behind a flag they may not reach for. An unrecognized flag close to a known
+one (edit distance ≤2, e.g. `--otuput`, `--lsit`, `--dif`) now gets a specific
+`Try: did you mean --output?` instead of that generic hint — plain Levenshtein distance against a
+small hand-maintained list of the flags the switch recognizes, no new dependency. 277 tests
+passing solution-wide. Not yet tagged/released.
 
 ## Next up
 

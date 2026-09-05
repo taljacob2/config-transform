@@ -193,6 +193,25 @@ public class CliOptionsParserTests
         Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { "--bogus" }));
     }
 
+    [Theory]
+    [InlineData("--otuput", "--output")]
+    [InlineData("--lsit", "--list")]
+    [InlineData("--dif", "--diff")]
+    [InlineData("--clint", "--client")]
+    public void Unrecognized_argument_close_to_a_known_flag_suggests_it(string typo, string expectedSuggestion)
+    {
+        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { typo }));
+        Assert.Contains($"did you mean {expectedSuggestion}?", ex.Message);
+    }
+
+    [Fact]
+    public void Unrecognized_argument_with_no_close_match_falls_back_to_the_generic_hint()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { "--totally-bogus-xyz" }));
+        Assert.DoesNotContain("did you mean", ex.Message);
+        Assert.Contains("Try: configtransform --help", ex.Message);
+    }
+
     [Fact]
     public void Flag_missing_its_value_throws()
     {

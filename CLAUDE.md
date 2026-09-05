@@ -156,9 +156,11 @@ is a wasted duplicate tag of `0.9.0-alpha` — see `docs/ROADMAP.md`'s "Current 
 drift note), tagged and published, with `config-transform-pilot` re-pinned to it. Two more
 real-user-reported usability fixes have since landed (not yet tagged): bare `help` now
 short-circuits from any argument position, not just as the very first argument (matching
-`--help`/`-h`, which already did); and every CLI validation error now ends with a one-line `Try:`
+`--help`/`-h`, which already did); every CLI validation error now ends with a one-line `Try:`
 example specific to that mistake, since `dotnet tool run configtransform ... --help` never
 actually reaches `configtransform` (`dotnet tool run` intercepts it as its own option — see
-`docs/USAGE.md`'s "Getting help" section for the `--` workaround). See `docs/ROADMAP.md`'s "Next
-up" for what's actionable now versus what needs either a solution repo that doesn't exist yet or
-an owner decision.
+`docs/USAGE.md`'s "Getting help" section for the `--` workaround); and an unrecognized flag close
+to a known one (edit distance ≤2) now gets a specific `Try: did you mean --output?` instead of
+the generic hint, via a small hand-maintained Levenshtein-distance check against the flags the
+switch recognizes. See `docs/ROADMAP.md`'s "Next up" for what's actionable now versus what needs
+either a solution repo that doesn't exist yet or an owner decision.

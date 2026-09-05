@@ -30,6 +30,19 @@ public static class CliOptionsParser
         null, null, null, null, DryRun: false, Diff: false, List: false, Set: false, Help: true, [], [],
         Init: false, [], [], [], null, Yes: false, NoScan: false, Template: false);
 
+    // Every token the switch below recognizes as a flag (or the bare "help" verb it also
+    // accepts) — used only to power the "did you mean" suggestion on an unrecognized argument,
+    // so it deliberately excludes "set"/"init" (recognized positionally, before this switch ever
+    // runs, not as a flag typo).
+    private static readonly string[] KnownFlags =
+    [
+        "--help", "-h", "help", "--resource", "-r", "--client", "-c", "--environment", "-e",
+        "--output", "-o", "--dry-run", "--diff", "--list", "--match", "--set", "--scan-root",
+        "--yes", "--no-scan", "--template"
+    ];
+
+    private const int MaxSuggestionDistance = 2;
+
     public static CliOptions Parse(string[] args)
     {
         if (args.Length == 0)
@@ -117,7 +130,10 @@ public static class CliOptionsParser
                     template = true;
                     break;
                 default:
-                    throw new ArgumentException($"Unrecognized argument: '{rest[i]}'.\nTry: configtransform --help to see every valid flag.");
+                    var suggestion = FindClosestFlag(rest[i]);
+                    throw new ArgumentException(suggestion is null
+                        ? $"Unrecognized argument: '{rest[i]}'.\nTry: configtransform --help to see every valid flag."
+                        : $"Unrecognized argument: '{rest[i]}'.\nTry: did you mean {suggestion}?");
             }
         }
 
@@ -192,5 +208,45 @@ public static class CliOptionsParser
 
         i++;
         return args[i];
+    }
+
+    private static string? FindClosestFlag(string token)
+    {
+        string? closest = null;
+        var closestDistance = MaxSuggestionDistance + 1;
+
+        foreach (var flag in KnownFlags)
+        {
+            var distance = LevenshteinDistance(token, flag);
+            if (distance < closestDistance)
+            {
+                closestDistance = distance;
+                closest = flag;
+            }
+        }
+
+        return closestDistance <= MaxSuggestionDistance ? closest : null;
+    }
+
+    private static int LevenshteinDistance(string a, string b)
+    {
+        var distances = new int[a.Length + 1, b.Length + 1];
+        for (var i = 0; i <= a.Length; i++)
+            distances[i, 0] = i;
+        for (var j = 0; j <= b.Length; j++)
+            distances[0, j] = j;
+
+        for (var i = 1; i <= a.Length; i++)
+        {
+            for (var j = 1; j <= b.Length; j++)
+            {
+                var substitutionCost = a[i - 1] == b[j - 1] ? 0 : 1;
+                distances[i, j] = Math.Min(
+                    Math.Min(distances[i - 1, j] + 1, distances[i, j - 1] + 1),
+                    distances[i - 1, j - 1] + substitutionCost);
+            }
+        }
+
+        return distances[a.Length, b.Length];
     }
 }
