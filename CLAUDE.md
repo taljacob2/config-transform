@@ -153,5 +153,12 @@ in`/`not patched in` wording, the resolution report's paths are always repo-rela
 line separates that report from the merged content/diff that follows. The `--client` fix and
 `init` command are tagged as `0.9.0-alpha`; the readability rework is `0.11.0-alpha` (`0.10.0-alpha`
 is a wasted duplicate tag of `0.9.0-alpha` — see `docs/ROADMAP.md`'s "Current state" for the full
-drift note). See `docs/ROADMAP.md`'s "Next up" for what's actionable now versus what needs either
-a solution repo that doesn't exist yet or an owner decision.
+drift note), tagged and published, with `config-transform-pilot` re-pinned to it. Two more
+real-user-reported usability fixes have since landed (not yet tagged): bare `help` now
+short-circuits from any argument position, not just as the very first argument (matching
+`--help`/`-h`, which already did); and every CLI validation error now ends with a one-line `Try:`
+example specific to that mistake, since `dotnet tool run configtransform ... --help` never
+actually reaches `configtransform` (`dotnet tool run` intercepts it as its own option — see
+`docs/USAGE.md`'s "Getting help" section for the `--` workaround). See `docs/ROADMAP.md`'s "Next
+up" for what's actionable now versus what needs either a solution repo that doesn't exist yet or
+an owner decision.

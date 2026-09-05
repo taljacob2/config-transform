@@ -56,6 +56,7 @@ public class CliOptionsParserTests
     {
         var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { "-r" }));
         Assert.Contains("-r", ex.Message);
+        Assert.Contains("Try: -r <value>", ex.Message);
     }
 
     [Fact]
@@ -90,15 +91,18 @@ public class CliOptionsParserTests
             "--client", "ClientA", "--output", "out.config"
         }));
         Assert.Contains("--client requires --environment", ex.Message);
+        Assert.Contains("Try: add --environment", ex.Message);
     }
 
     [Fact]
     public void Missing_output_throws_for_a_real_run()
     {
-        Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
+        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
         {
             "--client", "ClientA", "--environment", "Production"
         }));
+        Assert.Contains("--output is required", ex.Message);
+        Assert.Contains("Try: add --output", ex.Message);
     }
 
     [Fact]
@@ -297,6 +301,7 @@ public class CliOptionsParserTests
     [Theory]
     [InlineData("--help")]
     [InlineData("-h")]
+    [InlineData("help")]
     public void Help_flag_wins_regardless_of_position_or_other_flags(string helpFlag)
     {
         var options = CliOptionsParser.Parse(new[]
@@ -305,6 +310,32 @@ public class CliOptionsParserTests
         });
 
         Assert.True(options.Help);
+    }
+
+    [Fact]
+    public void Bare_help_verb_wins_trailing_after_resource_and_environment_flags()
+    {
+        // Regression: bare "help" used to only short-circuit as args[0], so e.g.
+        // `configtransform -e production -r App.config help` fell through to the switch's
+        // default case and threw "Unrecognized argument: 'help'." instead of printing help.
+        var options = CliOptionsParser.Parse(new[]
+        {
+            "-e", "production", "-r", "App.config", "help"
+        });
+
+        Assert.True(options.Help);
+    }
+
+    [Fact]
+    public void A_flag_value_that_happens_to_equal_help_is_not_mistaken_for_the_help_verb()
+    {
+        var options = CliOptionsParser.Parse(new[]
+        {
+            "set", "--resource", "App.config", "--match", "value=help", "--set", "x=y"
+        });
+
+        Assert.False(options.Help);
+        Assert.Equal(new[] { "value=help" }, options.Match);
     }
 
     [Fact]

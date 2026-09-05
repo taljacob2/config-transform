@@ -6,6 +6,26 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+### Fixed
+
+- **Bare `help` now wins from any argument position, not just leading.** `--help`/`-h` already
+  short-circuited from anywhere in the arguments, but a trailing bare `help` (e.g.
+  `configtransform -e Production -r App.config help`) fell through to the switch's default case
+  and threw `Unrecognized argument: 'help'.` instead — reported against the published tool by a
+  real user who reflexively appended `help` after an invocation that had already errored. All
+  three forms (`help`, `--help`, `-h`) now behave identically regardless of position.
+
+### Added
+
+- **A `Try:` line on every CLI validation error**, giving a concrete corrected example for that
+  specific mistake (e.g. `--output is required for a real run...` is now followed by
+  `Try: add --output <path>, or pass --dry-run/--diff to preview instead of writing.`) instead of
+  just pointing the user at the full help page. Prompted by the same user feedback as the `help`
+  fix above — `dotnet tool run configtransform ... --help` doesn't reach `configtransform` at all
+  (it's swallowed by `dotnet tool run`'s own argument parser; see `docs/USAGE.md`'s "Getting
+  help" section for the documented `--` workaround), so a one-line, targeted hint at the point of
+  the actual error is more likely to be seen than a pointer to `--help`.
+
 ## [0.11.0-alpha] - 2026-09-05
 
 ### Changed

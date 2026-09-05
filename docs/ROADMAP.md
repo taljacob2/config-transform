@@ -357,8 +357,26 @@ version number. Since a tag can't be moved once its packages are pushed (`docs/R
 own recovery policy), the fix is a fresh tag: `docs/CHANGELOG.md` now has proper `## [0.9.0-alpha]`
 (the init command + `--client` fix), `## [0.10.0-alpha]` (backfilled drift note, points at the
 same commit as `0.9.0-alpha`), and `## [0.11.0-alpha]` (the `--list`/resolution-report work,
-`#16`) sections — the owner still needs to tag and push `0.11.0-alpha` from current `main`.
-`config-transform-pilot` should be pinned to `0.11.0-alpha` once that tag exists, not `0.10.0-alpha`.
+`#16`) sections. The owner has since tagged and pushed `0.11.0-alpha` from `main` and its
+`publish.yml` ran green end to end; `config-transform-pilot` is re-pinned to it (see that repo's
+`FINDINGS.md`/`README.md`), so this drift is fully closed — `0.10.0-alpha` remains a wasted, never
+-to-be-used tag, documented rather than removed since tags are immutable once published.
+
+**Two more CLI usability issues, reported against the published tool by the same real user**:
+bare `help` only short-circuited as `args[0]`, so a trailing `help` after other flags (e.g.
+`configtransform -e Production -r App.config help`) fell through to `Unrecognized argument:
+'help'.` instead of printing help, even though `--help`/`-h` already worked from any position —
+fixed by adding `help` alongside `--help`/`-h` in `CliOptionsParser`'s switch, so all three now
+behave identically regardless of position. Separately, `dotnet tool run configtransform ...
+--help` doesn't reach `configtransform` at all — `dotnet tool run` intercepts `--help`/`-h` as
+its own option before forwarding anything to the tool, which is a `dotnet` CLI parsing behavior
+outside this tool's control; documented in `docs/USAGE.md`'s "Getting help" section along with
+the `--` separator workaround (`dotnet tool run configtransform -- --help`). Given that
+`--help` is easy to miss in practice, every CLI validation error now also gets a one-line `Try:`
+example specific to that mistake (e.g. missing `--output` on a real run suggests adding
+`--output <path>` or using `--dry-run`/`--diff`), so the fix is visible right where the user hit
+the problem, not just behind a flag they may not reach for. 272 tests passing solution-wide. Not
+yet tagged/released.
 
 ## Next up
 
