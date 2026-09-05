@@ -379,7 +379,10 @@ the problem, not just behind a flag they may not reach for. An unrecognized flag
 one (edit distance ≤2, e.g. `--otuput`, `--lsit`, `--dif`) now gets a specific
 `Try: did you mean --output?` instead of that generic hint — plain Levenshtein distance against a
 small hand-maintained list of the flags the switch recognizes, no new dependency. 277 tests
-passing solution-wide. Not yet tagged/released.
+passing solution-wide. Versioned as `0.12.0-alpha` (`docs/CHANGELOG.md` section moved out of
+`[Unreleased]` in the same change, per `docs/RELEASING.md` step 1) — the owner still needs to tag
+and push `0.12.0-alpha` from current `main`; `config-transform-pilot` should be re-pinned to it
+once that tag exists and `publish.yml` has run green.
 
 ## Next up
 

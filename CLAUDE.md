@@ -154,8 +154,9 @@ line separates that report from the merged content/diff that follows. The `--cli
 `init` command are tagged as `0.9.0-alpha`; the readability rework is `0.11.0-alpha` (`0.10.0-alpha`
 is a wasted duplicate tag of `0.9.0-alpha` — see `docs/ROADMAP.md`'s "Current state" for the full
 drift note), tagged and published, with `config-transform-pilot` re-pinned to it. Two more
-real-user-reported usability fixes have since landed (not yet tagged): bare `help` now
-short-circuits from any argument position, not just as the very first argument (matching
+real-user-reported usability fixes have since landed, versioned as `0.12.0-alpha` (owner still
+needs to tag and push it): bare `help` now short-circuits from any argument position, not just
+as the very first argument (matching
 `--help`/`-h`, which already did); every CLI validation error now ends with a one-line `Try:`
 example specific to that mistake, since `dotnet tool run configtransform ... --help` never
 actually reaches `configtransform` (`dotnet tool run` intercepts it as its own option — see

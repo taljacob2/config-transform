@@ -6,6 +6,8 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.12.0-alpha] - 2026-09-05
+
 ### Fixed
 
 - **Bare `help` now wins from any argument position, not just leading.** `--help`/`-h` already
