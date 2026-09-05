@@ -8,9 +8,17 @@ public sealed record ResolvedLayer(string Path, LayerManifest Manifest);
 /// for it, in extends order (outermost/base-most first) — the configtransform.json-based
 /// replacement for the old fixed-slot <c>LayerResolutionResult</c>. <see cref="Report"/> mirrors
 /// that type's found/not-found reporting (CONFIG_MANAGEMENT.md §5.1), now per layer instead of
-/// per fixed base/Environment/Client slot.
+/// per fixed base/Environment/Client slot. <see cref="Steps"/> is the same per-layer facts in a
+/// structured form for display (docs on the "clearer chain output" change) — collapses "not
+/// listed" and "listed with no patch" into one `PatchPath: null`, since the CLI only ever shows
+/// "not patched in" for either; the fine-grained distinction still lives in <see cref="Report"/>.
 /// </summary>
-public sealed record ResolvedResource(string BasePath, IReadOnlyList<string> PatchPathsInOrder, IReadOnlyList<string> Report);
+public sealed record ResolvedResource(
+    string BasePath, IReadOnlyList<string> PatchPathsInOrder, IReadOnlyList<string> Report,
+    IReadOnlyList<ChainStep> Steps);
+
+/// <summary>One layer's display row in a resolved chain — see <see cref="ResolvedResource.Steps"/>.</summary>
+public sealed record ChainStep(string Label, string? PatchPath);
 
 /// <summary>One layer's entry for a resource, found by scanning the whole tree — see <see cref="LayerChain.ReverseLookup"/>.</summary>
 public sealed record ReverseLookupEntry(string LayerPath, string? Patch, string? Extends);
@@ -77,6 +85,7 @@ public static class LayerChain
         var basePath = ResolveResourceBasePath(root, resourcePath);
         var report = new List<string> { $"base: '{resourcePath}' found at '{basePath}'" };
         var patches = new List<string>();
+        var steps = new List<ChainStep>();
 
         foreach (var layer in chain)
         {
@@ -86,12 +95,14 @@ public static class LayerChain
             if (entry is null)
             {
                 report.Add($"{label}: '{resourcePath}' not listed, skipping (no override at this layer)");
+                steps.Add(new ChainStep(label, null));
                 continue;
             }
 
             if (entry.Patch is null)
             {
                 report.Add($"{label}: '{resourcePath}' listed with no patch, skipping (no override at this layer)");
+                steps.Add(new ChainStep(label, null));
                 continue;
             }
 
@@ -102,9 +113,10 @@ public static class LayerChain
 
             report.Add($"{label}: '{resourcePath}' patched, applying ('{patchPath}')");
             patches.Add(patchPath);
+            steps.Add(new ChainStep(label, ToRepoRelative(root, patchPath)));
         }
 
-        return new ResolvedResource(basePath, patches, report);
+        return new ResolvedResource(basePath, patches, report, steps);
     }
 
     /// <summary>The union of every `resources[].path` mentioned anywhere in the chain — for a no-`--resource` invocation.</summary>

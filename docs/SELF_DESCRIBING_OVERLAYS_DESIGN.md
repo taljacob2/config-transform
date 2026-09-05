@@ -316,11 +316,18 @@ Confirmed directly by the repo owner — treat these as fixed, not open to silen
      extends: Environments/Production/configtransform.json
 
      OrderProcessor.Framework/App.config
-       patched here: patch-OrderProcessor.Framework-App.config.xml
-       also patched in: Environments/Production/configtransform.json
+       base                                                        (always applied)
+         ↓
+       Environments/Production/configtransform.json                patched in
+         ↓
+       Clients/Acme/Production/configtransform.json                patched in
 
      BillingApi.Core/appsettings.json
-       not patched here — inherited from Environments/Production/configtransform.json
+       base                                                        (always applied)
+         ↓
+       Environments/Production/configtransform.json                patched in
+         ↓
+       Clients/Acme/Production/configtransform.json                not patched in
    ```
 
    `--list --resource` — the reverse lookup:

@@ -99,10 +99,17 @@ nothing would be worse than failing loudly.
 Two modes:
 
 - **Given `--client`/`--environment`** (client optional, environment required): shows that
-  layer's own `extends` and every resource it touches — each one labeled `patched here: <patch>`
-  (plus `also patched in: <layer>` for every other layer in the chain that also patches it),
-  `not patched here — inherited from <layer>`, or `not patched anywhere — using the base file
-  directly`.
+  layer's own `extends` and every resource it touches, as its full chain in real application
+  order — `base` first, then every layer outermost-first, each one either `patched in` or
+  `not patched in`, connected by `↓`:
+  ```
+    OrderProcessor.Framework/App.config
+      base                                                             (always applied)
+        ↓
+      .configtransform/Environments/Production/configtransform.json    patched in
+        ↓
+      .configtransform/Clients/Acme/Production/configtransform.json    patched in
+  ```
 - **Given `--resource` instead** (no `--client`/`--environment`): a tree-wide reverse lookup —
   every `configtransform.json` anywhere under `.configtransform/` that patches this one resource,
   each with its own patch file and `extends` (if any). This closes a real ergonomic gap the new
@@ -142,7 +149,7 @@ dotnet run --project src/ConfigTransform.Cli -- \
 dotnet run --project src/ConfigTransform.Cli -- \
   --client Acme --environment Production --output publish/
 
-# --list for one layer — resources, extends, and what's patched here vs. inherited
+# --list for one layer — resources, extends, and the full base->Environment->Client chain
 dotnet run --project src/ConfigTransform.Cli -- \
   --list --client Acme --environment Production
 

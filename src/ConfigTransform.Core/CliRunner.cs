@@ -80,8 +80,7 @@ public static class CliRunner
         var engine = engines.Require(options.Resource!);
 
         var resolved = LayerChain.ResolveResource(root, chain, options.Resource!);
-        foreach (var line in resolved.Report)
-            stdout.WriteLine(line);
+        PrintResolutionReport(stdout, options.Resource!, resolved);
 
         var merged = engine.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
@@ -89,12 +88,14 @@ public static class CliRunner
         {
             var baseOnly = engine.Merge(resolved.BasePath, []);
             var diff = GitDiff.Render(baseOnly, merged);
+            stdout.WriteLine();
             stdout.WriteLine(string.IsNullOrWhiteSpace(diff) ? "(no changes)" : diff);
             return;
         }
 
         if (options.DryRun)
         {
+            stdout.WriteLine();
             stdout.WriteLine(merged);
             return;
         }
@@ -107,6 +108,31 @@ public static class CliRunner
 
         File.WriteAllText(outputPath, merged);
         stdout.WriteLine($"Wrote merged result to '{outputPath}'.");
+    }
+
+    /// <summary>
+    /// Prints the base→arrow→layer chain for one resource: a two-line entry per layer (its
+    /// configtransform.json label, then an indented "patched in: &lt;path&gt;"/"not patched in"
+    /// detail line) since patch paths are too long to trail on the label line in a normal
+    /// terminal width — see the "clearer chain output" design note in CONFIG_MANAGEMENT.md.
+    /// </summary>
+    private static void PrintResolutionReport(TextWriter stdout, string resourcePath, ResolvedResource resolved)
+    {
+        stdout.WriteLine($"Resolving '{resourcePath}'");
+
+        stdout.WriteLine("    base");
+        stdout.WriteLine($"      {resourcePath}");
+        if (resolved.Steps.Count > 0)
+            stdout.WriteLine("      ↓");
+
+        for (var i = 0; i < resolved.Steps.Count; i++)
+        {
+            var step = resolved.Steps[i];
+            stdout.WriteLine($"    {step.Label}");
+            stdout.WriteLine(step.PatchPath is null ? "      not patched in" : $"      patched in: {step.PatchPath}");
+            if (i < resolved.Steps.Count - 1)
+                stdout.WriteLine("      ↓");
+        }
     }
 
     /// <summary>

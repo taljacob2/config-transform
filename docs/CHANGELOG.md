@@ -46,6 +46,25 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   both resolves the base file with nothing applied, `--environment` alone resolves that
   Environment layer with no client override.
 
+### Changed
+
+- **Clearer chain output for `--list` and the single-resource resolution report**, reported
+  against the published tool by a real user working against `config-transform-pilot`. `--list`
+  used to show the target layer first (`patched here`) and ancestors after (`also patched in`)
+  — backwards from how the chain actually applies — and never showed the base file at all; it
+  now walks the chain in real application order (`base` first, then every layer outermost-first),
+  connected by `↓`, with uniform `patched in`/`not patched in` status (no more `patched here`/
+  `also patched in`/`inherited from`/`using the base file directly` variants). The resolution
+  report printed before every single-resource `--dry-run`/`--diff`/real-run got the same
+  base→arrow→layer shape, but with a two-line entry per layer (a label line, then an indented
+  `patched in: <path>`/`not patched in` detail line) since patch paths are too long to trail on
+  the label line in a normal terminal width; every path shown is repo-relative now, never an
+  OS-absolute path, and never omitted. A blank line now separates that report from the merged
+  content (`--dry-run`) or diff (`--diff`) that follows it, so the two don't visually run
+  together. New `LayerChain.ChainStep`/`ResolvedResource.Steps` back the new display; the
+  existing `ResolvedResource.Report` field (and its wording) is unchanged, since it's a
+  lower-level fact log directly unit-tested elsewhere, not the presentation layer.
+
 ## [0.8.0-alpha] - 2026-09-04
 
 Breaking, following this repo's own precedent for a pre-1.0 breaking change (`0.2.0-alpha`'s
