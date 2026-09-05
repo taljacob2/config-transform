@@ -6,6 +6,22 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+### Fixed
+
+- **Omitting `--resource` against a nonexistent `--environment`/`--client` now says so**,
+  reported against the published tool: `configtransform -e test --dry-run` against an
+  environment that was never configured (e.g. a typo) printed the generic
+  `(no resources with a registered format handler at this layer)` — worded as if the layer
+  existed but its resources' formats were unsupported, when the real reason was that
+  `.configtransform/Environments/test/configtransform.json` doesn't exist at all. This is still
+  never an error (a missing target layer stays non-fatal, same as any other missing overlay —
+  CONFIG_MANAGEMENT.md §5.1), but `RunEveryResource` now distinguishes the two cases: when the
+  target layer itself is missing, it prints `(no configtransform.json found for --environment
+  'test' -- expected at '.configtransform/Environments/test/configtransform.json'. Try: check
+  the spelling, or run 'configtransform init' to scaffold it.)` naming the exact path it looked
+  for; the original message is unchanged for the cases it actually describes — a layer that
+  exists but declares no resources, or whose resources' extensions have no registered engine.
+
 ## [0.13.0-alpha] - 2026-09-05
 
 ### Fixed

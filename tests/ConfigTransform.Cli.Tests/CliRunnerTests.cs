@@ -287,6 +287,48 @@ public class CliRunnerTests
     }
 
     [Fact]
+    public void Omitting_resource_names_the_missing_environment_when_no_configtransform_json_exists_for_it()
+    {
+        using var workspace = new TempCliWorkspace();
+
+        var stdout = new StringWriter();
+        var stderr = new StringWriter();
+
+        var exitCode = CliRunner.Run(new[]
+        {
+            "--environment", "test", "--dry-run"
+        }, stdout, stderr, FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(0, exitCode);
+        var output = stdout.ToString();
+        Assert.Contains("no configtransform.json found for --environment 'test'", output);
+        Assert.Contains(".configtransform/Environments/test/configtransform.json", output);
+        Assert.Contains("Try: check the spelling", output);
+        Assert.DoesNotContain("no resources with a registered format handler", output);
+        Assert.Empty(stderr.ToString());
+    }
+
+    [Fact]
+    public void Omitting_resource_names_the_missing_client_and_environment_when_no_configtransform_json_exists_for_them()
+    {
+        using var workspace = new TempCliWorkspace();
+
+        var stdout = new StringWriter();
+        var stderr = new StringWriter();
+
+        var exitCode = CliRunner.Run(new[]
+        {
+            "--client", "Nope", "--environment", "Production", "--dry-run"
+        }, stdout, stderr, FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(0, exitCode);
+        var output = stdout.ToString();
+        Assert.Contains("no configtransform.json found for --client 'Nope' --environment 'Production'", output);
+        Assert.Contains(".configtransform/Clients/Nope/Production/configtransform.json", output);
+        Assert.Empty(stderr.ToString());
+    }
+
+    [Fact]
     public void Omitting_resource_diff_covers_both_formats_in_one_call()
     {
         using var workspace = new TempCliWorkspace();

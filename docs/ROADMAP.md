@@ -422,9 +422,22 @@ the diff. `GitDiff.Render` now strips exactly those 4 lines (matched by prefix o
 body line already starts with its own `+`/`-`/` `/`\` diff marker) before returning the output.
 283 tests passing solution-wide. Versioned as `0.13.0-alpha` (`docs/CHANGELOG.md` section moved
 out of `[Unreleased]` in the same change, per `docs/RELEASING.md` step 1 — learned the hard way
-from `0.12.0-alpha`'s empty release notes above) — the owner still needs to tag and push
-`0.13.0-alpha` from current `main`; `config-transform-pilot` should be re-pinned to it once that
-tag exists and `publish.yml` has run green.
+from `0.12.0-alpha`'s empty release notes above). Tagged, pushed, and published clean this time —
+`publish.yml` succeeded and the GitHub Release has real, complete notes with no manual patching
+needed, unlike `0.12.0-alpha`. `config-transform-pilot` is re-pinned to `0.13.0-alpha` and
+verified against real CI.
+
+**Omitting `--resource` against a nonexistent `--environment`/`--client` now names the missing
+layer instead of a generic "no resources" message** — reported against the published tool:
+`configtransform -e test --dry-run` against a typo'd/never-configured environment printed
+`(no resources with a registered format handler at this layer)`, worded as if the layer existed
+but its resources' formats were unsupported. Still never an error — a missing target layer stays
+non-fatal, same as any other missing overlay (`CONFIG_MANAGEMENT.md` §5.1) — but
+`RunEveryResource` now tells the two cases apart: when the target layer file itself doesn't
+exist, it names the exact path it looked for and suggests `configtransform init`; the original
+message is unchanged for a layer that genuinely exists but declares no resources, or whose
+resources' extensions have no registered engine. 285 tests passing solution-wide. Not yet
+tagged/released.
 
 ## Next up
 

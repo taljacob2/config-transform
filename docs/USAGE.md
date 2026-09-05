@@ -122,6 +122,14 @@ in one invocation:
   .xml, .json.") — not an error, and not silently dropped. This is the only remaining skip case:
   every currently-supported format resolves in the same call, with no note at all, which is the
   actual capability CLI unification delivers over the old two-tool split.
+- If `--environment`/`--client` names a layer with no `configtransform.json` at all (most often a
+  typo), the run still isn't an error — a missing target layer is tolerated the same as any other
+  missing overlay — but the message names the exact path it looked for instead of the generic
+  "no resources" note: `(no configtransform.json found for --environment 'test' -- expected at
+  '.configtransform/Environments/test/configtransform.json'. Try: check the spelling, or run
+  'configtransform init' to scaffold it.)`. The generic `(no resources with a registered format
+  handler at this layer)` message is reserved for a layer that genuinely exists but declares no
+  resources, or whose resources' extensions have no registered engine.
 
 Naming that one exact resource with `--resource` instead is always an error if no engine handles
 its extension (rather than a stderr note) — you named that exact file, so silently producing

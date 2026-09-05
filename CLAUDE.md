@@ -181,6 +181,14 @@ that named the underlying OS temp files `GitDiff` diffs against — meaningless 
 already shows the real resource path above the diff; `GitDiff.Render` strips exactly those 4
 lines now. All three are versioned as `0.13.0-alpha` (CHANGELOG moved out of `[Unreleased]` before
 tagging this time, per `docs/RELEASING.md` step 1 — the `0.12.0-alpha` empty-release-notes drift
-above is exactly the mistake this avoids); owner still needs to tag and push it. See
-`docs/ROADMAP.md`'s "Next up" for what's actionable now versus what
+above is exactly the mistake this avoids), tagged, pushed, and published clean — real, complete
+GitHub Release notes this time, no manual patching needed — and `config-transform-pilot` is
+re-pinned to `0.13.0-alpha`, verified against real CI. A fifth real-user report has since landed,
+not yet tagged: omitting `--resource` against a nonexistent `--environment`/`--client` (a typo,
+most likely) printed the generic `(no resources with a registered format handler at this layer)`
+— worded as if the layer existed but its resources' formats were unsupported. `RunEveryResource`
+now tells that case apart from a layer that genuinely exists but declares no resources: when the
+target layer file itself is missing, it names the exact path it looked for and suggests
+`configtransform init`, while the original message is unchanged for the cases it actually
+describes. See `docs/ROADMAP.md`'s "Next up" for what's actionable now versus what
 needs either a solution repo that doesn't exist yet or an owner decision.
