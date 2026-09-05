@@ -6,6 +6,21 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.12.0-alpha] - 2026-09-05
+
+**Tagged before this section existed on `main`.** The owner pushed the `0.12.0-alpha` tag against
+`1396e2e` (the #18 merge commit) while this very section was still sitting under `[Unreleased]`
+in an unmerged PR (#19) — the same class of drift already flagged for `0.4.1`/`0.6.0-alpha`/
+`0.9.0-alpha`/`0.10.0-alpha` above, this time with a real consequence rather than a cosmetic one:
+`scripts/extract-changelog-section.sh` found no `## [0.12.0-alpha]` heading at the tagged commit,
+so the GitHub Release it created has an **empty body** (build/test/pack/push/smoke-test all
+still succeeded — the published package itself is real and correct, only the release notes text
+is missing). Packages can't be un-published, so there's no re-tagging this one; the fix is to
+paste this section's content into the release manually
+(https://github.com/taljacob2/config-transform/releases/tag/0.12.0-alpha, "Edit release"). Going
+forward: tag only after the `[Unreleased]`→versioned-section PR has actually merged, not just
+opened.
+
 ### Fixed
 
 - **Bare `help` now wins from any argument position, not just leading.** `--help`/`-h` already
