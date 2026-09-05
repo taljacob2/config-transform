@@ -179,5 +179,8 @@ resources happen to be in the layer right now. A fourth: `--diff`'s output no lo
 own file-identity header lines (`diff --git a/... b/...`, `index ...`, `--- a/...`, `+++ b/...`)
 that named the underlying OS temp files `GitDiff` diffs against — meaningless given the CLI
 already shows the real resource path above the diff; `GitDiff.Render` strips exactly those 4
-lines now. Not yet tagged. See `docs/ROADMAP.md`'s "Next up" for what's actionable now versus what
+lines now. All three are versioned as `0.13.0-alpha` (CHANGELOG moved out of `[Unreleased]` before
+tagging this time, per `docs/RELEASING.md` step 1 — the `0.12.0-alpha` empty-release-notes drift
+above is exactly the mistake this avoids); owner still needs to tag and push it. See
+`docs/ROADMAP.md`'s "Next up" for what's actionable now versus what
 needs either a solution repo that doesn't exist yet or an owner decision.

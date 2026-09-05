@@ -396,7 +396,8 @@ existing directory excludes) for exactly these two filenames, since neither is e
 per-client/per-environment resource in any repo — unlike something merely config-*shaped*
 (`tsconfig.json`, a stray `package.json`), which is deliberately still left to the checklist; see
 `docs/INIT_COMMAND_DESIGN.md`'s "Scanning: directory filters, not content filters" for why this
-doesn't reopen that broader rule. 280 tests passing solution-wide. Not yet tagged/released.
+doesn't reopen that broader rule. 280 tests passing solution-wide. Versioned as `0.13.0-alpha`
+together with the two fixes below (see that paragraph for tag status).
 
 **A clear error instead of a raw `IOException` when `--output` collides with an existing file
 in multi-resource mode** — also reported against the published tool, from the same session as
@@ -408,7 +409,8 @@ instead of a real error. `RunEveryResource` now checks up front and fails with a
 found" and silently write to that file instead — was considered and rejected: it would make the
 same command's meaning depend on how many resources happen to sit in the layer *right now*, so
 adding a second resource to that layer later (a routine change) would silently change what an
-existing, working command does. 281 tests passing solution-wide. Not yet tagged/released.
+existing, working command does. 281 tests passing solution-wide. Versioned as `0.13.0-alpha`
+together with the fix above and below.
 
 **`--diff` no longer leaks git's own file-identity header lines** — another report from the same
 session: `GitDiff` shells out to `git diff --no-index` against two throwaway temp files, and
@@ -418,7 +420,11 @@ noise, not real file identity, given the CLI already prints the actual resource 
 the diff. `GitDiff.Render` now strips exactly those 4 lines (matched by prefix once
 `--color=always`'s ANSI codes are stripped, never confusable with real hunk content since every
 body line already starts with its own `+`/`-`/` `/`\` diff marker) before returning the output.
-283 tests passing solution-wide. Not yet tagged/released.
+283 tests passing solution-wide. Versioned as `0.13.0-alpha` (`docs/CHANGELOG.md` section moved
+out of `[Unreleased]` in the same change, per `docs/RELEASING.md` step 1 — learned the hard way
+from `0.12.0-alpha`'s empty release notes above) — the owner still needs to tag and push
+`0.13.0-alpha` from current `main`; `config-transform-pilot` should be re-pinned to it once that
+tag exists and `publish.yml` has run green.
 
 ## Next up
 
