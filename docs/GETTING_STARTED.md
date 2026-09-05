@@ -58,9 +58,13 @@ flowchart LR
    the one-time setup (CI secret + `nuget.config` + local env vars, with Windows/macOS/Linux
    instructions) — do that first if this repo hasn't already.
 
-   Once installed, `dotnet tool run configtransform` with no arguments at all (or
-   `configtransform help`/`--help`/`-h` anytime) prints a quick tldr-style cheat sheet — worth
-   running once just to confirm the install worked, before setting up a real override below.
+   Once installed, `dotnet tool run configtransform` with no arguments at all, or a bare `help`
+   appended anywhere (`dotnet tool run configtransform help`), prints a quick tldr-style cheat
+   sheet — worth running once just to confirm the install worked, before setting up a real
+   override below. `--help`/`-h` print the same page too, but only past the `--` separator
+   (`dotnet tool run configtransform -- --help`) — without it, `dotnet tool run` itself intercepts
+   `--help`/`-h` as its own option before `configtransform` ever sees them; see `USAGE.md`'s
+   "Getting help" section for the full explanation.
 3. **Optional but recommended**: scaffold the tree itself first, with `init`, rather than letting
    the very first `set` below create a Client layer before any Environment layer exists. `init`
    scans the repo for candidate resources (or takes them explicitly), asks (or takes as flags)

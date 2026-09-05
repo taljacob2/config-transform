@@ -56,6 +56,7 @@ public class CliOptionsParserTests
     {
         var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { "-r" }));
         Assert.Contains("-r", ex.Message);
+        Assert.Contains("Try: -r <value>", ex.Message);
     }
 
     [Fact]
@@ -90,15 +91,18 @@ public class CliOptionsParserTests
             "--client", "ClientA", "--output", "out.config"
         }));
         Assert.Contains("--client requires --environment", ex.Message);
+        Assert.Contains("Try: add --environment", ex.Message);
     }
 
     [Fact]
     public void Missing_output_throws_for_a_real_run()
     {
-        Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
+        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
         {
             "--client", "ClientA", "--environment", "Production"
         }));
+        Assert.Contains("--output is required", ex.Message);
+        Assert.Contains("Try: add --output", ex.Message);
     }
 
     [Fact]
@@ -187,6 +191,25 @@ public class CliOptionsParserTests
     public void Unrecognized_argument_throws()
     {
         Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { "--bogus" }));
+    }
+
+    [Theory]
+    [InlineData("--otuput", "--output")]
+    [InlineData("--lsit", "--list")]
+    [InlineData("--dif", "--diff")]
+    [InlineData("--clint", "--client")]
+    public void Unrecognized_argument_close_to_a_known_flag_suggests_it(string typo, string expectedSuggestion)
+    {
+        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { typo }));
+        Assert.Contains($"did you mean {expectedSuggestion}?", ex.Message);
+    }
+
+    [Fact]
+    public void Unrecognized_argument_with_no_close_match_falls_back_to_the_generic_hint()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { "--totally-bogus-xyz" }));
+        Assert.DoesNotContain("did you mean", ex.Message);
+        Assert.Contains("Try: configtransform --help", ex.Message);
     }
 
     [Fact]
@@ -297,6 +320,7 @@ public class CliOptionsParserTests
     [Theory]
     [InlineData("--help")]
     [InlineData("-h")]
+    [InlineData("help")]
     public void Help_flag_wins_regardless_of_position_or_other_flags(string helpFlag)
     {
         var options = CliOptionsParser.Parse(new[]
@@ -305,6 +329,32 @@ public class CliOptionsParserTests
         });
 
         Assert.True(options.Help);
+    }
+
+    [Fact]
+    public void Bare_help_verb_wins_trailing_after_resource_and_environment_flags()
+    {
+        // Regression: bare "help" used to only short-circuit as args[0], so e.g.
+        // `configtransform -e production -r App.config help` fell through to the switch's
+        // default case and threw "Unrecognized argument: 'help'." instead of printing help.
+        var options = CliOptionsParser.Parse(new[]
+        {
+            "-e", "production", "-r", "App.config", "help"
+        });
+
+        Assert.True(options.Help);
+    }
+
+    [Fact]
+    public void A_flag_value_that_happens_to_equal_help_is_not_mistaken_for_the_help_verb()
+    {
+        var options = CliOptionsParser.Parse(new[]
+        {
+            "set", "--resource", "App.config", "--match", "value=help", "--set", "x=y"
+        });
+
+        Assert.False(options.Help);
+        Assert.Equal(new[] { "value=help" }, options.Match);
     }
 
     [Fact]

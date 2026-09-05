@@ -37,12 +37,13 @@ does.
 
 Running `configtransform` with **no arguments at all** prints a help page and exits 0 — it's the
 default, not an error, specifically so a new user's first, uninformed invocation actually teaches
-them something instead of just failing. The same page is reachable anytime via a leading bare
-`configtransform help`, or `--help`/`-h` added to any other invocation (both are recognized only
-in flag position, so a value some other flag is consuming that happens to equal `-h` is never
-mistaken for the flag) — and it wins over every other flag, including what would otherwise be a
-validation error (`configtransform --client Acme --help` shows help, not "--environment is
-required.").
+them something instead of just failing. The same page is reachable anytime via a bare `help`, or
+`--help`/`-h`, added anywhere in an otherwise-normal invocation — not just leading; `configtransform
+-e Production -r App.config help` shows help exactly like `configtransform help` does (all three
+forms are recognized only in flag position, so a value some other flag is consuming that happens
+to equal `help` or `-h` is never mistaken for the flag) — and it wins over every other flag,
+including what would otherwise be a validation error (`configtransform --client Acme --help` shows
+help, not "--environment is required.").
 
 The page itself is a short, tldr-style cheat sheet, not the full reference this document is —
 a `USAGE` summary, a `COMMON COMMANDS` quick-reference table, and, for every command, one easy
@@ -50,6 +51,31 @@ example plus one more advanced example (a mixed-format single-call resolve, a `-
 reverse lookup, a `set` with a compound `$elemMatch` condition). The list of supported resource
 extensions it prints is read from the tool's own real, registered format engines, not a separate
 hardcoded copy — it can't drift from what the binary actually handles.
+
+Every validation error the tool prints (missing `--output`, `--client` without `--environment`,
+an unrecognized flag, and so on) is followed by a second `Try:` line with a concrete corrected
+example for that specific mistake, rather than pointing you at the full help page — e.g. omitting
+`--output` on a real run prints:
+
+```
+Error: --output is required for a real run (omit only with --dry-run or --diff).
+Try: add --output <path>, or pass --dry-run/--diff to preview instead of writing.
+```
+
+An unrecognized flag gets the same treatment, but as a spelling suggestion when one fits: a typo
+within edit distance 2 of a known flag (e.g. `--otuput`, `--lsit`, `--dif`) prints
+`Try: did you mean --output?` instead of the generic hint; anything farther off falls back to
+`Try: configtransform --help to see every valid flag.`
+
+**Running via `dotnet tool run` swallows `--help`/`-h` before it reaches `configtransform`.**
+`dotnet tool run <name> [<toolArguments>...] [options]` treats `--help`/`-h`/`-?` as its *own*
+option (you'll see `dotnet`'s "Run a local tool" help instead of ours) — this is a `dotnet` CLI
+parsing behavior, not something `configtransform` can intercept. Use the `--` separator to force
+everything after it to be forwarded as tool arguments instead:
+`dotnet tool run configtransform -- -e Production -r App.config --help`. The bare `help` verb
+isn't affected by this — `dotnet tool run configtransform -- -e Production -r App.config help`
+and even without the `--` separator both reach `configtransform` and print its help normally,
+since `dotnet tool run` doesn't treat a bare `help` token as one of its own options.
 
 ## Resolving `--client`/`--environment` to a layer
 
