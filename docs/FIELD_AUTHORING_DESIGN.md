@@ -6,9 +6,13 @@ defaults with verification; the ambiguous/not-found/"did you mean" error paths; 
 auto-`--diff`). `ConfigTransform.Json`'s `set` covers a single key path — both updating an
 existing key *and* creating a brand-new one, since JSON has no `Insert`-style gap — **and now also
 covers matching/creating an item inside an array of objects**, via a `$elemMatch`-style overlay
-syntax (see "JSON / YAML" below). See `docs/USAGE.md`'s `set` section and `docs/CHANGELOG.md`'s
-`[0.6.0-alpha]`/`[0.7.0-alpha]` entries for exactly what's live and where. **Not yet
-implemented**: XML's `Insert`
+syntax (see "JSON / YAML" below). XML's `set` also now supports matching a singleton element by
+its **tag name alone** (a reserved `tag=` `--match` coordinate — see "What --match and --set mean,
+per format" → XML below), for elements like `customErrors`/`compilation`/`httpRuntime` that have
+no identifying attribute at all — a real, previously-undesigned gap reported against the published
+tool, found the same way the JSON array-of-objects gap was: by a real user hitting it. See
+`docs/USAGE.md`'s `set` section and `docs/CHANGELOG.md`'s `[0.6.0-alpha]`/`[0.7.0-alpha]` entries
+for exactly what's live and where. **Not yet implemented**: XML's `Insert`
 case (a genuinely brand-new element), and XML's array-of-objects matching (see "Open items" below
 for both — JSON's version of the array-of-objects gap, once a real, previously-undesigned problem
 found during implementation, is now closed). This document otherwise still reflects the original
@@ -95,6 +99,36 @@ mechanically, not asked for: resolve the target overlay layer as it exists today
 matched element is already present in the fully-resolved document up to that layer, the
 operation is `SetAttributes`; if absent, `Insert`; a `set` with no `--client`/`--environment`
 writes the base file directly (a new key meant for everyone).
+
+**Reserved coordinate: `tag=`.** Some elements have no identifying attribute at all —
+`customErrors`, `compilation`, `httpRuntime`, `sessionState`, and similar `system.web`/
+`system.webServer` sections are each the only element of their tag under their parent, singleton
+by position rather than by any attribute value. Real XDT already has an idiom for this: omit
+`xdt:Locator` entirely and it matches by element name alone. `set` exposes the same idiom via a
+reserved `tag=` `--match` coordinate — the element's own tag name, not a real attribute:
+
+```xml
+<!-- customErrors: no identifying attribute, unique under system.web -->
+<customErrors mode="Off" />
+```
+```
+set --match tag=customErrors --set mode=RemoteOnly
+```
+```xml
+<!-- written overlay: no xdt:Locator at all, matching real XDT's own default-match behavior -->
+<customErrors xdt:Transform="SetAttributes" mode="RemoteOnly" />
+```
+
+`tag` is never written to the overlay as a literal attribute (it isn't one), and never appears
+inside a `Locator(...)` string — the tag name is already the overlay element's own name, exactly
+as it is for every other `set` case. It combines with real attribute matches too
+(`--match tag=add --match key=ApiUrl`), in which case the Locator is built from the attribute
+matches only — `tag` narrows *which* elements are even candidates, the same way an attribute match
+does, but contributes nothing to the emitted `Locator` string since XDT never needs the tag name
+stated there (the overlay element's own tag already carries it). This is a small, deliberate
+exception to XML's otherwise-open attribute vocabulary ("no fixed heuristic," above) — parallel to
+JSON's own reserved `key`/`literal-key` coordinates below, and accepted for the same reason: a real
+schema having an attribute literally named `tag` is a theoretical collision, not a practical one.
 
 ### JSON / YAML
 
@@ -322,6 +356,7 @@ No case needed a bespoke resolution; each was the same rule applied once more.
 | Where `$elemMatch` conditions resolve to a real position | At real merge time (`JsonLayerMerger.Merge`, via a new pre-processing pass), re-run on every merge, progressively per layer (Environment resolves against base; Client resolves against base+Environment-merged) | Resolve once, at `set`-authoring time only, and bake the resolved position into the overlay file | The "no index in the persisted file" requirement rules out baking anything in. A hand-written overlay (never touched by `set`) still needs to resolve correctly, and a later merge can see a different array shape than the one `set` saw when it wrote the file (e.g. another layer inserted an item first) — only a fresh, real merge-time resolution is correct in general. `set` still does the same resolution eagerly too, for immediate UX (ambiguous/not-found errors surface right away) — but that check is advisory, not authoritative. |
 | Rewritten-position representation inside `Merge`'s pre-processing pass | A `JsonObject` keyed by numeric-string index (`{"1": {...}}`), fed to `Microsoft.Extensions.Configuration` via `AddJsonStream` | A `JsonArray` literal with placeholder entries for skipped indices | A real array can't express "touch only index 1, leave 0 and 2+ alone" without placeholder nulls at the skipped positions, and those nulls would themselves flatten to real `IConfiguration` keys and clobber the base layer's actual values there — the same hazard `JsonLayerMerger`'s own doc comment already warns about for plain overlay arrays. A numeric-string object key has no such constraint, and empirically flattens to the identical `IConfiguration` path as a real array index (verified for both `AddJsonFile` and, since this design switches overlay layers to in-memory streams, `AddJsonStream` specifically — not just inferred from the file case). |
 | No match for a patch's conditions | Upsert: create a new item, combining the `$elemMatch` condition fields as its identity plus whatever `--set` wrote | Treat "no match" as an error, requiring a separate insert-only command or flag | Mirrors MongoDB's own upsert semantics for the same shape (a filter document plus an update document) — a known convention again, not an invented one. Keeps the overlay file's shape identical regardless of whether a given patch will update or create, which is the whole point: that decision is made at resolution time, not authoring time. |
+| XML tag-only matching for a singleton element (found the same way as the JSON array-of-objects gap: a real user hitting it) | A reserved `tag=` `--match` coordinate; writes no `xdt:Locator` at all when it's the only coordinate given, mirroring real XDT's own default-match-by-name behavior | Require the user to invent a synthetic identifying attribute; guess a default attribute name (e.g. always try `mode`) | `customErrors`/`compilation`/`httpRuntime`-shaped elements genuinely have no identifying attribute — there is nothing to guess without breaking "never guessed" (above). A dedicated reserved coordinate names the real thing (the tag) instead of faking an attribute-shaped answer to a non-attribute question, and mirrors real XDT's own idiom for the exact same case. |
 
 ## Open items for implementation
 

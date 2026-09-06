@@ -439,6 +439,18 @@ message is unchanged for a layer that genuinely exists but declares no resources
 resources' extensions have no registered engine. 285 tests passing solution-wide. Not yet
 tagged/released.
 
+**`set --match tag=<ElementName>` supports matching an XML element by tag name alone** —
+reported against the published tool: a real production overlay used
+`<customErrors xdt:Transform="SetAttributes" mode="RemoteOnly" />` with no `xdt:Locator` at all
+(real XDT's own default-match-by-name idiom for a singleton element with no identifying
+attribute), but `set` had no way to produce this — `--match` always required an attribute=value
+pair. `tag` is a new reserved `--match` coordinate, parallel to JSON's existing reserved
+`key`/`literal-key`: `XmlFieldAuthor.FindMatchingElements` now filters by element name when
+`tag` is given, and the writer omits `xdt:Locator` entirely when `tag` is the only coordinate
+(never writing `tag` itself as a literal attribute or inside `Locator(...)`, since it isn't a
+real attribute). Combines with real attribute matches too, narrowing candidates without
+appearing in the emitted Locator. 289 tests passing solution-wide. Not yet tagged/released.
+
 ## Next up
 
 One item below is now actionable purely within this repo (see the first bullet); every other
