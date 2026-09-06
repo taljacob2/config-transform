@@ -7,5 +7,6 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Authors>taljacob2</Authors>
     <RepositoryUrl>https://github.com/taljacob2/config-transform</RepositoryUrl>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
   </PropertyGroup>
 </Project>
