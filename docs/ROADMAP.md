@@ -436,8 +436,8 @@ non-fatal, same as any other missing overlay (`CONFIG_MANAGEMENT.md` §5.1) — 
 `RunEveryResource` now tells the two cases apart: when the target layer file itself doesn't
 exist, it names the exact path it looked for and suggests `configtransform init`; the original
 message is unchanged for a layer that genuinely exists but declares no resources, or whose
-resources' extensions have no registered engine. 285 tests passing solution-wide. Not yet
-tagged/released.
+resources' extensions have no registered engine. 285 tests passing solution-wide. Versioned as
+`0.14.0-alpha` together with the fix below (see that paragraph for tag status).
 
 **`set --match tag=<ElementName>` supports matching an XML element by tag name alone** —
 reported against the published tool: a real production overlay used
@@ -449,7 +449,11 @@ pair. `tag` is a new reserved `--match` coordinate, parallel to JSON's existing 
 `tag` is given, and the writer omits `xdt:Locator` entirely when `tag` is the only coordinate
 (never writing `tag` itself as a literal attribute or inside `Locator(...)`, since it isn't a
 real attribute). Combines with real attribute matches too, narrowing candidates without
-appearing in the emitted Locator. 289 tests passing solution-wide. Not yet tagged/released.
+appearing in the emitted Locator. 289 tests passing solution-wide. Versioned as `0.14.0-alpha`
+(`docs/CHANGELOG.md` section moved out of `[Unreleased]` in the same change, per
+`docs/RELEASING.md` step 1) — the owner still needs to tag and push `0.14.0-alpha` from current
+`main`; `config-transform-pilot` should be re-pinned to it once that tag exists and
+`publish.yml` has run green.
 
 ## Next up
 
