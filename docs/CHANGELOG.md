@@ -6,6 +6,8 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.14.0-alpha] - 2026-09-06
+
 ### Added
 
 - **`set --match tag=<ElementName>` matches an XML element by its tag name alone**, for
