@@ -1,0 +1,1 @@
+{ "resources": [ { "path": "Project/custom-settings.json", "patch": ".configtransform/Environments/Production/patch-Project-custom-settings.json.json" } ] }

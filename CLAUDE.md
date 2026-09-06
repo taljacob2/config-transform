@@ -33,22 +33,31 @@ here.
 
 `config-transform` resolves per-client, per-environment configuration overrides for .NET
 projects — App.config, Web.config, appsettings.json, and eventually other formats — by
-layering **base → Environments → Clients** overlays through a manifest-driven model. It's one
-piece of a larger architecture; the full "why" lives in
+layering **base → Environments → Clients** overlays through self-describing `configtransform.json`
+layers, each declaring what it extends and which resources it patches. It's one piece of a larger
+architecture; the full "why" lives in
 [`docs/CONFIG_MANAGEMENT.md`](docs/CONFIG_MANAGEMENT.md) — read that before assuming something
 here is accidental rather than deliberate.
 
 ## Core concepts — read before touching code
 
-- **Manifest** ([`docs/MANIFEST_SCHEMA.md`](docs/MANIFEST_SCHEMA.md), implemented in
-  `src/ConfigTransform.Core/Manifest.cs`): one per project. Declares the project's `directory`
-  explicitly — never assume a `src/` layout, repos vary. `directory` is genuinely just a path;
-  the tool never opens or validates anything at it, only resolves `relativeToDirectory` against
-  it (`CliRunner`). Don't add code that assumes it points at a `.csproj` — it doesn't have to.
-- **Layering, fixed order**: base file → `Environments/<Env>.<ext>` (optional) →
-  `Clients/<Client>/<Env>.<ext>` (optional) → merged result. The order is a rule inside the
-  tool, not declared per-file — there is no per-overlay manifest to read, unlike Kustomize
-  (see `docs/CONFIG_MANAGEMENT.md` §9 for that comparison).
+- **Self-describing layers** ([`docs/MANIFEST_SCHEMA.md`](docs/MANIFEST_SCHEMA.md), implemented in
+  `src/ConfigTransform.Core/LayerManifest.cs`/`LayerChain.cs`): one `configtransform.json` per
+  layer directory under `.configtransform/` — `.configtransform/Environments/<Env>/` and
+  `.configtransform/Clients/<Client>/<Env>/` — not one manifest per project. Each declares an
+  optional `extends` (the layer it inherits from) and a `resources[]` list, each entry pairing a
+  project's real, repo-root-relative `path` with its own optional `patch`. There is no separate
+  project-declaration file — `resources[].path` points straight at the real config file. Don't
+  add code that assumes a `.csproj` or any particular directory layout — `path` is genuinely just
+  a path; the tool never opens or validates anything about the project it belongs to, only
+  resolves it against the repo root (`LayerChain`).
+- **Layering via `extends`, not a fixed rule**: an Environment layer has no `extends`; a Client
+  layer typically `extends` the matching Environment layer, but this is a declared reference in
+  the file itself (`LayerChain.Build` walks it), not a hardcoded base→Environments→Clients rule
+  baked into the tool the way it used to be (see `docs/CONFIG_MANAGEMENT.md` §9 and
+  `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md` for that history and the full design). A chain can be
+  deeper than the traditional two hops — `LayerChain`/the merge engines never assume a fixed
+  depth.
 - **Format-generic by design.** `ConfigTransform.Xml` (via `Microsoft.Web.Xdt`) treats
   App.config, Web.config, NLog.config, or any other XML file identically — there is no
   App.config-specific logic anywhere in it. `ConfigTransform.Json` is the same for JSON via
@@ -61,8 +70,8 @@ here is accidental rather than deliberate.
   A `.NET` project on net35, net40, net45, or net472 works exactly the same as one on net48 or
   net8.0 (confirmed via `config-transform-pilot`'s `LegacyGateway.Framework`, a deliberately
   vanilla net35 project) — and the same is true for a Node.js, Angular, React, or Flutter
-  project's own JSON config, since `directory` is just a path (see the Manifest bullet above).
-  The only real constraint is the config file's *format*: XML or JSON today, not the ecosystem
+  project's own JSON config, since `resources[].path` is just a path (see the Self-describing
+  layers bullet above). The only real constraint is the config file's *format*: XML or JSON today, not the ecosystem
   or TFM it happens to live in. Don't add anything here that assumes a specific TFM, language,
   or the consuming project's own SDK/build tooling.
 - **Case-insensitive file resolution** (`FileResolver`, in Core). Exists because CI
@@ -76,11 +85,15 @@ here is accidental rather than deliberate.
 
 ## Repo structure — where to look
 
-- `src/ConfigTransform.Core/` — shared, format-agnostic logic (manifest parsing, file
-  resolution, layer-resolution reporting). Change here first for anything that should behave
-  identically across XML and JSON.
-- `src/ConfigTransform.Xml/`, `src/ConfigTransform.Json/` — thin CLI front-ends, one per
-  format, each wrapping a different merge engine.
+- `src/ConfigTransform.Core/` — shared, format-agnostic logic (`configtransform.json` parsing,
+  `extends`-chain resolution, file resolution, layer-resolution reporting, `set` orchestration,
+  and `FormatEngine`/`FormatEngineRegistry` dispatch). Change here first for anything that should
+  behave identically across XML and JSON.
+- `src/ConfigTransform.Xml/`, `src/ConfigTransform.Json/` — internal merge-engine libraries, one
+  per format (`XmlLayerMerger`/`XmlFieldAuthor`, `JsonLayerMerger`/`JsonFieldAuthor`), not their
+  own dotnet tools.
+- `src/ConfigTransform.Cli/` — the actual CLI, packaged as the `configtransform` dotnet tool.
+  Registers both format engines above into Core's dispatcher; this is genuinely all it does.
 - `tests/*/Fixtures/` — real-shaped fixture files per scenario: `DotNetFramework`,
   `IisWebConfig`, `GenericXml` (XML); `DotNetCore`, `GenericJson` (JSON). New merge-behavior
   test cases belong here as fixtures, exercised by data-driven tests — not as inline strings
@@ -100,7 +113,86 @@ here is accidental rather than deliberate.
 
 See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the current plan (this is the doc rule #1 above
 points at) and [`docs/CHANGELOG.md`](docs/CHANGELOG.md) for exactly what's implemented so far.
-Short version as of the last update here: `ConfigTransform.Xml` and `ConfigTransform.Json` are
-both fully implemented, tested, and released (`0.1.0-alpha`, published to GitHub Packages).
-Nothing is actionable purely within this repo right now — see `docs/ROADMAP.md`'s "Next up" for
-what needs either a solution repo that doesn't exist yet or an owner decision.
+Short version as of the last update here: `manifest.json` and the fixed base→Environments→
+Clients rule are gone — replaced by self-describing `configtransform.json` layers
+(`docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`, fully implemented). The CLI is a single unified tool,
+`configtransform` (`ConfigTransform.Cli`) — `ConfigTransform.Xml`/`ConfigTransform.Json` are now
+internal merge-engine libraries, not separate dotnet tools; every already-published version of
+those two tools stays installable forever, but neither gets a new one. `--resource` is the
+tool-wide targeting flag; omitting it processes every resource a layer touches, across every
+registered format, in one call — a mixed XML/JSON layer resolves with no skipping at all; a
+resource whose extension no format engine handles is reported on stderr and skipped, never
+silently dropped. `--list` shows one layer's resources (or, given `--resource` instead, a
+tree-wide reverse lookup). No arguments at all (or `help`/`--help`/`-h` anytime) prints a
+tldr-style help page — common commands plus an easy and an advanced example each — via the new
+`HelpPrinter`.
+
+`set` (docs/FIELD_AUTHORING_DESIGN.md) targets a resource by its own repo-root-relative path,
+dispatching to the right engine by that path's extension, and creates a missing
+`configtransform.json` layer (with the right `extends`) on first write: XML authors an overlay
+field's `SetAttributes` operation mechanically (updating an existing key/attribute; creating a
+brand-new one, `Insert`, is not implemented), JSON writes a nested key directly (covers both
+updating and creating) and also matches or creates an item inside an array of objects via a
+`$elemMatch` overlay syntax (`JsonElemMatchResolver`) — the one real design gap found during
+implementation, for JSON, is closed; XML's own array-of-objects matching remains open, alongside
+`Insert`. `0.8.0-alpha` is tagged and published, and `config-transform-pilot` has been migrated
+onto it (unified `configtransform` command, golden-output-verified against a real pre-migration
+baseline — see that repo's `FINDINGS.md` and `config-transform-pilot#2`, merged). A new `init`
+command (`docs/INIT_COMMAND_DESIGN.md`) scaffolds a `.configtransform/` tree directly — an
+interactive form (no TUI), a flag-driven quiet mode safe for CI, and a bare `init --template`
+starter tree that's immediately runnable (every layer's demo resource names itself in its
+override). Along the way, fixed a real patch-filename stutter shared with `set`
+(`PatchFileNaming`), and — reported independently by a real user against the published tool —
+fixed `--client`/`--environment` to be optional everywhere, uniformly (`--client` requires
+`--environment`; neither is otherwise required), matching what `--list`/`set` already allowed and
+what the underlying engine already supported. `--list` and the single-resource resolution report
+(printed before every `--dry-run`/`--diff`/real run) were also reworked for readability, reported
+by a real user against the published tool: both now show the resolved chain in real application
+order (`base` first, then every layer outermost-first, connected by `↓`) with uniform `patched
+in`/`not patched in` wording, the resolution report's paths are always repo-relative, and a blank
+line separates that report from the merged content/diff that follows. The `--client` fix and
+`init` command are tagged as `0.9.0-alpha`; the readability rework is `0.11.0-alpha` (`0.10.0-alpha`
+is a wasted duplicate tag of `0.9.0-alpha` — see `docs/ROADMAP.md`'s "Current state" for the full
+drift note), tagged and published, with `config-transform-pilot` re-pinned to it. Two more
+real-user-reported usability fixes have since landed, versioned as `0.12.0-alpha` and published —
+but tagged against the #18 merge commit before the CHANGELOG-versioning PR (#19) had merged, so
+the GitHub Release has an empty body (package itself is real and correct; see
+`docs/CHANGELOG.md`'s `[0.12.0-alpha]` entry for the drift note and manual fix): bare `help` now
+short-circuits from any argument position, not just as the very first argument (matching
+`--help`/`-h`, which already did); every CLI validation error now ends with a one-line `Try:`
+example specific to that mistake, since `dotnet tool run configtransform ... --help` never
+actually reaches `configtransform` (`dotnet tool run` intercepts it as its own option — see
+`docs/USAGE.md`'s "Getting help" section for the `--` workaround); and an unrecognized flag close
+to a known one (edit distance ≤2) now gets a specific `Try: did you mean --output?` instead of
+the generic hint, via a small hand-maintained Levenshtein-distance check against the flags the
+switch recognizes. `config-transform-pilot` is re-pinned to `0.12.0-alpha`. A further real-user
+report — `init`'s scan surfacing `.config/dotnet-tools.json`/`nuget.config` as candidate
+resources — is fixed too: `InitScanner` now excludes both by exact filename, a narrow named
+exception alongside its existing directory excludes (see `docs/INIT_COMMAND_DESIGN.md`'s
+"Scanning: directory filters, not content filters" for why this doesn't reopen the broader
+no-filename-heuristics rule). A third: omitting `--resource` treats `--output` as a directory, so
+an existing file at that path (most naturally, a layer whose only resource shares its exact name)
+used to fail with a raw, OS-worded `IOException`; `RunEveryResource` now checks up front and
+fails with a real error plus a `Try: add --resource ...` hint — deliberately not an
+auto-detect-the-single-resource shortcut, since that would make behavior depend on how many
+resources happen to be in the layer right now. A fourth: `--diff`'s output no longer leaks git's
+own file-identity header lines (`diff --git a/... b/...`, `index ...`, `--- a/...`, `+++ b/...`)
+that named the underlying OS temp files `GitDiff` diffs against — meaningless given the CLI
+already shows the real resource path above the diff; `GitDiff.Render` strips exactly those 4
+lines now. All three are versioned as `0.13.0-alpha` (CHANGELOG moved out of `[Unreleased]` before
+tagging this time, per `docs/RELEASING.md` step 1 — the `0.12.0-alpha` empty-release-notes drift
+above is exactly the mistake this avoids), tagged, pushed, and published clean — real, complete
+GitHub Release notes this time, no manual patching needed — and `config-transform-pilot` is
+re-pinned to `0.13.0-alpha`, verified against real CI. A fifth real-user report has since landed,
+not yet tagged: omitting `--resource` against a nonexistent `--environment`/`--client` (a typo,
+most likely) printed the generic `(no resources with a registered format handler at this layer)`
+— worded as if the layer existed but its resources' formats were unsupported. `RunEveryResource`
+now tells that case apart from a layer that genuinely exists but declares no resources: when the
+target layer file itself is missing, it names the exact path it looked for and suggests
+`configtransform init`, while the original message is unchanged for the cases it actually
+describes. A sixth: `set` now supports matching an XML element by tag name alone
+(`--match tag=customErrors`), for singleton elements with no identifying attribute at all —
+mirrors real XDT's own default-match-by-name idiom (no `xdt:Locator` at all) for exactly that
+case, via a new reserved `tag` `--match` coordinate parallel to JSON's existing `key`/
+`literal-key`. See `docs/ROADMAP.md`'s "Next up" for what's actionable now versus what
+needs either a solution repo that doesn't exist yet or an owner decision.

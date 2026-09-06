@@ -18,8 +18,9 @@ repo's own structure and test plan) and [`docs/CONFIG_MANAGEMENT.md`](docs/CONFI
 Documentation is updated in the same change as the code — see
 [`docs/DOCUMENTATION_POLICY.md`](docs/DOCUMENTATION_POLICY.md).
 
-Changes to the CLI's arguments or the manifest schema (`docs/MANIFEST_SCHEMA.md`) are breaking
-changes — see `docs/CHANGELOG.md` and the SemVer policy before making one.
+Changes to the CLI's arguments or the `configtransform.json` layer schema
+(`docs/MANIFEST_SCHEMA.md`) are breaking changes — see `docs/CHANGELOG.md` and the SemVer policy
+before making one.
 
 ## Tests
 

@@ -7,15 +7,13 @@ namespace ConfigTransform.Json.Tests;
 public class JsonLayerMergerTests
 {
     private static string FixturesRoot => Path.Combine(AppContext.BaseDirectory, "Fixtures", "DotNetCore");
+    private const string ResourcePath = "Project/appsettings.json";
 
     [Fact]
     public void Merges_base_environment_and_client_layers_end_to_end()
     {
-        var projectDir = Path.Combine(FixturesRoot, "Project");
-        var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
-
-        var resolution = LayerResolution.Resolve(projectDir, "appsettings.json", overlayRoot, "ClientA", "Production");
-        var merged = JsonLayerMerger.Merge(resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
+        var resolved = Resolve("ClientA", "Production");
+        var merged = JsonLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
         using var doc = JsonDocument.Parse(merged);
         var root = doc.RootElement;
@@ -31,11 +29,8 @@ public class JsonLayerMergerTests
     {
         // IConfiguration stores every leaf as a plain string internally; a naive round-trip
         // would turn `"RetryCount": 5` into `"RetryCount": "5"`. This pins that it doesn't.
-        var projectDir = Path.Combine(FixturesRoot, "Project");
-        var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
-
-        var resolution = LayerResolution.Resolve(projectDir, "appsettings.json", overlayRoot, "ClientA", "Production");
-        var merged = JsonLayerMerger.Merge(resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
+        var resolved = Resolve("ClientA", "Production");
+        var merged = JsonLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
         using var doc = JsonDocument.Parse(merged);
         var root = doc.RootElement;
@@ -54,11 +49,8 @@ public class JsonLayerMergerTests
         // flattens arrays to indexed keys ("AllowedOrigins:0", "AllowedOrigins:1", ...), so an
         // overlay array only overrides the indices it specifies -- it does not replace the
         // base array wholesale. Index 1 survives from the base layer untouched.
-        var projectDir = Path.Combine(FixturesRoot, "Project");
-        var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
-
-        var resolution = LayerResolution.Resolve(projectDir, "appsettings.json", overlayRoot, "ClientA", "Production");
-        var merged = JsonLayerMerger.Merge(resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
+        var resolved = Resolve("ClientA", "Production");
+        var merged = JsonLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
         using var doc = JsonDocument.Parse(merged);
         var origins = doc.RootElement.GetProperty("AllowedOrigins");
@@ -72,14 +64,10 @@ public class JsonLayerMergerTests
     [Fact]
     public void Applies_only_base_when_no_overlays_match()
     {
-        var projectDir = Path.Combine(FixturesRoot, "Project");
-        var overlayRoot = Path.Combine(FixturesRoot, "Overlay");
+        var resolved = Resolve("ClientB", "Staging");
+        Assert.Empty(resolved.PatchPathsInOrder);
 
-        var resolution = LayerResolution.Resolve(projectDir, "appsettings.json", overlayRoot, "ClientB", "Staging");
-        var merged = JsonLayerMerger.Merge(resolution.BasePath, resolution.EnvironmentOverlayPath, resolution.ClientOverlayPath);
-
-        Assert.Null(resolution.EnvironmentOverlayPath);
-        Assert.Null(resolution.ClientOverlayPath);
+        var merged = JsonLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
         using var doc = JsonDocument.Parse(merged);
         var root = doc.RootElement;
@@ -87,5 +75,11 @@ public class JsonLayerMergerTests
         Assert.Equal("https://dev.example.com", root.GetProperty("ApiUrl").GetString());
         Assert.Equal(3, root.GetProperty("RetryCount").GetInt32());
         Assert.Equal("Information", root.GetProperty("Logging").GetProperty("LogLevel").GetProperty("Default").GetString());
+    }
+
+    private static ResolvedResource Resolve(string client, string environment)
+    {
+        var chain = LayerChain.Build(FixturesRoot, LayerPathResolver.Resolve(FixturesRoot, client, environment));
+        return LayerChain.ResolveResource(FixturesRoot, chain, ResourcePath);
     }
 }

@@ -1,0 +1,4 @@
+{
+  "extends": ".configtransform/Environments/Production/configtransform.json",
+  "resources": [ { "path": "Project/appsettings.json", "patch": ".configtransform/Clients/ClientA/Production/patch-Project-appsettings.json.json" } ]
+}

@@ -1,0 +1,9 @@
+{
+  "endpoints": {
+    "routes": [
+      { "name": "primary", "region": "east", "active": false },
+      { "name": "secondary", "region": "east", "active": false }
+    ]
+  },
+  "tags": [ "alpha", "beta" ]
+}

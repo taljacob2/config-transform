@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <Description>Shared logic for ConfigTransform: manifest parsing, case-insensitive file resolution, and layer-resolution reporting. Format-agnostic — consumed by both ConfigTransform.Xml and ConfigTransform.Json.</Description>
+    <IsPackable>false</IsPackable>
+    <Description>Shared logic for ConfigTransform: layer parsing, case-insensitive file resolution, and layer-resolution reporting. Format-agnostic — consumed by ConfigTransform.Xml, ConfigTransform.Json, and ConfigTransform.Cli.</Description>
   </PropertyGroup>
 
 </Project>

@@ -1,11 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <PackAsTool>true</PackAsTool>
-    <ToolCommandName>configtransform-xml</ToolCommandName>
-    <PackageId>ConfigTransform.Xml</PackageId>
-    <Description>Base + Environments + Clients layered XDT transform resolution for App.config, Web.config, and other XML config files. See CONFIG_MANAGEMENT.md §5.2 and §6.</Description>
+    <IsPackable>false</IsPackable>
+    <Description>XDT-based layered merge engine for App.config, Web.config, and other XML config files — the XML half of ConfigTransform.Cli's format registry. See CONFIG_MANAGEMENT.md §5.2 and §6.</Description>
   </PropertyGroup>
 
   <ItemGroup>

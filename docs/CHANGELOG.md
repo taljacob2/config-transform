@@ -6,8 +6,468 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.14.0-alpha] - 2026-09-06
+
 ### Added
 
+- **`set --match tag=<ElementName>` matches an XML element by its tag name alone**, for
+  singleton elements with no identifying attribute at all — `customErrors`, `compilation`,
+  `httpRuntime`, and similar `system.web`/`system.webServer` sections. Reported against the
+  published tool: a real production overlay used `<customErrors xdt:Transform="SetAttributes"
+  mode="RemoteOnly" />` with no `xdt:Locator` at all — real XDT's own default-match-by-name
+  idiom for exactly this case — but `set` had no way to produce it, since `--match` always
+  required an attribute=value pair. `tag` is a new reserved `--match` coordinate (parallel to
+  JSON's existing reserved `key`/`literal-key`): `XmlFieldAuthor` now filters candidates by
+  element name when it's given, and writes no `xdt:Locator` at all when `tag` is the only
+  coordinate — the tag is never written as a literal attribute or listed inside `Locator(...)`,
+  since it isn't a real attribute. Combines with real attribute matches too
+  (`--match tag=add --match key=ApiUrl`), narrowing candidates without adding anything to the
+  emitted Locator. See `docs/FIELD_AUTHORING_DESIGN.md`'s "What --match and --set mean, per
+  format" → XML for the full design and decision log entry.
+
+### Fixed
+
+- **Omitting `--resource` against a nonexistent `--environment`/`--client` now says so**,
+  reported against the published tool: `configtransform -e test --dry-run` against an
+  environment that was never configured (e.g. a typo) printed the generic
+  `(no resources with a registered format handler at this layer)` — worded as if the layer
+  existed but its resources' formats were unsupported, when the real reason was that
+  `.configtransform/Environments/test/configtransform.json` doesn't exist at all. This is still
+  never an error (a missing target layer stays non-fatal, same as any other missing overlay —
+  CONFIG_MANAGEMENT.md §5.1), but `RunEveryResource` now distinguishes the two cases: when the
+  target layer itself is missing, it prints `(no configtransform.json found for --environment
+  'test' -- expected at '.configtransform/Environments/test/configtransform.json'. Try: check
+  the spelling, or run 'configtransform init' to scaffold it.)` naming the exact path it looked
+  for; the original message is unchanged for the cases it actually describes — a layer that
+  exists but declares no resources, or whose resources' extensions have no registered engine.
+
+## [0.13.0-alpha] - 2026-09-05
+
+### Fixed
+
+- **`init`'s scan no longer suggests `dotnet-tools.json`/`nuget.config` as candidate resources.**
+  Reported against the published tool: a plain `configtransform init` in this very repo surfaced
+  `.config/dotnet-tools.json` (its own local tool manifest) and `nuget.config` on the checklist
+  alongside real application config. `InitScanner` excludes both by exact filename now, alongside
+  its existing directory-level excludes (`.git`, `.configtransform`, `bin`, `obj`,
+  `node_modules`) — a narrow, named exception since these two are never a legitimate
+  per-client/per-environment resource in any repo, unlike something merely config-*shaped*
+  (`tsconfig.json`, a stray `package.json`) that's still left to the checklist. See
+  `docs/INIT_COMMAND_DESIGN.md`'s "Scanning: directory filters, not content filters" for why this
+  doesn't reopen the broader rule against filename/schema heuristics.
+- **A clear error when `--output` collides with an existing file in multi-resource mode**,
+  reported against the published tool: omitting `--resource` treats `--output` as a directory
+  (one file written per resource), but a bare filename that happened to already exist there (a
+  layer's only resource shares its own name, or any other file at that exact path) used to throw
+  a raw, unhelpful `IOException` — `Cannot create '...' because a file or directory with the same
+  name already exists.` on Windows, `The file '...' already exists.` on Linux — with no
+  indication of why or what to do. `RunEveryResource` now checks for this up front and fails with
+  `Error: --output '<path>' already exists as a file, but --resource was omitted...` plus
+  `Try: add --resource <path> to target and overwrite that one file directly, or point --output
+  at a different or empty directory.` Deliberately **not** auto-detected from "only one resource
+  found" — that would make the same command's behavior depend on how many resources happen to be
+  in the layer *right now*, silently changing meaning the day a second resource is added to it.
+- **`--diff` no longer prints git's own file-identity header lines**, reported against the
+  published tool: `git diff --no-index` (which `GitDiff` shells out to, comparing two throwaway
+  temp files) prefixes its actual hunk output with 4 lines identifying the compared files —
+  `diff --git a/... b/...`, `index ...`, `--- a/...`, `+++ b/...` — but since `a`/`b` here are
+  always OS temp file paths (e.g. `C:\Users\...\AppData\Local\Temp\tmpXXXX.tmp`), those lines are
+  meaningless noise, not real file identity; the CLI already shows the actual resource path right
+  above the diff (`Resolving '<path>'` for one resource, `=== <path> ===` for every resource).
+  `GitDiff.Render` now strips exactly those 4 meta lines (matched by prefix after stripping
+  `--color=always`'s ANSI codes, never mistaken for real content since every hunk-body line
+  already starts with a `+`/`-`/` `/`\` diff marker) before returning the output.
+
+## [0.12.0-alpha] - 2026-09-05
+
+**Tagged before this section existed on `main`.** The owner pushed the `0.12.0-alpha` tag against
+`1396e2e` (the #18 merge commit) while this very section was still sitting under `[Unreleased]`
+in an unmerged PR (#19) — the same class of drift already flagged for `0.4.1`/`0.6.0-alpha`/
+`0.9.0-alpha`/`0.10.0-alpha` above, this time with a real consequence rather than a cosmetic one:
+`scripts/extract-changelog-section.sh` found no `## [0.12.0-alpha]` heading at the tagged commit,
+so the GitHub Release it created has an **empty body** (build/test/pack/push/smoke-test all
+still succeeded — the published package itself is real and correct, only the release notes text
+is missing). Packages can't be un-published, so there's no re-tagging this one; the fix is to
+paste this section's content into the release manually
+(https://github.com/taljacob2/config-transform/releases/tag/0.12.0-alpha, "Edit release"). Going
+forward: tag only after the `[Unreleased]`→versioned-section PR has actually merged, not just
+opened.
+
+### Fixed
+
+- **Bare `help` now wins from any argument position, not just leading.** `--help`/`-h` already
+  short-circuited from anywhere in the arguments, but a trailing bare `help` (e.g.
+  `configtransform -e Production -r App.config help`) fell through to the switch's default case
+  and threw `Unrecognized argument: 'help'.` instead — reported against the published tool by a
+  real user who reflexively appended `help` after an invocation that had already errored. All
+  three forms (`help`, `--help`, `-h`) now behave identically regardless of position.
+
+### Added
+
+- **A `Try:` line on every CLI validation error**, giving a concrete corrected example for that
+  specific mistake (e.g. `--output is required for a real run...` is now followed by
+  `Try: add --output <path>, or pass --dry-run/--diff to preview instead of writing.`) instead of
+  just pointing the user at the full help page. Prompted by the same user feedback as the `help`
+  fix above — `dotnet tool run configtransform ... --help` doesn't reach `configtransform` at all
+  (it's swallowed by `dotnet tool run`'s own argument parser; see `docs/USAGE.md`'s "Getting
+  help" section for the documented `--` workaround), so a one-line, targeted hint at the point of
+  the actual error is more likely to be seen than a pointer to `--help`.
+- **"Did you mean" suggestions for a mistyped flag.** An unrecognized argument within edit
+  distance 2 of a known flag (e.g. `--otuput`, `--lsit`, `--dif`) now gets
+  `Try: did you mean --output?` instead of the generic `Try: configtransform --help ...` hint;
+  anything farther off still falls back to the generic hint. Plain Levenshtein distance against
+  a small hand-maintained list of the flags `CliOptionsParser`'s switch recognizes — no new
+  dependency.
+
+## [0.11.0-alpha] - 2026-09-05
+
+### Changed
+
+- **Clearer chain output for `--list` and the single-resource resolution report**, reported
+  against the published tool by a real user working against `config-transform-pilot`. `--list`
+  used to show the target layer first (`patched here`) and ancestors after (`also patched in`)
+  — backwards from how the chain actually applies — and never showed the base file at all; it
+  now walks the chain in real application order (`base` first, then every layer outermost-first),
+  connected by `↓`, with uniform `patched in`/`not patched in` status (no more `patched here`/
+  `also patched in`/`inherited from`/`using the base file directly` variants). The resolution
+  report printed before every single-resource `--dry-run`/`--diff`/real-run got the same
+  base→arrow→layer shape, but with a two-line entry per layer (a label line, then an indented
+  `patched in: <path>`/`not patched in` detail line) since patch paths are too long to trail on
+  the label line in a normal terminal width; every path shown is repo-relative now, never an
+  OS-absolute path, and never omitted. A blank line now separates that report from the merged
+  content (`--dry-run`) or diff (`--diff`) that follows it, so the two don't visually run
+  together. New `LayerChain.ChainStep`/`ResolvedResource.Steps` back the new display; the
+  existing `ResolvedResource.Report` field (and its wording) is unchanged, since it's a
+  lower-level fact log directly unit-tested elsewhere, not the presentation layer.
+
+## [0.10.0-alpha] - 2026-09-05
+
+Published directly by the repo owner, 14 minutes after `0.9.0-alpha`, before this session's
+`0.11.0-alpha` work above had merged to `main` — this section is backfilled after the fact,
+which is why it wasn't already here (same class of drift previously flagged for `0.4.1`). Points
+at the exact same commit as `0.9.0-alpha` (`de7e8c2`), so its actual `ConfigTransform.Cli` code
+is identical: no functional changes beyond it. Not recommended for use — pin to `0.11.0-alpha` or
+later.
+
+## [0.9.0-alpha] - 2026-09-05
+
+Published directly by the repo owner, without first following `docs/RELEASING.md`'s step 1
+(moving `docs/CHANGELOG.md`'s `[Unreleased]` content into a versioned section before tagging) —
+the same kind of drift already flagged for `0.4.1`/`0.6.0-alpha` above, here reconciled directly
+since the intent was unambiguous (the tag points at the exact commit this content was merged at):
+this section covers everything below, backfilled after the fact rather than left undocumented.
+
+### Added
+
+- **`init` command** (`docs/INIT_COMMAND_DESIGN.md`) — scaffolds a `.configtransform/` tree
+  instead of hand-writing the first `configtransform.json`. Three modes: an interactive form
+  (plain sequential prompts — no TUI — asking which scanned resources to manage, then
+  environments, then clients), a fully flag-driven quiet mode safe for CI (`--environment`/
+  `--client`/`--resource` are repeatable here, distinct from their singular meaning everywhere
+  else), and `init --template` — a bare switch, one fixed starter tree (`Production`/`Test` x
+  `Client-A`/`Client-B`, one JSON resource) that's immediately runnable: every layer overrides
+  the resource's `message` field with a value naming itself, so `--dry-run`/`--diff` right after
+  `init --template` show the override chain actually working, not just proof a tree exists.
+  Scanning excludes only structural noise (`.git/`, `.configtransform/`, `bin/`, `obj/`,
+  `node_modules/`) — never a filename/content heuristic, consistent with this tool's
+  format-genericity. Idempotent: re-running merges into whatever's already there (a new
+  client, a newly-added resource) without touching existing `patch`/`extends` references, the
+  same convention `set` already established. New `InitScanner`/`InitPlanner`/`InitTemplate`/
+  `InitRunner` in `ConfigTransform.Core`.
+- **`PatchFileNaming`** (`ConfigTransform.Core`) — the patch-filename convention `set`
+  (`SetTargetResolver`) and `init --template` now share: `patch-{path-with-'/'-as-'-'}`, plus the
+  patch extension only when the resource's own extension doesn't already end with it. Fixes a
+  real, previously-silent stutter for any resource whose extension already matches the patch
+  extension — every plain `.json` resource `set` has ever created a patch for, e.g.
+  `patch-appsettings.json.json` — now `patch-appsettings.json`. Only affects filenames chosen for
+  patches that don't exist yet; an already-recorded `patch` path in an existing
+  `configtransform.json` is never touched.
+
+### Fixed
+
+- **`--client` no longer required for a plain resolve/`--dry-run`/`--diff`/real-run.**
+  `CliOptionsParser`'s default branch demanded both `--client` and `--environment`
+  unconditionally — stricter than `--list`/`set` ever were (both already allowed
+  `--environment` alone, or neither, targeting the base file directly) and stricter than the
+  underlying engine needed (`LayerPathResolver`/`LayerChain` already resolve an Environment-only
+  or base-only target correctly). Reported against the published tool:
+  `configtransform --environment Production --resource <path>` (no `--client`) failed with
+  `Error: --client is required.` The rule is now uniform across every mode: `--client` requires
+  `--environment` (there's no client-only layer), but neither is otherwise required — omitting
+  both resolves the base file with nothing applied, `--environment` alone resolves that
+  Environment layer with no client override.
+
+## [0.8.0-alpha] - 2026-09-04
+
+Breaking, following this repo's own precedent for a pre-1.0 breaking change (`0.2.0-alpha`'s
+manifest-schema rename, `0.7.0-alpha`'s manifest.json removal): a MINOR bump, not a jump to
+`1.0.0` — `CONFIG_MANAGEMENT.md` §10.8 ties dropping `-alpha` to real-content validation, not to
+breaking-change size, unchanged by this release.
+
+### Added
+
+- **`help` command, and the default when the tool is run with no arguments at all.** New
+  `HelpPrinter` (`ConfigTransform.Core`) prints a tldr-style page: a `USAGE` summary, a
+  `COMMON COMMANDS` quick-reference table, and — for every command (`--dry-run`, `--diff`,
+  `--output`, `--list`, `set`) — one easy example plus one more advanced ("tldr") example (a
+  mixed-format single-call resolve, a `--list --resource` reverse lookup, a `set` with a
+  compound JSON `$elemMatch` condition). Supported extensions are listed from the real,
+  currently-registered `FormatEngineRegistry` rather than hardcoded, so the page never drifts
+  from what the binary actually handles. Reachable four ways, all equivalent: no arguments,
+  a leading bare `help`, or `--help`/`-h` anywhere in the arguments — the last two are
+  recognized only in flag position (never mistaken for a value some other flag is consuming,
+  e.g. `--set value=-h`), and win over every other flag, including what would otherwise be a
+  validation error (a bare `--client` with no `--environment` now shows help instead of
+  "--environment is required."). `CliOptions` gains a `Help` field; `CliRunner.Run` checks it
+  first, before even resolving a working directory.
+
+### Changed
+
+- **CLI unification: `ConfigTransform.Xml`/`ConfigTransform.Json` (two separate dotnet tools,
+  `configtransform-xml`/`configtransform-json`) are replaced by one `ConfigTransform.Cli` tool
+  (`configtransform`)**, the deferred piece of `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`'s
+  "Settled decisions" #2 finally implemented. Every resource a resolved layer touches — across
+  **every** registered format, not just one tool's own — now resolves in a single call: a mixed
+  XML/JSON layer no longer needs two separate tool invocations, and omitting `--resource` no
+  longer skips the other format with a stderr note (that skip only fires now for a genuinely
+  unregistered extension, e.g. a future YAML resource — reported, never silently dropped).
+  `set` dispatches the same way, by the target resource's own extension, so one shared
+  `configtransform.json` layer can list both an XML-authored and a JSON-authored resource,
+  each written by its own engine independently.
+  **New types in `ConfigTransform.Core`**: `FormatEngine` (one format's merge function, field-
+  author function, owned extensions, and patch-file extension) and `FormatEngineRegistry`
+  (dispatches a resource to its engine by extension; throws naming supported extensions for an
+  unregistered one). `CliRunner.Run` and the new `SetRunner.Run` (the unified `set` orchestration,
+  replacing each tool's own near-duplicate `RunSet`) take a `FormatEngineRegistry` instead of a
+  single hardcoded merge function — `XmlLayerMerger`/`JsonLayerMerger`/`XmlFieldAuthor`/
+  `JsonFieldAuthor` are otherwise **unchanged**, still the actual merge/authoring engines, exactly
+  as the design doc said they would stay.
+  **`ConfigTransform.Xml`/`ConfigTransform.Json` are now internal libraries, not their own NuGet
+  packages** (`IsPackable=false`) — every version already published under those package IDs stays
+  installable forever (GitHub Packages is immutable), but neither receives a new version from
+  this point on. `ConfigTransform.Core` also gets `IsPackable=false` in this same change, fixing
+  an unrelated pre-existing oversight (it was implicitly packable, never actually meant to be its
+  own package).
+  **Accepted cost**: `ConfigTransform.Cli`'s package now bundles both `Microsoft.Web.Xdt` and
+  `Microsoft.Extensions.Configuration(.Json)` — a JSON-only consumer downloads the XDT dependency
+  and vice versa. Inherent to a single dispatcher; not worth a second package split back apart.
+  **Migration**: any CI/CD invocation using `configtransform-xml`/`configtransform-json` needs
+  updating to install `ConfigTransform.Cli` and invoke `configtransform` instead — the flag shape
+  itself (`--resource`/`--client`/`--environment`/`--output`/`--dry-run`/`--diff`/`--list`/`set`)
+  is unchanged. `config-transform-pilot` is **not** migrated in this change — deliberately
+  deferred, see `docs/ROADMAP.md`'s "Next up".
+  `docs/USAGE.md` rewritten in full for the unified tool; `scripts/smoke-test-published-tool.sh`
+  now installs one tool and asserts a single mixed-format call resolves both an XML and a JSON
+  resource with no stderr skip note — the real capability this release delivers, not just a
+  rename.
+
+## [0.7.0-alpha2] - 2026-09-04
+
+Corrects a partial release, not a code or schema change — no `src/` changes in this entry. See
+`docs/RELEASING.md`'s documented failure-recovery policy (packages already pushed to GitHub
+Packages can never be un-published or overwritten; a corrected re-attempt must be a new version
+tag) and its own precedent, `0.1.0-alpha` → `0.1.0-alpha2`.
+
+### Fixed
+
+- **`scripts/smoke-test-published-tool.sh` still used the removed `--manifest`/`manifest.json`
+  CLI shape**, a gap left over from `0.7.0-alpha`'s own implementation work: every other
+  `--manifest`-referencing doc and script was swept and updated at the time, but this one was
+  missed. `publish.yml` runs this script immediately after pushing packages to GitHub Packages
+  and gates GitHub Release creation on it passing — so `0.7.0-alpha`'s packages went live, but
+  the smoke-test step failed with `Error: Unrecognized argument: '--manifest'.` and no GitHub
+  Release was ever created for it.
+  Rewritten to build a real 2-layer `configtransform.json` chain (`Environments/Smoke` →
+  `Clients/SmokeClient/Smoke`) and invoke `--resource <path> --client SmokeClient --environment
+  Smoke --dry-run` from inside it, asserting the merged value appears in the output — a stronger
+  check than the old script's "exit code 0," which asserted nothing about the actual result.
+  Verified locally against real builds of both `ConfigTransform.Xml`/`ConfigTransform.Json`
+  before this release, resolving correctly through `extends`+`resources`+`patch`.
+- `0.7.0-alpha`'s packages themselves needed no changes — the CLI behavior they shipped was
+  already correct (verified via extensive manual smoke-testing during that release's own
+  implementation, see its changelog entry below); only the *release-verification script* was
+  broken. This tag exists solely to get an accompanying GitHub Release created against a package
+  set that has now actually passed its own gate.
+
+## [0.7.0-alpha] - 2026-09-04
+
+Breaking, following this repo's own precedent for a pre-1.0 breaking change (`0.2.0-alpha`'s
+manifest-schema rename): a MINOR bump, not a jump to `1.0.0` — see `CONFIG_MANAGEMENT.md` §10.8,
+unchanged by this release. `1.0.0` stays reserved for real-content validation, not for the size
+of a breaking change; this redesign hasn't cleared that bar any more than `0.6.0-alpha` had.
+
+### Changed
+
+- **Breaking: `manifest.json` and `--manifest`/`--file` are gone, replaced by self-describing
+  `configtransform.json` layers.** `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`'s fully-decided
+  design (see the entry below) is now real code. One `configtransform.json` per layer directory
+  (`.configtransform/Environments/<Env>/` and `.configtransform/Clients/<Client>/<Env>/`)
+  declares an optional `extends` and a `resources[]` list, each entry pairing a project's
+  repo-root-relative path with its own optional `patch` — no separate project-declaration file;
+  `resources[].path` points straight at the real config file.
+  `Manifest`/`ManifestLoader`/`ManifestDiscovery`/`ManifestEntrySelector`/`ManifestLister`/
+  `LayerResolution` (`ConfigTransform.Core`) are deleted, replaced by `LayerManifest`/
+  `LayerManifestLoader`/`LayerPathResolver`/`LayerChain`/`LayerLister`. `XmlLayerMerger`/
+  `JsonLayerMerger.Merge` take an arbitrary-length ordered patch chain instead of a fixed
+  base+environment+client two-slot signature; `JsonLayerMerger`'s `$elemMatch` progressive
+  resolution now folds over the whole chain (verified with a genuine 3-deep chain test, not just
+  the old 2-hop case).
+  **CLI**: `--manifest`/`--file` are gone; `--resource <repo-root-relative path>` is the tool-wide
+  targeting flag for a resolve/`--dry-run`/`--diff`/a real run/`--list`/`set`. Omitting it
+  processes every resource the resolved layer touches, in that tool's own format, in one call — a
+  real run then requires `--output <directory>` and writes one file per resource; a resource in
+  the other tool's format is skipped with a stderr note, not an error or silent drop (true
+  single-binary dispatch across formats is a separate, not-yet-started pass). `--list` shows one
+  layer's resources and `extends` (or, given `--resource` instead, a tree-wide reverse lookup —
+  every layer that patches one project, closing a real ergonomic gap the new tree creates).
+  **`set`**: now targets a resource by its own path; creates a missing `configtransform.json` on
+  first write, defaulting a Client layer's `extends` to the matching Environment layer even if
+  that file doesn't exist yet (a missing `extends` target is "nothing to inherit," not an error) —
+  its actual field-authoring logic is untouched. A real bug caught only by manual smoke-testing,
+  not the unit suite: `set` was writing an *absolute* path into a newly-created layer's `extends`
+  field instead of repo-root-relative, violating the design's own "every path is repo-root-relative,
+  no exceptions" rule — fixed, with the regression coverage tightened from a loose substring check
+  to exact-value assertions.
+  **Migration**: every consuming repo's `.configtransform/<Project>/manifest.json` +
+  `Environments/`/`Clients/` tree needs converting to the new
+  `.configtransform/Environments/<Env>/configtransform.json` +
+  `.configtransform/Clients/<Client>/<Env>/configtransform.json` shape (`docs/MANIFEST_SCHEMA.md`
+  has the full field reference and worked example) — no coexistence period, no automated
+  migration tool (no real solution repo has adopted the old schema in production yet, so there's
+  no live migration to script for). Every CI/CD invocation using `--manifest`/`--file` needs
+  updating to `--resource`.
+  All fixture trees migrated to the new tree shape; `TempCliWorkspace` (both test projects)
+  rebuilt around a synthetic repo root; `CLAUDE.md`/`MANIFEST_SCHEMA.md`/`GETTING_STARTED.md`/
+  `ONBOARDING.md`/`USAGE.md`/`CONFIG_MANAGEMENT.md` §3/§4/§5.1/§9 rewritten in the same change.
+  CLI unification (`ConfigTransform.Xml`/`ConfigTransform.Json` merging into one dispatcher)
+  remains the one deliberately deferred piece — see `docs/ROADMAP.md`'s "Next up".
+
+### Added
+
+- `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`: **now fully decided** — replaces `manifest.json` and
+  the fixed base→Environments→Clients rule with a Kustomize-style self-describing
+  `configtransform.json` per layer directory, raised directly by the repo owner. Every design
+  question it originally opened is settled: file format (JSON, not YAML — no new dependency for a
+  config file this tool doesn't merge); scope (one file spans every project/format a
+  client×environment touches, not just one project — accepting `ConfigTransform.Xml`/
+  `ConfigTransform.Json` likely unifying into one CLI dispatcher as a first-class consequence);
+  patch-to-resource matching (each `resources` entry pairs its own `path` with an optional `patch`
+  field directly, requested by the repo owner over the document's own earlier filename-convention
+  proposal — needed a new `extends` field to keep that unambiguous when a layer inherits from
+  another multi-project layer); path convention (`extends`, `path`, and `patch` all
+  repo-root-relative, uniformly — the document's first pass special-cased `patch` as a
+  same-directory filename and gave `extends` a different anchor than `path`, both real
+  inconsistencies caught and corrected, prioritizing one predictable rule over the repetition it
+  costs); `manifest.json`'s fate (fully replaced, a clean break, no coexistence period); and
+  `set`'s redesign (a new `--resource <path>` targeting flag, rules for creating/updating a
+  layer's `resources` entries and patch files, while the actual field-authoring logic —
+  `XmlFieldAuthor`/`JsonFieldAuthor`, `$elemMatch`, verified defaults — stays untouched). See
+  `docs/ROADMAP.md`'s "Next up" for what's left, which is implementation planning, not more design.
+
+## [0.6.0-alpha] - 2026-09-03
+
+### Added
+
+- **`set` support for JSON array-of-objects matching, via a `$elemMatch` overlay syntax** —
+  closes the gap flagged below as "not implemented". `--match key=<array>` locates the array, one
+  or more further `--match <field>=<value>` (any attribute other than `key`/`literal-key`) become
+  match conditions; no match found creates a new item instead of erroring (an upsert, combining
+  the conditions themselves with whatever `--set` wrote as the new item's fields); more than one
+  match is a hard error listing every candidate, same posture as XML's ambiguous-element case.
+  The persisted overlay never contains an array index anywhere, including in the file itself — a
+  named, deliberate requirement — expressed instead as a **list** of `$elemMatch` patches under
+  the array's key (a list even for one condition set, so a second `set` call against the same
+  array in the same overlay file, different conditions, appends a second patch rather than
+  colliding with the first; the same conditions re-run updates that patch in place). Because
+  nothing in the file names a position, resolving one has to happen fresh at real merge time, not
+  only when `set` writes the file — a hand-written `$elemMatch` overlay must merge correctly too,
+  and layering is progressive (an Environment-layer patch resolves against the base array; a
+  Client-layer patch against the base+Environment-*merged* array, mirroring how `XmlLayerMerger`
+  applies the Client transform to the already-Environment-transformed document). New
+  `src/ConfigTransform.Json/JsonElemMatchResolver.cs` implements the shared resolution logic (used
+  by both `set`'s eager, non-authoritative set-time check and `JsonLayerMerger`'s authoritative
+  merge-time resolution); `JsonLayerMerger.Merge` gained a pre-processing pass that rewrites
+  `$elemMatch` patches into a real position (a `JsonObject` keyed by numeric-string index, proven
+  to flatten identically to a real array element at that index — not a `JsonArray` literal, which
+  can't address one index without placeholder nulls at the others that would themselves clobber
+  base-layer values) before a layer reaches `Microsoft.Extensions.Configuration`, and falls back
+  to the original, unmodified merge implementation whenever neither overlay layer uses
+  `$elemMatch` at all. 41 new tests (`JsonElemMatchResolverTests`,
+  `JsonLayerMergerElemMatchTests`/`JsonLayerMergerGenericJsonElemMatchTests`, and additions to
+  `JsonFieldAuthorTests`/`JsonSetCommandCliTests`). See `docs/FIELD_AUTHORING_DESIGN.md`'s "JSON /
+  YAML" section and decision log for the full design, and `docs/USAGE.md`'s `set` section for
+  worked examples.
+
+- **`set` command on `ConfigTransform.Json`**: authors a nested key's value directly — no
+  XDT-style Transform/Locator concept for JSON, so both updating an existing key *and* creating a
+  brand-new one are the same operation (unlike XML's `Insert` gap below). `--match key=<path>`
+  (`:`-separated, matching `Microsoft.Extensions.Configuration`'s own flattening convention and
+  ASP.NET Core's command-line config override syntax — not `.`, since dots commonly appear
+  literally in real setting names) or `--match literal-key=<name>` for a key that itself contains
+  a literal `:`. **Matching an item inside an array of objects** was not implemented at the time
+  this entry was first written — discovered during implementation, not part of the original
+  design: `Microsoft.Extensions.Configuration`'s JSON provider merges arrays purely by index, not
+  by matching a field's value the way XDT's `Locator` does for XML, so `--match name=Prod`-style
+  disambiguation (as `docs/FIELD_AUTHORING_DESIGN.md`'s original array-of-objects section
+  describes) couldn't be resolved the same way. **Now closed** — see the entry above. A genuine
+  nested-path-vs-literal-key collision refuses and shows both `--match key=...`/
+  `--match literal-key=...` forms — reachable in practice only via a base-target write against a
+  hand-edited file, since `Microsoft.Extensions.Configuration.Json` itself already refuses to load
+  a file shaped that way for any Environment/Client-target write (which merges through it), making
+  its own load failure the actual defense there. Implemented in
+  `src/ConfigTransform.Json/JsonFieldAuthor.cs`; target-file resolution shared with XML via a new
+  `src/ConfigTransform.Core/SetTargetResolver.cs` (extracted from `XmlCliRunner`'s original inline
+  version, refactor-only, no behavior change). See `docs/USAGE.md`'s `set` section for the full
+  reference and worked examples.
+
+- **`set` command on `ConfigTransform.Xml`**: authors an overlay field's
+  `xdt:Transform="SetAttributes"` — or edits the base file directly — by checking the real,
+  resolved document instead of it being hand-written, per `docs/FIELD_AUTHORING_DESIGN.md`.
+  `--match <attr>=<value>` (repeatable, identifies the target; bare `<value>` defaults to
+  `key=<value>`) and `--set <attr>=<value>` (repeatable, the field(s) written; bare `<value>`
+  defaults to `value=<value>`) — both defaults only ever applied after verifying against the
+  document, never guessed on brand-new content. Covers updating a field that already exists
+  anywhere in the resolved document (the common case — overriding an existing value for one
+  environment/client, or the shared default in the base file); creating a genuinely new element
+  (`Insert`) is **not yet implemented** — there's nothing in an empty document to derive its
+  parent location from, and `set` refuses rather than guessing, with a suggested
+  `--match <realattr>=<value>` when a bare `--match` found the value under a different attribute
+  instead of guessing wrong. A real write auto-prints the effective `--diff` afterward.
+  Implemented in `src/ConfigTransform.Xml/XmlFieldAuthor.cs` (the matching/authoring logic) and
+  `src/ConfigTransform.Xml/XmlCliRunner.cs` (orchestration); shared `--match`/`--set` argument
+  parsing (`MatchSpec`) lives in `ConfigTransform.Core`, also reused by JSON's `set` above. See
+  `docs/USAGE.md`'s `set` section for the full flag reference and worked examples.
+
+- `docs/FIELD_AUTHORING_DESIGN.md`: a completed design (not yet implemented) for a `set` command
+  that authors an overlay field's `SetAttributes`/`Insert`/base-edit operation mechanically
+  instead of by hand, removing the silent-failure risk of a hand-picked `Locator` matching
+  nothing. Covers the `--match`/`--set` model (repeatable, same shape across XML/JSON/YAML/
+  `.env`), per-format matching rules, verified-vs-unverifiable default handling, and the single
+  "verify against the real document, refuse only when creating something brand new" rule that
+  resolved every ambiguity case raised during design. A deliberate, named exception to the
+  `init`/TUI/GUI validation gate in `docs/ROADMAP.md` — see that document's own reasoning for
+  why this specific piece doesn't need real-content validation to design correctly.
+
+## [0.5.0-alpha] - 2026-09-02
+
+### Added
+
+- **Manifest auto-discovery and short flag aliases**, on both `ConfigTransform.Xml` and
+  `ConfigTransform.Json`: `--manifest`/`-m` is now optional — when omitted, `ManifestDiscovery`
+  (new, in `ConfigTransform.Core`) looks for exactly one `.configtransform/*/manifest.json`
+  under the current directory and uses it, failing with an actionable error naming every
+  candidate it found (or that none exist) rather than ever guessing between more than one. Every
+  value-taking flag also gained a short alias — `-m`/`-f`/`-c`/`-e`/`-o` for
+  `--manifest`/`--file`/`--client`/`--environment`/`--output` — for less typing on an
+  interactive command; the long forms are unchanged and still what CI should keep using for a
+  readable pipeline log. Prompted directly by a product-brainstorming session on the tool's
+  accessibility: the ergonomics gap wasn't the base→Environments→Clients model, which is simple
+  to explain, but that every invocation demanded five fully-spelled flags with no defaults. This
+  is the first of that session's non-breaking, no-guessing-added ideas (a repo-local wrapper
+  script naming its own manifest path is the other, left to individual solution repos rather
+  than built here). `CliRunner.Run` (and both front-ends' `Run`) also gained an optional
+  `workingDirectory` parameter (defaulting to the real process CWD) purely as a test seam for
+  auto-discovery, with no effect on `Program.cs`'s existing call sites.
 - `docs/ONBOARDING.md`: a strict, linear, copy-paste checklist for a developer joining a repo
   that already uses `config-transform` — install prerequisites, get a PAT, set env vars, unlock
   git-crypt, restore the tool, run a first `--list`/`--diff`. Complements
@@ -19,6 +479,18 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   wrong-working-directory `Manifest not found` error (`config-transform-pilot`'s `FINDINGS.md`),
   and `NU1301` from env vars not set in the current shell/CI step
   (`SECRETS_AND_LOCAL_SETUP.md` §1).
+
+## [0.4.1] - 2026-09-01
+
+Published directly by the repo owner as a test of the release/publish pipeline, not through
+`docs/RELEASING.md`'s documented process (this section is backfilled after the fact, which is
+why it wasn't already here). Points at the same commit as `0.4.0-alpha`'s immediate docs
+follow-up (`b4087d7`, "Add docs/ONBOARDING.md") — so its actual `ConfigTransform.Xml`/
+`ConfigTransform.Json` code is identical to `0.4.0-alpha`'s. No functional changes. Also the
+first release in this repo's history published as non-prerelease (no `-alpha`/`-beta` suffix) —
+not a deliberate graduation out of pre-release status; see `docs/CONFIG_MANAGEMENT.md` §10.8 for
+why `0.5.0-alpha` kept the suffix instead. Not recommended for use — pin to `0.5.0-alpha` or
+later.
 
 ## [0.4.0-alpha] - 2026-08-31
 

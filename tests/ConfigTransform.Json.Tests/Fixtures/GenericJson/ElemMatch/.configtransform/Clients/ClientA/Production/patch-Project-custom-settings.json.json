@@ -1,0 +1,9 @@
+{
+  "endpoints": {
+    "routes": [
+      { "$elemMatch": { "name": "primary" }, "active": true },
+      { "$elemMatch": { "name": "tertiary" }, "active": false }
+    ]
+  },
+  "tags": [ "gamma" ]
+}

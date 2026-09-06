@@ -1,0 +1,8 @@
+{
+  "endpoints": {
+    "routes": [
+      { "$elemMatch": { "name": "secondary" }, "active": true },
+      { "$elemMatch": { "name": "tertiary" }, "active": true, "region": "east" }
+    ]
+  }
+}
