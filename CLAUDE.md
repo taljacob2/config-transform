@@ -190,5 +190,9 @@ most likely) printed the generic `(no resources with a registered format handler
 now tells that case apart from a layer that genuinely exists but declares no resources: when the
 target layer file itself is missing, it names the exact path it looked for and suggests
 `configtransform init`, while the original message is unchanged for the cases it actually
-describes. See `docs/ROADMAP.md`'s "Next up" for what's actionable now versus what
+describes. A sixth: `set` now supports matching an XML element by tag name alone
+(`--match tag=customErrors`), for singleton elements with no identifying attribute at all —
+mirrors real XDT's own default-match-by-name idiom (no `xdt:Locator` at all) for exactly that
+case, via a new reserved `tag` `--match` coordinate parallel to JSON's existing `key`/
+`literal-key`. See `docs/ROADMAP.md`'s "Next up" for what's actionable now versus what
 needs either a solution repo that doesn't exist yet or an owner decision.

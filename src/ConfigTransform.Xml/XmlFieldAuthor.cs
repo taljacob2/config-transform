@@ -16,6 +16,18 @@ public static class XmlFieldAuthor
 {
     private const string XdtNamespace = "http://schemas.microsoft.com/XML-Document-Transform";
 
+    /// <summary>
+    /// Reserved <c>--match</c> coordinate naming the element's own tag, not a real attribute —
+    /// for a singleton element with no identifying attribute at all (<c>customErrors</c>,
+    /// <c>compilation</c>, <c>httpRuntime</c>...), where real XDT itself matches by tag name alone
+    /// and omits <c>xdt:Locator</c> entirely (docs/FIELD_AUTHORING_DESIGN.md's "What --match and
+    /// --set mean, per format" → XML). Parallel to JSON's own reserved <c>key</c>/<c>literal-key</c>
+    /// coordinates -- the same small, deliberate exception to XML's otherwise-open attribute
+    /// vocabulary, accepted for the same reason: a real schema having an attribute literally named
+    /// <c>tag</c> is a theoretical collision, not a practical one.
+    /// </summary>
+    private const string TagCoordinate = "tag";
+
     /// <param name="precedingXml">
     /// The document that exists immediately before this write's own layer would apply: the base
     /// file alone for an Environment-layer write, base+Environment merged for a Client-layer
@@ -74,18 +86,25 @@ public static class XmlFieldAuthor
         EnsureXdtNamespaceDeclared(target);
 
         var container = FindOrCreateAncestorPath(target, ancestorPath);
-        var locatorAttrs = string.Join(",", matches.Select(m => m.Attribute));
+        // The tag coordinate identifies the element to find, but it isn't a real attribute -- it
+        // must never be written to the overlay or appear in the Locator string itself (the tag
+        // name is already the overlay element's own name). When it's the *only* coordinate given,
+        // the overlay carries no xdt:Locator at all, matching real XDT's own default-match
+        // behavior for a singleton element with nothing else to identify it by.
+        var attributeMatches = matches.Where(m => m.Attribute != TagCoordinate).ToList();
+        var locatorAttrs = string.Join(",", attributeMatches.Select(m => m.Attribute));
 
-        var existingOverlayElement = FindExistingOverlayElement(container, matched.Name, matches);
+        var existingOverlayElement = FindExistingOverlayElement(container, matched.Name, attributeMatches);
         var overlayElement = existingOverlayElement ?? target.CreateElement(matched.Name);
 
-        foreach (var m in matches)
+        foreach (var m in attributeMatches)
             overlayElement.SetAttribute(m.Attribute, m.Value);
         foreach (var field in setFields)
             overlayElement.SetAttribute(field.Attribute, field.Value);
 
         overlayElement.SetAttribute("Transform", XdtNamespace, "SetAttributes");
-        overlayElement.SetAttribute("Locator", XdtNamespace, $"Match({locatorAttrs})");
+        if (attributeMatches.Count > 0)
+            overlayElement.SetAttribute("Locator", XdtNamespace, $"Match({locatorAttrs})");
 
         if (existingOverlayElement is null)
             container.AppendChild(overlayElement);
@@ -93,8 +112,15 @@ public static class XmlFieldAuthor
         return Serialize(target);
     }
 
-    private static IEnumerable<XmlElement> FindMatchingElements(XmlElement root, IReadOnlyList<MatchSpec> matches) =>
-        Descendants(root).Where(el => matches.All(m => el.HasAttribute(m.Attribute) && el.GetAttribute(m.Attribute) == m.Value));
+    private static IEnumerable<XmlElement> FindMatchingElements(XmlElement root, IReadOnlyList<MatchSpec> matches)
+    {
+        var tagMatches = matches.Where(m => m.Attribute == TagCoordinate).ToList();
+        var attributeMatches = matches.Where(m => m.Attribute != TagCoordinate).ToList();
+
+        return Descendants(root).Where(el =>
+            tagMatches.All(t => el.Name == t.Value) &&
+            attributeMatches.All(m => el.HasAttribute(m.Attribute) && el.GetAttribute(m.Attribute) == m.Value));
+    }
 
     private static IEnumerable<XmlElement> Descendants(XmlElement root)
     {

@@ -6,6 +6,23 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+### Added
+
+- **`set --match tag=<ElementName>` matches an XML element by its tag name alone**, for
+  singleton elements with no identifying attribute at all — `customErrors`, `compilation`,
+  `httpRuntime`, and similar `system.web`/`system.webServer` sections. Reported against the
+  published tool: a real production overlay used `<customErrors xdt:Transform="SetAttributes"
+  mode="RemoteOnly" />` with no `xdt:Locator` at all — real XDT's own default-match-by-name
+  idiom for exactly this case — but `set` had no way to produce it, since `--match` always
+  required an attribute=value pair. `tag` is a new reserved `--match` coordinate (parallel to
+  JSON's existing reserved `key`/`literal-key`): `XmlFieldAuthor` now filters candidates by
+  element name when it's given, and writes no `xdt:Locator` at all when `tag` is the only
+  coordinate — the tag is never written as a literal attribute or listed inside `Locator(...)`,
+  since it isn't a real attribute. Combines with real attribute matches too
+  (`--match tag=add --match key=ApiUrl`), narrowing candidates without adding anything to the
+  emitted Locator. See `docs/FIELD_AUTHORING_DESIGN.md`'s "What --match and --set mean, per
+  format" → XML for the full design and decision log entry.
+
 ### Fixed
 
 - **Omitting `--resource` against a nonexistent `--environment`/`--client` now says so**,

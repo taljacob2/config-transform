@@ -214,6 +214,92 @@ public class XmlFieldAuthorTests
     }
 
     [Fact]
+    public void Tag_only_match_targets_a_singleton_element_with_no_identifying_attribute()
+    {
+        const string baseXml = """
+            <configuration>
+              <system.web>
+                <customErrors mode="Off" />
+              </system.web>
+            </configuration>
+            """;
+
+        var result = XmlFieldAuthor.Author(
+            baseXml, existingTargetXml: null, isBaseTarget: false,
+            matches: [new MatchSpec("tag", "customErrors", WasDefaulted: false)],
+            setFields: [new MatchSpec("mode", "RemoteOnly", WasDefaulted: false)]);
+
+        Assert.Contains("xdt:Transform=\"SetAttributes\"", result);
+        Assert.Contains("mode=\"RemoteOnly\"", result);
+        // Real XDT's own default-match behavior for a singleton element: no Locator at all.
+        Assert.DoesNotContain("xdt:Locator", result);
+        // "tag" is a coordinate, never a real attribute -- must never be written to the overlay.
+        Assert.DoesNotContain("tag=", result);
+    }
+
+    [Fact]
+    public void Tag_only_match_re_run_updates_the_existing_overlay_entry_in_place()
+    {
+        const string baseXml = """
+            <configuration>
+              <system.web>
+                <customErrors mode="Off" />
+              </system.web>
+            </configuration>
+            """;
+
+        var first = XmlFieldAuthor.Author(
+            baseXml, existingTargetXml: null, isBaseTarget: false,
+            matches: [new MatchSpec("tag", "customErrors", WasDefaulted: false)],
+            setFields: [new MatchSpec("mode", "RemoteOnly", WasDefaulted: false)]);
+
+        var second = XmlFieldAuthor.Author(
+            baseXml, existingTargetXml: first, isBaseTarget: false,
+            matches: [new MatchSpec("tag", "customErrors", WasDefaulted: false)],
+            setFields: [new MatchSpec("mode", "On", WasDefaulted: false)]);
+
+        Assert.Contains("mode=\"On\"", second);
+        Assert.DoesNotContain("RemoteOnly", second);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(second, "<customErrors"));
+    }
+
+    [Fact]
+    public void Tag_combined_with_an_attribute_match_still_produces_a_Locator_for_the_attribute_only()
+    {
+        var result = XmlFieldAuthor.Author(
+            DotNetFrameworkBase, existingTargetXml: null, isBaseTarget: false,
+            matches:
+            [
+                new MatchSpec("tag", "add", WasDefaulted: false),
+                new MatchSpec("key", "ApiUrl", WasDefaulted: false)
+            ],
+            setFields: [new MatchSpec("value", "https://new.example.com", WasDefaulted: false)]);
+
+        Assert.Contains("xdt:Locator=\"Match(key)\"", result);
+        Assert.DoesNotContain("tag=", result);
+    }
+
+    [Fact]
+    public void Tag_only_match_is_ambiguous_when_more_than_one_sibling_shares_the_tag()
+    {
+        const string baseXml = """
+            <configuration>
+              <appSettings>
+                <add key="ApiUrl" value="https://a.example.com" />
+                <add key="OtherKey" value="unrelated" />
+              </appSettings>
+            </configuration>
+            """;
+
+        var ex = Assert.Throws<InvalidOperationException>(() => XmlFieldAuthor.Author(
+            baseXml, existingTargetXml: null, isBaseTarget: false,
+            matches: [new MatchSpec("tag", "add", WasDefaulted: false)],
+            setFields: [new MatchSpec("value", "X", WasDefaulted: false)]));
+
+        Assert.Contains("More than one element matches", ex.Message);
+    }
+
+    [Fact]
     public void Adding_to_an_existing_overlay_file_preserves_its_other_content()
     {
         var withApiUrl = XmlFieldAuthor.Author(
