@@ -1,0 +1,1 @@
+{ "resources": [ { "path": "Project/appsettings.yaml", "patch": ".configtransform/Environments/Production/patch-Project-appsettings.yaml" } ] }

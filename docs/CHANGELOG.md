@@ -6,6 +6,35 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+### Added
+
+- **YAML format support** — a fourth `FormatEngine` (`ConfigTransform.Yaml`), registered
+  alongside XML, JSON, and `.env` in `ConfigTransform.Cli`'s `FormatEngineRegistry` with zero
+  orchestration changes needed, confirming the dispatcher generalizes to a fourth format (not
+  just three). Recognized by `resources[].path`'s own `.yaml`/`.yml` extension (both map to the
+  same engine, the same two-extension pattern XML already uses for `.config`/`.xml`). Reuses the
+  exact same build-time flatten-and-merge *architecture* as JSON (`Microsoft.Extensions.Configuration`),
+  swapping `NetEscapades.Configuration.Yaml`'s `AddYamlFile` in for `AddJsonFile` on the read
+  side, and `YamlDotNet`'s high-level `ISerializer` for the write side (needed directly, since
+  NetEscapades only reads) — no code shared with `ConfigTransform.Json`, per this repo's
+  per-format independent-library convention. Merge semantics — array-override-by-index,
+  empty-container-round-trips-as-absent — are inherited from `IConfiguration`'s own flattening,
+  identically to JSON. One known, real, verified limitation: YAML itself is case-sensitive but
+  `IConfiguration` isn't, so two sibling keys differing only in case throw a duplicate-key error
+  at parse time. `set` (`YamlFieldAuthor`) covers the plain-field path only — updating an
+  existing key or creating a new one via `--match key=<path>`/`--match literal-key=<path>`, the
+  same `:`-separated nested-path model and nested-vs-literal collision detection as JSON's own
+  plain-field case. Matching an item inside an array of objects (YAML's equivalent of JSON's
+  `$elemMatch`) is **not** implemented — refused with a clear "not yet supported" message, the
+  same posture this tool already takes for XML's own unimplemented array-of-objects matching and
+  `Insert`; porting `JsonElemMatchResolver` to YAML's object-graph shape is real, separable work,
+  deliberately deferred rather than bundled into this first version — the same sequencing JSON's
+  own `$elemMatch` followed. See `docs/CONFIG_MANAGEMENT.md` §5.6 for the full merge semantics
+  and the case-sensitivity caveat, and `docs/FIELD_AUTHORING_DESIGN.md`'s "JSON / YAML" section
+  and decision log for the `set` design and dependency choices. 352 tests passing solution-wide
+  (a new 19-test `ConfigTransform.Yaml.Tests` project, plus 6 new `ConfigTransform.Cli.Tests`
+  covering a genuine 4-format single-call resolution and `set` end-to-end).
+
 ## [0.15.0-alpha] - 2026-09-07
 
 ### Added

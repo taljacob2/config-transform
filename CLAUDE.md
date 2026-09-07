@@ -32,8 +32,8 @@ here.
 ## What this is
 
 `config-transform` resolves per-client, per-environment configuration overrides for .NET
-projects — App.config, Web.config, appsettings.json, `.env`, and eventually other formats — by
-layering **base → Environments → Clients** overlays through self-describing `configtransform.json`
+projects — App.config, Web.config, appsettings.json, `.env`, YAML, and eventually other
+formats — by layering **base → Environments → Clients** overlays through self-describing `configtransform.json`
 layers, each declaring what it extends and which resources it patches. It's one piece of a larger
 architecture; the full "why" lives in
 [`docs/CONFIG_MANAGEMENT.md`](docs/CONFIG_MANAGEMENT.md) — read that before assuming something
@@ -61,21 +61,24 @@ here is accidental rather than deliberate.
 - **Format-generic by design.** `ConfigTransform.Xml` (via `Microsoft.Web.Xdt`) treats
   App.config, Web.config, NLog.config, or any other XML file identically — there is no
   App.config-specific logic anywhere in it. `ConfigTransform.Json` is the same for JSON via
-  `Microsoft.Extensions.Configuration`, and `ConfigTransform.Env` the same for flat `KEY=VALUE`
-  `.env` files, with no NuGet dependency at all. This is proven, not just claimed: the
-  `GenericXml`, `GenericJson`, and `GenericEnv` test fixtures use arbitrary, made-up
+  `Microsoft.Extensions.Configuration`, `ConfigTransform.Env` the same for flat `KEY=VALUE`
+  `.env` files with no NuGet dependency at all, and `ConfigTransform.Yaml` the same for YAML via
+  `NetEscapades.Configuration.Yaml`/`YamlDotNet` (same architecture as JSON, no code shared with
+  it — see Repo structure below). This is proven, not just claimed: the `GenericXml`,
+  `GenericJson`, `GenericEnv`, and `GenericYaml` test fixtures use arbitrary, made-up
   schemas/key-names specifically to catch any accidental special-casing. Don't add logic that
   assumes a specific filename or schema.
-- **No coupling to any language, ecosystem, or `TargetFramework`.** All three engines are plain
-  `net8.0` libraries operating on config files purely as XML/JSON/`.env` content — they never
+- **No coupling to any language, ecosystem, or `TargetFramework`.** All four engines are plain
+  `net8.0` libraries operating on config files purely as XML/JSON/`.env`/YAML content — they never
   compile against, reference, or otherwise depend on the project the config file belongs to.
   A `.NET` project on net35, net40, net45, or net472 works exactly the same as one on net48 or
   net8.0 (confirmed via `config-transform-pilot`'s `LegacyGateway.Framework`, a deliberately
   vanilla net35 project) — and the same is true for a Node.js, Angular, React, or Flutter
-  project's own JSON config or `.env` file, since `resources[].path` is just a path (see the
-  Self-describing layers bullet above). The only real constraint is the config file's *format*:
-  XML, JSON, or `.env` today, not the ecosystem or TFM it happens to live in. Don't add anything
-  here that assumes a specific TFM, language, or the consuming project's own SDK/build tooling.
+  project's own JSON, `.env`, or YAML config file, since `resources[].path` is just a path (see
+  the Self-describing layers bullet above). The only real constraint is the config file's
+  *format*: XML, JSON, `.env`, or YAML today, not the ecosystem or TFM it happens to live in.
+  Don't add anything here that assumes a specific TFM, language, or the consuming project's own
+  SDK/build tooling.
 - **Case-insensitive file resolution** (`FileResolver`, in Core). Exists because CI
   runners are typically Linux (case-sensitive) while local dev is typically Windows
   (case-insensitive) — a hazard that can pass locally and fail silently or loudly in CI. Full
@@ -90,17 +93,20 @@ here is accidental rather than deliberate.
 - `src/ConfigTransform.Core/` — shared, format-agnostic logic (`configtransform.json` parsing,
   `extends`-chain resolution, file resolution, layer-resolution reporting, `set` orchestration,
   and `FormatEngine`/`FormatEngineRegistry` dispatch). Change here first for anything that should
-  behave identically across XML and JSON.
-- `src/ConfigTransform.Xml/`, `src/ConfigTransform.Json/`, `src/ConfigTransform.Env/` — internal
-  merge-engine libraries, one per format (`XmlLayerMerger`/`XmlFieldAuthor`,
-  `JsonLayerMerger`/`JsonFieldAuthor`, `EnvLayerMerger`/`EnvFieldAuthor`), not their own dotnet
-  tools.
+  behave identically across all formats.
+- `src/ConfigTransform.Xml/`, `src/ConfigTransform.Json/`, `src/ConfigTransform.Env/`,
+  `src/ConfigTransform.Yaml/` — internal merge-engine libraries, one per format
+  (`XmlLayerMerger`/`XmlFieldAuthor`, `JsonLayerMerger`/`JsonFieldAuthor`,
+  `EnvLayerMerger`/`EnvFieldAuthor`, `YamlLayerMerger`/`YamlFieldAuthor`), not their own dotnet
+  tools, and never sharing code with each other even where conceptually similar (YAML and JSON
+  share an architecture, not an implementation).
 - `src/ConfigTransform.Cli/` — the actual CLI, packaged as the `configtransform` dotnet tool.
-  Registers both format engines above into Core's dispatcher; this is genuinely all it does.
+  Registers all four format engines above into Core's dispatcher; this is genuinely all it does.
 - `tests/*/Fixtures/` — real-shaped fixture files per scenario: `DotNetFramework`,
-  `IisWebConfig`, `GenericXml` (XML); `DotNetCore`, `GenericJson` (JSON). New merge-behavior
-  test cases belong here as fixtures, exercised by data-driven tests — not as inline strings
-  duplicated per test method. Full test matrix: `docs/CONFIGTRANSFORM_TOOL_DESIGN.md` §3.
+  `IisWebConfig`, `GenericXml` (XML); `DotNetCore`, `GenericJson` (JSON); `GenericEnv` (`.env`);
+  `DotNetCore`, `GenericYaml` (YAML). New merge-behavior test cases belong here as fixtures,
+  exercised by data-driven tests — not as inline strings duplicated per test method. Full test
+  matrix: `docs/CONFIGTRANSFORM_TOOL_DESIGN.md` §3.
 - `docs/` — see [`docs/INDEX.md`](docs/INDEX.md) for the full map.
   `docs/CONFIG_MANAGEMENT.md` carries the "why" behind almost every non-obvious decision in
   this codebase.
@@ -201,10 +207,28 @@ case, via a new reserved `tag` `--match` coordinate parallel to JSON's existing 
 registered as a third `FormatEngine` with zero orchestration changes needed — the real proof the
 dispatcher generalizes past two engines) — needs no NuGet package at all, merges as a flat
 `KEY→VALUE` override/append (simpler than JSON, no nesting or arrays to disambiguate), and `set`
-is implemented as the simplest of the three formats' field authors
+is implemented as the simplest of the four formats' field authors
 (`--match key=<NAME> --set value=<value>`). See `docs/CONFIG_MANAGEMENT.md` §5.5 for the `.env`
-grammar this tool deliberately picked (there's no formal spec). Versioned as `0.15.0-alpha` — the
-owner still needs to tag and push it; `config-transform-pilot` should be re-pinned to it, with a
-new `.env`-based pilot project added, once that tag exists and `publish.yml` has run green. See
-`docs/ROADMAP.md`'s "Next up" for what's actionable now versus what needs either a solution repo
-that doesn't exist yet or an owner decision.
+grammar this tool deliberately picked (there's no formal spec). `0.15.0-alpha` is tagged and
+published, and `config-transform-pilot` is re-pinned to it with a new `.env`-based
+`NotificationWorker` pilot project added and verified via real CI. A fourth format has since
+landed: YAML support (`ConfigTransform.Yaml`, registered as a fourth `FormatEngine` with zero
+orchestration changes needed — the dispatcher generalizing to a fourth engine, not just three) —
+reuses JSON's flatten-and-merge *architecture* (`Microsoft.Extensions.Configuration`) via
+`NetEscapades.Configuration.Yaml`'s `AddYamlFile` (read) and `YamlDotNet`'s `ISerializer` (write,
+needed directly since NetEscapades only reads), sharing no code with `ConfigTransform.Json` per
+this repo's per-format independent-library convention. Merge semantics (array-override-by-index,
+empty-container-round-trips-as-absent) are inherited from `IConfiguration`'s own flattening,
+identically to JSON; one real, documented limitation is that YAML is case-sensitive but
+`IConfiguration` isn't, so sibling keys differing only in case throw at parse time. `set` covers
+the plain-field path only (update/create a key, same `:`-separated model as JSON's own
+plain-field case) — matching an item inside a YAML array of objects is **not** implemented,
+refused with a "not yet supported" message, the same posture XML's own unimplemented
+array-of-objects matching already takes; porting `JsonElemMatchResolver` to YAML is real,
+separable work, deliberately deferred (mirrors how JSON's own `$elemMatch` landed after JSON's
+first `set`). See `docs/CONFIG_MANAGEMENT.md` §5.6 for the full merge semantics and dependency
+reasoning. Versioned as the next `0.x-alpha` after `0.15.0-alpha` in `docs/CHANGELOG.md`'s
+`[Unreleased]` section — not yet cut, tagged, or pushed; re-pinning `config-transform-pilot` and
+adding a YAML-based pilot project is a separate follow-up once this ships and is tagged, same
+sequencing as `.env`'s own pilot work. See `docs/ROADMAP.md`'s "Next up" for what's actionable
+now versus what needs either a solution repo that doesn't exist yet or an owner decision.

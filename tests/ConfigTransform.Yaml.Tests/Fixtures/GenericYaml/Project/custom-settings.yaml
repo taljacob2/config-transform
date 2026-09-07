@@ -1,0 +1,6 @@
+endpoints:
+  primary:
+    url: https://dev.example.com/api
+    timeoutSeconds: 30
+flags:
+  betaEnabled: false

@@ -13,14 +13,17 @@ no identifying attribute at all — a real, previously-undesigned gap reported a
 tool, found the same way the JSON array-of-objects gap was: by a real user hitting it. See
 `docs/USAGE.md`'s `set` section and `docs/CHANGELOG.md`'s `[0.6.0-alpha]`/`[0.7.0-alpha]` entries
 for exactly what's live and where. `ConfigTransform.Env`'s `set` is also implemented — the
-simplest of the three, since a `.env` file is always flat: no nested-path disambiguation (JSON)
+simplest of the four, since a `.env` file is always flat: no nested-path disambiguation (JSON)
 and no update-vs-insert branch (XML) to make at all, just `--match key=<NAME> --set
-value=<value>` writing or overwriting a key directly. **Not yet implemented**: XML's `Insert`
-case (a genuinely brand-new element), and XML's array-of-objects matching (see "Open items" below
-for both — JSON's version of the array-of-objects gap, once a real, previously-undesigned problem
-found during implementation, is now closed). This document otherwise still reflects the original
-completed design from a product-brainstorming session; treat any specific claim about *current*
-behavior as superseded by `docs/CHANGELOG.md` where the two differ.
+value=<value>` writing or overwriting a key directly. `ConfigTransform.Yaml`'s `set` is
+implemented for its plain-field path (update an existing key, or create a new one) — the same
+model as JSON's own plain-field case, since YAML shares JSON's exact nesting. **Not yet
+implemented**: XML's `Insert` case (a genuinely brand-new element), XML's array-of-objects
+matching, and YAML's array-of-objects matching (see "Open items" below for all three — JSON's
+version of the array-of-objects gap, once a real, previously-undesigned problem found during
+implementation, is now closed). This document otherwise still reflects the original completed
+design from a product-brainstorming session; treat any specific claim about *current* behavior as
+superseded by `docs/CHANGELOG.md` where the two differ.
 
 ## Why this exists, and why now
 
@@ -231,11 +234,20 @@ See `src/ConfigTransform.Json/JsonElemMatchResolver.cs` for the resolver itself 
 resolution), and `docs/USAGE.md`'s `set` section for more worked examples (compound conditions,
 a second patch in the same overlay, progressive layering across Environment/Client).
 
-YAML is not designed separately from JSON here: `docs/CONFIG_MANAGEMENT.md` §5.6 already
-confirmed YAML fits the existing design without a redesign (same tree-of-maps/lists/scalars
-data model, different serialization) — this command's model inherits that, once YAML support
-itself lands (still "not needed yet" per `docs/ROADMAP.md`; this design doesn't change that
-timeline, it just means `set` won't need separate design work when it does).
+YAML is implemented (`YamlFieldAuthor`, `docs/CONFIG_MANAGEMENT.md` §5.6) and, as predicted here,
+needed no separate design: same tree-of-maps/lists/scalars data model as JSON, same `:`-separated
+nested-path grammar, same `key=`/`literal-key=` disambiguation for a literal key that happens to
+contain a colon. The one real difference from JSON's `set` is scope, not model: YAML's first
+version covers the plain-field path only (update an existing key, or create a new one) — matching
+an item inside an array of objects (the `$elemMatch` case above) is **not** ported for YAML.
+A `--match` shape with more than one coordinate is refused with a clear "not yet supported"
+error rather than guessed at, mirroring how XML's own array-of-objects matching and `Insert`
+are refused today. This is a genuine, named scope gap, not an oversight: `JsonElemMatchResolver`
+is ~200 lines tightly coupled to `System.Text.Json.Nodes` types (`JsonNode`/`JsonObject`/
+`JsonArray`) — porting its `DeepEquals`/`DeepClone`/index-preserving-rewrite logic to YAML's own
+`Dictionary<string, object>`/`List<object>` object graph is real, separable work, deliberately
+deferred rather than bundled into YAML's first version. This repo's own precedent is the same:
+JSON's own `$elemMatch` landed in a later PR than JSON's first `set`.
 
 ### `.env`
 
@@ -361,6 +373,8 @@ No case needed a bespoke resolution; each was the same rule applied once more.
 | Single-segment JSON key vs. the nested/literal collision check | Skip the collision check entirely when the key has no `:` at all | Apply the same nested-vs-literal check uniformly to every key length | A colon-free key (e.g. `ApiUrl`) has only one possible reading — "nested" and "literal" are the same thing for it. Applying the check anyway made the single most common shape a JSON `set` will see (`--match ApiUrl`) always report as ambiguous, a real bug caught by manual smoke-testing, not a design choice. |
 | JSON array-of-objects overlay syntax (closing the row above) | `$elemMatch` — MongoDB's own operator name for "match an array element by field conditions" | Inventing a new name (e.g. `$match`); padding an overlay array with `{}` placeholders up to the target index; addressing the item by a plain numeric index in the overlay file | The user explicitly required that no array index ever be visible anywhere, including in the persisted overlay file — ruling out index-based and padding-based approaches outright. `$elemMatch` is a real, already-known convention (this project's own "prefer a known convention over inventing one" principle, same reasoning as `:` over `.` above) — closer in spirit to XDT's `Locator` than any index-shaped alternative. |
 | Canonical shape for the `$elemMatch` overlay: always a list of patches, even for one condition set | A list under the array's key (`{"Rules": [{"$elemMatch": {...}, ...}]}`), never a bare single object | A bare `{"$elemMatch": {...}, ...}` object for the single-condition-set case, promoted to a list only when a second patch is added | One shape to parse everywhere (set-authoring, merge-time rewrite, hand-editing) beats two; a bare-object shape has nowhere to put a second `set` call against the same array in the same overlay file (different conditions) without either colliding or silently changing shape between the first and second write. |
+| YAML `set` scope for its first version | Plain-field path only (update/create a key); array-of-objects matching refused with a named "not yet supported" error | Port `$elemMatch` to YAML in the same PR | `JsonElemMatchResolver` is tightly coupled to `System.Text.Json.Nodes` types; porting it to a `Dictionary<string, object>`/`List<object>` graph is real, separable work. Matches this repo's own precedent — JSON's own `$elemMatch` landed in a later PR than JSON's first `set` — and keeps YAML's first PR reviewable. |
+| YAML dependency shape | `NetEscapades.Configuration.Yaml` (read, via `AddYamlFile`) + `YamlDotNet` directly (write, via `ISerializer`) | A single library for both directions; a lower-level YamlDotNet node-tree API for writing | No single maintained library does both `Microsoft.Extensions.Configuration` integration and serialization; `YamlDotNet`'s high-level `SerializerBuilder` already makes sensible block/flow-style and quoting choices for a plain object graph, so there's no need to hand-manage YAML tags or emitter state the way the lower-level node-tree API would require. |
 | Where `$elemMatch` conditions resolve to a real position | At real merge time (`JsonLayerMerger.Merge`, via a new pre-processing pass), re-run on every merge, progressively per layer (Environment resolves against base; Client resolves against base+Environment-merged) | Resolve once, at `set`-authoring time only, and bake the resolved position into the overlay file | The "no index in the persisted file" requirement rules out baking anything in. A hand-written overlay (never touched by `set`) still needs to resolve correctly, and a later merge can see a different array shape than the one `set` saw when it wrote the file (e.g. another layer inserted an item first) — only a fresh, real merge-time resolution is correct in general. `set` still does the same resolution eagerly too, for immediate UX (ambiguous/not-found errors surface right away) — but that check is advisory, not authoritative. |
 | Rewritten-position representation inside `Merge`'s pre-processing pass | A `JsonObject` keyed by numeric-string index (`{"1": {...}}`), fed to `Microsoft.Extensions.Configuration` via `AddJsonStream` | A `JsonArray` literal with placeholder entries for skipped indices | A real array can't express "touch only index 1, leave 0 and 2+ alone" without placeholder nulls at the skipped positions, and those nulls would themselves flatten to real `IConfiguration` keys and clobber the base layer's actual values there — the same hazard `JsonLayerMerger`'s own doc comment already warns about for plain overlay arrays. A numeric-string object key has no such constraint, and empirically flattens to the identical `IConfiguration` path as a real array index (verified for both `AddJsonFile` and, since this design switches overlay layers to in-memory streams, `AddJsonStream` specifically — not just inferred from the file case). |
 | No match for a patch's conditions | Upsert: create a new item, combining the `$elemMatch` condition fields as its identity plus whatever `--set` wrote | Treat "no match" as an error, requiring a separate insert-only command or flag | Mirrors MongoDB's own upsert semantics for the same shape (a filter document plus an update document) — a known convention again, not an invented one. Keeps the overlay file's shape identical regardless of whether a given patch will update or create, which is the whole point: that decision is made at resolution time, not authoring time. |
@@ -388,9 +402,10 @@ No case needed a bespoke resolution; each was the same rule applied once more.
   `Microsoft.Extensions.Configuration` merges arrays purely by index with no native
   value-matching to port from XDT — is now closed; see the "JSON / YAML" section above for the
   `$elemMatch` mechanism that closed it, and the decision log for why.)
-- YAML support doesn't exist in this tool at all yet (`docs/ROADMAP.md`: "not needed yet") — this
-  document's YAML section is forward-looking, not something `set` can ship against today.
-  `.env` support has since shipped; its section above now describes real, implemented behavior.
+- **YAML's own array-of-objects matching is not implemented** — the same named, deferred gap as
+  XML's, described in the "JSON / YAML" section above alongside YAML's own plain-field `set`.
+- `.env` and YAML support have both since shipped; their sections above now describe real,
+  implemented behavior rather than a forward-looking design.
 - One deliberate deviation from the design above, decided during implementation: the verified
   "found a different real attribute" case (XML's `key`/`value` defaults section, and "Errors,
   warnings, and suggestions") always refuses and shows the corrected command now, rather than
@@ -403,6 +418,6 @@ No case needed a bespoke resolution; each was the same rule applied once more.
   automates, explained for a human doing it by hand today.
 - [`USAGE.md`](USAGE.md) — the CLI reference, including `set`'s own section.
 - [`CONFIG_MANAGEMENT.md`](CONFIG_MANAGEMENT.md) §5.5 — `.env` merge semantics and grammar;
-  §5.6 — YAML format compatibility (still forward-looking).
+  §5.6 — YAML merge semantics, dependencies, and the case-sensitivity limitation.
 - [`ROADMAP.md`](ROADMAP.md) — `init` (since shipped, `docs/INIT_COMMAND_DESIGN.md`) and the
   still-deferred TUI/GUI entries this document partially unblocked.
