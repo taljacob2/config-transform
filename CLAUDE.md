@@ -203,6 +203,8 @@ dispatcher generalizes past two engines) — needs no NuGet package at all, merg
 `KEY→VALUE` override/append (simpler than JSON, no nesting or arrays to disambiguate), and `set`
 is implemented as the simplest of the three formats' field authors
 (`--match key=<NAME> --set value=<value>`). See `docs/CONFIG_MANAGEMENT.md` §5.5 for the `.env`
-grammar this tool deliberately picked (there's no formal spec). See `docs/ROADMAP.md`'s "Next up"
-for what's actionable now versus what needs either a solution repo that doesn't exist yet or an
-owner decision.
+grammar this tool deliberately picked (there's no formal spec). Versioned as `0.15.0-alpha` — the
+owner still needs to tag and push it; `config-transform-pilot` should be re-pinned to it, with a
+new `.env`-based pilot project added, once that tag exists and `publish.yml` has run green. See
+`docs/ROADMAP.md`'s "Next up" for what's actionable now versus what needs either a solution repo
+that doesn't exist yet or an owner decision.
