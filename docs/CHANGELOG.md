@@ -6,6 +6,8 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.16.0-alpha] - 2026-09-07
+
 ### Added
 
 - **YAML format support** — a fourth `FormatEngine` (`ConfigTransform.Yaml`), registered
