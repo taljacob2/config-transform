@@ -500,10 +500,11 @@ followed (see "Next up" below, which folds XML's, JSON's-already-closed, and now
 array-of-objects status into one list). See `docs/CONFIG_MANAGEMENT.md` §5.6 and
 `docs/FIELD_AUTHORING_DESIGN.md`'s "JSON / YAML" section and decision log for the full mechanism,
 dependency choices, and case-sensitivity caveat. 352 tests passing solution-wide (a new 19-test
-`ConfigTransform.Yaml.Tests` project, plus 6 new `ConfigTransform.Cli.Tests`). Versioned as the
-next `0.x-alpha` after `0.15.0-alpha` in `docs/CHANGELOG.md`'s `[Unreleased]` section — not yet
-cut, tagged, or pushed; re-pinning `config-transform-pilot` and adding a YAML-based pilot project
-is a separate follow-up once this ships and is tagged, same sequencing as `.env`'s own pilot work.
+`ConfigTransform.Yaml.Tests` project, plus 6 new `ConfigTransform.Cli.Tests`). Merged as
+`taljacob2/config-transform#29`. Versioned as `0.16.0-alpha` (`docs/CHANGELOG.md` section moved
+out of `[Unreleased]` in the same change, per `docs/RELEASING.md` step 1); re-pinning
+`config-transform-pilot` and adding a YAML-based pilot project is a separate follow-up once this
+ships and `publish.yml` runs green, same sequencing as `.env`'s own pilot work.
 
 ## Next up
 

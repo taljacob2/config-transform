@@ -227,8 +227,9 @@ refused with a "not yet supported" message, the same posture XML's own unimpleme
 array-of-objects matching already takes; porting `JsonElemMatchResolver` to YAML is real,
 separable work, deliberately deferred (mirrors how JSON's own `$elemMatch` landed after JSON's
 first `set`). See `docs/CONFIG_MANAGEMENT.md` §5.6 for the full merge semantics and dependency
-reasoning. Versioned as the next `0.x-alpha` after `0.15.0-alpha` in `docs/CHANGELOG.md`'s
-`[Unreleased]` section — not yet cut, tagged, or pushed; re-pinning `config-transform-pilot` and
-adding a YAML-based pilot project is a separate follow-up once this ships and is tagged, same
-sequencing as `.env`'s own pilot work. See `docs/ROADMAP.md`'s "Next up" for what's actionable
-now versus what needs either a solution repo that doesn't exist yet or an owner decision.
+reasoning. Merged as `taljacob2/config-transform#29` and versioned as `0.16.0-alpha`
+(`docs/CHANGELOG.md` section moved out of `[Unreleased]` in the same change, per
+`docs/RELEASING.md` step 1); re-pinning `config-transform-pilot` and adding a YAML-based pilot
+project is a separate follow-up once this ships and `publish.yml` runs green, same sequencing as
+`.env`'s own pilot work. See `docs/ROADMAP.md`'s "Next up" for what's actionable now versus what
+needs either a solution repo that doesn't exist yet or an owner decision.
