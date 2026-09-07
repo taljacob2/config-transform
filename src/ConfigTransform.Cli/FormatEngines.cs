@@ -9,6 +9,8 @@ namespace ConfigTransform.Cli;
 /// inside `namespace ConfigTransform.Cli`, a `using ConfigTransform.Xml;`/`using
 /// ConfigTransform.Json;` would make the bare identifiers `Xml`/`Json` resolve to those
 /// namespaces, shadowing `System.Xml`/`System.Text.Json` for any later edit to this file.
+/// <c>ConfigTransform.Env</c> has no such collision (no `System.Env` namespace exists) but is
+/// fully-qualified here too, purely for consistency with the other two lines.
 /// </summary>
 public static class FormatEngines
 {
@@ -18,5 +20,7 @@ public static class FormatEngines
             ConfigTransform.Xml.XmlLayerMerger.Merge, ConfigTransform.Xml.XmlFieldAuthor.Author),
         new FormatEngine("JSON", [".json"], "json",
             ConfigTransform.Json.JsonLayerMerger.Merge, ConfigTransform.Json.JsonFieldAuthor.Author),
+        new FormatEngine("ENV", [".env"], "env",
+            ConfigTransform.Env.EnvLayerMerger.Merge, ConfigTransform.Env.EnvFieldAuthor.Author),
     ]);
 }

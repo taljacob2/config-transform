@@ -1,8 +1,8 @@
 # config-transform
 
 Base + Environments + Clients layered configuration resolution for multi-client,
-multi-environment .NET deployments — App.config, Web.config, and appsettings.json — through
-self-describing `configtransform.json` layers.
+multi-environment .NET deployments — App.config, Web.config, appsettings.json, and `.env` —
+through self-describing `configtransform.json` layers.
 
 Status: **implemented, tested, and released** (pre-1.0, `-alpha` — see
 [`docs/ROADMAP.md`](docs/ROADMAP.md) for exactly what that does and doesn't mean).
@@ -29,9 +29,11 @@ project from scratch and [`docs/USAGE.md`](docs/USAGE.md) for the full CLI refer
   files. An internal library, not its own dotnet tool.
 - `src/ConfigTransform.Json` — `Microsoft.Extensions.Configuration`-based merge engine for
   appsettings.json and other JSON config files. An internal library, not its own dotnet tool.
+- `src/ConfigTransform.Env` — dependency-free flat `KEY=VALUE` merge engine for `.env` config
+  files. An internal library, not its own dotnet tool.
 - `src/ConfigTransform.Cli` — the unified CLI, distributed as the `configtransform` dotnet tool
   (`ConfigTransform.Cli` package). Dispatches each resource to the right engine above by its own
-  file extension, so a mixed XML/JSON layer resolves in one call. Replaces the separate
+  file extension, so a mixed XML/JSON/`.env` layer resolves in one call. Replaces the separate
   `configtransform-xml`/`configtransform-json` tools (`ConfigTransform.Xml`/`ConfigTransform.Json`
   packages) — every already-published version of those stays installable forever, but neither
   receives a new version.
