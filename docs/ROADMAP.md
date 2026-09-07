@@ -455,6 +455,25 @@ appearing in the emitted Locator. 289 tests passing solution-wide. Versioned as 
 `main`; `config-transform-pilot` should be re-pinned to it once that tag exists and
 `publish.yml` has run green.
 
+**`.env` format support implemented** — the item flagged below in "Next up" as "confirmed
+compatible without a redesign... not needed yet" has now landed: a third `FormatEngine`
+(`ConfigTransform.Env`), registered in `ConfigTransform.Cli`'s `FormatEngineRegistry` alongside
+XML and JSON with zero orchestration changes needed — the real proof the dispatcher generalizes
+past two engines, not just a claim. Needs no NuGet package at all — parsing/serializing flat
+`KEY=VALUE` text needs nothing beyond the BCL. Merge semantics mirror JSON's flat key-override,
+simpler still since `.env` has no nesting or arrays to disambiguate. `set` is implemented too
+(`--match key=<NAME> --set value=<value>`, both with bare-shorthand defaults) — the simplest of
+the three formats' field authors, since a flat file has no nested-path disambiguation (JSON) and
+no update-vs-insert branch (XML) to make. The `.env` grammar itself (there's no formal spec) was
+picked deliberately — blank lines/whole-line `#` comments dropped on merge (matching JSON's own
+existing comment-dropping behavior), an optional leading `export ` stripped, keys validated
+against the real POSIX env-var-name grammar, values treated as opaque text (matching quotes
+stripped, no escape processing), only a whole-line `#` counts as a comment — see
+`docs/CONFIG_MANAGEMENT.md` §5.5 and `docs/FIELD_AUTHORING_DESIGN.md`'s decision log for the full
+reasoning. 327 tests passing solution-wide (a new 31-test `ConfigTransform.Env.Tests` project,
+plus 7 new `ConfigTransform.Cli.Tests`). Versioned as the next `0.x-alpha` after `0.14.0-alpha`
+(exact number decided at CHANGELOG-cut time, per `docs/RELEASING.md` step 1) — not yet tagged.
+
 ## Next up
 
 One item below is now actionable purely within this repo (see the first bullet); every other
@@ -503,8 +522,9 @@ default next step.
   this repo's concern directly, but blocks the consuming architecture's
   `build-transformed.yml`. `CONFIG_MANAGEMENT.md` §8.3.
 - **git-crypt key rotation trigger** — deferred by design, not blocking.
-- **YAML/`.env` format support** — confirmed compatible with the existing design without a
-  redesign, see `docs/CONFIG_MANAGEMENT.md` §5.5. Not needed yet.
+- **YAML format support** — confirmed compatible with the existing design without a redesign,
+  see `docs/CONFIG_MANAGEMENT.md` §5.6. Not needed yet. (`.env` support has since shipped, see
+  "Current state" above.)
 - **A real (non-`-alpha`) `1.0.0` release** — once the solution-repo pilot validates the design
   against real content, worth promoting out of pre-release.
 - **A TUI (`configtransform-tui`) and/or a cross-platform GUI (`configtransform-gui`)** —

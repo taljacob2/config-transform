@@ -32,7 +32,7 @@ here.
 ## What this is
 
 `config-transform` resolves per-client, per-environment configuration overrides for .NET
-projects — App.config, Web.config, appsettings.json, and eventually other formats — by
+projects — App.config, Web.config, appsettings.json, `.env`, and eventually other formats — by
 layering **base → Environments → Clients** overlays through self-describing `configtransform.json`
 layers, each declaring what it extends and which resources it patches. It's one piece of a larger
 architecture; the full "why" lives in
@@ -61,19 +61,21 @@ here is accidental rather than deliberate.
 - **Format-generic by design.** `ConfigTransform.Xml` (via `Microsoft.Web.Xdt`) treats
   App.config, Web.config, NLog.config, or any other XML file identically — there is no
   App.config-specific logic anywhere in it. `ConfigTransform.Json` is the same for JSON via
-  `Microsoft.Extensions.Configuration`. This is proven, not just claimed: the `GenericXml` and
-  `GenericJson` test fixtures use arbitrary, made-up schemas specifically to catch any
-  accidental special-casing. Don't add logic that assumes a specific filename or schema.
-- **No coupling to any language, ecosystem, or `TargetFramework`.** Both tools are plain
-  `net8.0` executables operating on config files purely as XML/JSON content — they never
+  `Microsoft.Extensions.Configuration`, and `ConfigTransform.Env` the same for flat `KEY=VALUE`
+  `.env` files, with no NuGet dependency at all. This is proven, not just claimed: the
+  `GenericXml`, `GenericJson`, and `GenericEnv` test fixtures use arbitrary, made-up
+  schemas/key-names specifically to catch any accidental special-casing. Don't add logic that
+  assumes a specific filename or schema.
+- **No coupling to any language, ecosystem, or `TargetFramework`.** All three engines are plain
+  `net8.0` libraries operating on config files purely as XML/JSON/`.env` content — they never
   compile against, reference, or otherwise depend on the project the config file belongs to.
   A `.NET` project on net35, net40, net45, or net472 works exactly the same as one on net48 or
   net8.0 (confirmed via `config-transform-pilot`'s `LegacyGateway.Framework`, a deliberately
   vanilla net35 project) — and the same is true for a Node.js, Angular, React, or Flutter
-  project's own JSON config, since `resources[].path` is just a path (see the Self-describing
-  layers bullet above). The only real constraint is the config file's *format*: XML or JSON today, not the ecosystem
-  or TFM it happens to live in. Don't add anything here that assumes a specific TFM, language,
-  or the consuming project's own SDK/build tooling.
+  project's own JSON config or `.env` file, since `resources[].path` is just a path (see the
+  Self-describing layers bullet above). The only real constraint is the config file's *format*:
+  XML, JSON, or `.env` today, not the ecosystem or TFM it happens to live in. Don't add anything
+  here that assumes a specific TFM, language, or the consuming project's own SDK/build tooling.
 - **Case-insensitive file resolution** (`FileResolver`, in Core). Exists because CI
   runners are typically Linux (case-sensitive) while local dev is typically Windows
   (case-insensitive) — a hazard that can pass locally and fail silently or loudly in CI. Full
@@ -89,9 +91,10 @@ here is accidental rather than deliberate.
   `extends`-chain resolution, file resolution, layer-resolution reporting, `set` orchestration,
   and `FormatEngine`/`FormatEngineRegistry` dispatch). Change here first for anything that should
   behave identically across XML and JSON.
-- `src/ConfigTransform.Xml/`, `src/ConfigTransform.Json/` — internal merge-engine libraries, one
-  per format (`XmlLayerMerger`/`XmlFieldAuthor`, `JsonLayerMerger`/`JsonFieldAuthor`), not their
-  own dotnet tools.
+- `src/ConfigTransform.Xml/`, `src/ConfigTransform.Json/`, `src/ConfigTransform.Env/` — internal
+  merge-engine libraries, one per format (`XmlLayerMerger`/`XmlFieldAuthor`,
+  `JsonLayerMerger`/`JsonFieldAuthor`, `EnvLayerMerger`/`EnvFieldAuthor`), not their own dotnet
+  tools.
 - `src/ConfigTransform.Cli/` — the actual CLI, packaged as the `configtransform` dotnet tool.
   Registers both format engines above into Core's dispatcher; this is genuinely all it does.
 - `tests/*/Fixtures/` — real-shaped fixture files per scenario: `DotNetFramework`,
@@ -194,5 +197,12 @@ describes. A sixth: `set` now supports matching an XML element by tag name alone
 (`--match tag=customErrors`), for singleton elements with no identifying attribute at all —
 mirrors real XDT's own default-match-by-name idiom (no `xdt:Locator` at all) for exactly that
 case, via a new reserved `tag` `--match` coordinate parallel to JSON's existing `key`/
-`literal-key`. See `docs/ROADMAP.md`'s "Next up" for what's actionable now versus what
-needs either a solution repo that doesn't exist yet or an owner decision.
+`literal-key`. A third format has since landed: `.env` support (`ConfigTransform.Env`,
+registered as a third `FormatEngine` with zero orchestration changes needed — the real proof the
+dispatcher generalizes past two engines) — needs no NuGet package at all, merges as a flat
+`KEY→VALUE` override/append (simpler than JSON, no nesting or arrays to disambiguate), and `set`
+is implemented as the simplest of the three formats' field authors
+(`--match key=<NAME> --set value=<value>`). See `docs/CONFIG_MANAGEMENT.md` §5.5 for the `.env`
+grammar this tool deliberately picked (there's no formal spec). See `docs/ROADMAP.md`'s "Next up"
+for what's actionable now versus what needs either a solution repo that doesn't exist yet or an
+owner decision.

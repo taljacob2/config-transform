@@ -66,6 +66,47 @@ public class MixedFormatTests
     }
 
     [Fact]
+    public void Omitting_resource_resolves_all_three_registered_formats_in_one_call()
+    {
+        // The real proof that FormatEngineRegistry generalizes past two engines, not just a
+        // claim: XML + JSON (from TempCliWorkspace) plus a third, genuinely registered .env
+        // resource, all resolved by one --resource-omitted call with zero stderr skip notes --
+        // unlike the unregistered-.yaml case above, which does skip.
+        using var workspace = new TempCliWorkspace();
+        const string envResourcePath = "Project/.env";
+
+        Directory.CreateDirectory(Path.Combine(workspace.RootPath, "Project"));
+        File.WriteAllText(Path.Combine(workspace.RootPath, "Project", ".env"), "API_URL=https://dev.example.com\n");
+
+        var environmentDir = Path.Combine(workspace.RootPath, ".configtransform", "Environments", "Production");
+        var envPatchPath = Path.Combine(environmentDir, "patch-Project-.env");
+        File.WriteAllText(envPatchPath, "API_URL=https://prod.example.com\n");
+
+        var environmentLayer = LayerManifestLoader.Load(workspace.EnvironmentLayerPath);
+        var updated = environmentLayer with
+        {
+            Resources = [.. environmentLayer.Resources, new ResourceEntry(envResourcePath, ".configtransform/Environments/Production/patch-Project-.env")],
+        };
+        File.WriteAllText(workspace.EnvironmentLayerPath, System.Text.Json.JsonSerializer.Serialize(updated));
+
+        var stdout = new StringWriter();
+        var stderr = new StringWriter();
+        var exitCode = CliRunner.Run(new[]
+        {
+            "--client", "ClientA", "--environment", "Production", "--dry-run"
+        }, stdout, stderr, FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(0, exitCode);
+        Assert.Empty(stderr.ToString());
+
+        var output = stdout.ToString();
+        Assert.Contains($"=== {workspace.XmlResourcePath} ===", output);
+        Assert.Contains($"=== {workspace.JsonResourcePath} ===", output);
+        Assert.Contains($"=== {envResourcePath} ===", output);
+        Assert.Contains("API_URL=https://prod.example.com", output); // environment layer applied
+    }
+
+    [Fact]
     public void Set_dispatches_to_the_right_engine_by_resource_extension_within_one_shared_layer()
     {
         using var workspace = new TempCliWorkspace();

@@ -6,6 +6,31 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+### Added
+
+- **`.env` format support** — a third `FormatEngine` (`ConfigTransform.Env`), registered
+  alongside XML and JSON in `ConfigTransform.Cli`'s `FormatEngineRegistry` with zero
+  orchestration changes needed, confirming the "register a new engine, nothing else changes"
+  claim for a third format and not just two. Needs no NuGet package at all — parsing/serializing
+  flat `KEY=VALUE` text needs nothing beyond the BCL. Merge semantics mirror JSON's flat
+  key-override, simpler still since `.env` has no nesting or arrays: the base file's ordered
+  `KEY→VALUE` map is overridden and appended to by each patch in the resolved chain, in
+  `extends` order. `set` is implemented too (`--match key=<NAME> --set value=<value>`, both with
+  bare-shorthand defaults) — the simplest of the three formats' field authors, since a flat file
+  has no nested-path disambiguation (JSON) and no update-vs-insert branch (XML) to make. The
+  `.env` grammar itself (there's no formal spec) was picked deliberately: blank lines and
+  whole-line `#` comments are dropped (not preserved through a merge, matching JSON's own
+  existing comment-dropping behavior on rebuild); an optional leading `export ` is stripped; a
+  key must match the real POSIX env-var-name grammar; a value wrapped in matching `"`/`'` has the
+  quotes stripped with no escape processing and no `${VAR}` expansion; only a whole-line `#` is a
+  comment (no inline/trailing-comment stripping, to avoid truncating a value like
+  `PASSWORD=abc#123`); a value is quoted on write only when it needs to be. See
+  `docs/CONFIG_MANAGEMENT.md` §5.5 for the full grammar and `docs/FIELD_AUTHORING_DESIGN.md`'s
+  `.env` section and decision log for the `set` design and the reasoning behind each grammar
+  choice. 327 tests passing solution-wide (a new 31-test `ConfigTransform.Env.Tests` project,
+  plus 7 new `ConfigTransform.Cli.Tests` covering a genuine 3-format single-call resolution and
+  `set` end-to-end).
+
 ## [0.14.0-alpha] - 2026-09-06
 
 ### Added
