@@ -6,6 +6,8 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.15.0-alpha] - 2026-09-07
+
 ### Added
 
 - **`.env` format support** — a third `FormatEngine` (`ConfigTransform.Env`), registered

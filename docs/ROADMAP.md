@@ -451,9 +451,9 @@ pair. `tag` is a new reserved `--match` coordinate, parallel to JSON's existing 
 real attribute). Combines with real attribute matches too, narrowing candidates without
 appearing in the emitted Locator. 289 tests passing solution-wide. Versioned as `0.14.0-alpha`
 (`docs/CHANGELOG.md` section moved out of `[Unreleased]` in the same change, per
-`docs/RELEASING.md` step 1) — the owner still needs to tag and push `0.14.0-alpha` from current
-`main`; `config-transform-pilot` should be re-pinned to it once that tag exists and
-`publish.yml` has run green.
+`docs/RELEASING.md` step 1) — the owner has since tagged and pushed `0.14.0-alpha` and
+`publish.yml` ran green; `config-transform-pilot` has not yet been re-pinned to it, superseded by
+`0.15.0-alpha` below before that re-pin happened.
 
 **`.env` format support implemented** — the item flagged below in "Next up" as "confirmed
 compatible without a redesign... not needed yet" has now landed: a third `FormatEngine`
@@ -471,8 +471,12 @@ against the real POSIX env-var-name grammar, values treated as opaque text (matc
 stripped, no escape processing), only a whole-line `#` counts as a comment — see
 `docs/CONFIG_MANAGEMENT.md` §5.5 and `docs/FIELD_AUTHORING_DESIGN.md`'s decision log for the full
 reasoning. 327 tests passing solution-wide (a new 31-test `ConfigTransform.Env.Tests` project,
-plus 7 new `ConfigTransform.Cli.Tests`). Versioned as the next `0.x-alpha` after `0.14.0-alpha`
-(exact number decided at CHANGELOG-cut time, per `docs/RELEASING.md` step 1) — not yet tagged.
+plus 7 new `ConfigTransform.Cli.Tests`). Versioned as `0.15.0-alpha`
+(`docs/CHANGELOG.md` section moved out of `[Unreleased]` in the same change, per
+`docs/RELEASING.md` step 1) — merged as `taljacob2/config-transform#27`; the owner still needs
+to tag and push `0.15.0-alpha` from current `main`; `config-transform-pilot` should be re-pinned
+to it, with a new `.env`-based pilot project added, once that tag exists and `publish.yml` has
+run green.
 
 ## Next up
 
