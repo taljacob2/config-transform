@@ -1,0 +1,5 @@
+endpoints:
+  primary:
+    url: https://clienta.example.com/api
+flags:
+  betaEnabled: true

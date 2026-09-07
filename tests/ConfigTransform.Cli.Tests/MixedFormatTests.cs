@@ -17,13 +17,13 @@ public class MixedFormatTests
     public void Resource_with_an_unregistered_extension_fails_and_names_the_supported_formats()
     {
         using var workspace = new TempCliWorkspace();
-        var yamlPath = Path.Combine(workspace.RootPath, "Project", "config.yaml");
-        File.WriteAllText(yamlPath, "placeholder: true");
+        var iniPath = Path.Combine(workspace.RootPath, "Project", "config.ini");
+        File.WriteAllText(iniPath, "placeholder=true");
 
         var stderr = new StringWriter();
         var exitCode = CliRunner.Run(new[]
         {
-            "--resource", "Project/config.yaml",
+            "--resource", "Project/config.ini",
             "--client", "ClientA", "--environment", "Production", "--dry-run"
         }, new StringWriter(), stderr, FormatEngines.All, workspace.RootPath);
 
@@ -38,13 +38,13 @@ public class MixedFormatTests
     public void Omitting_resource_notes_an_unregistered_extension_on_stderr_and_still_processes_the_rest()
     {
         using var workspace = new TempCliWorkspace();
-        var yamlPath = Path.Combine(workspace.RootPath, "Project", "config.yaml");
-        File.WriteAllText(yamlPath, "placeholder: true");
+        var iniPath = Path.Combine(workspace.RootPath, "Project", "config.ini");
+        File.WriteAllText(iniPath, "placeholder=true");
 
         var environmentLayer = LayerManifestLoader.Load(workspace.EnvironmentLayerPath);
         var updated = environmentLayer with
         {
-            Resources = [.. environmentLayer.Resources, new ResourceEntry("Project/config.yaml", null)],
+            Resources = [.. environmentLayer.Resources, new ResourceEntry("Project/config.ini", null)],
         };
         File.WriteAllText(workspace.EnvironmentLayerPath, System.Text.Json.JsonSerializer.Serialize(updated));
 
@@ -66,26 +66,37 @@ public class MixedFormatTests
     }
 
     [Fact]
-    public void Omitting_resource_resolves_all_three_registered_formats_in_one_call()
+    public void Omitting_resource_resolves_all_four_registered_formats_in_one_call()
     {
         // The real proof that FormatEngineRegistry generalizes past two engines, not just a
         // claim: XML + JSON (from TempCliWorkspace) plus a third, genuinely registered .env
-        // resource, all resolved by one --resource-omitted call with zero stderr skip notes --
-        // unlike the unregistered-.yaml case above, which does skip.
+        // resource and a fourth, genuinely registered YAML resource, all resolved by one
+        // --resource-omitted call with zero stderr skip notes -- unlike the unregistered-.yaml
+        // case above (a plain-text placeholder file, never registered as a resource), which
+        // does skip.
         using var workspace = new TempCliWorkspace();
         const string envResourcePath = "Project/.env";
+        const string yamlResourcePath = "Project/settings.yaml";
 
         Directory.CreateDirectory(Path.Combine(workspace.RootPath, "Project"));
         File.WriteAllText(Path.Combine(workspace.RootPath, "Project", ".env"), "API_URL=https://dev.example.com\n");
+        File.WriteAllText(Path.Combine(workspace.RootPath, "Project", "settings.yaml"), "ApiUrl: https://dev.example.com\n");
 
         var environmentDir = Path.Combine(workspace.RootPath, ".configtransform", "Environments", "Production");
         var envPatchPath = Path.Combine(environmentDir, "patch-Project-.env");
         File.WriteAllText(envPatchPath, "API_URL=https://prod.example.com\n");
+        var yamlPatchPath = Path.Combine(environmentDir, "patch-Project-settings.yaml");
+        File.WriteAllText(yamlPatchPath, "ApiUrl: https://prod-yaml.example.com\n");
 
         var environmentLayer = LayerManifestLoader.Load(workspace.EnvironmentLayerPath);
         var updated = environmentLayer with
         {
-            Resources = [.. environmentLayer.Resources, new ResourceEntry(envResourcePath, ".configtransform/Environments/Production/patch-Project-.env")],
+            Resources =
+            [
+                .. environmentLayer.Resources,
+                new ResourceEntry(envResourcePath, ".configtransform/Environments/Production/patch-Project-.env"),
+                new ResourceEntry(yamlResourcePath, ".configtransform/Environments/Production/patch-Project-settings.yaml"),
+            ],
         };
         File.WriteAllText(workspace.EnvironmentLayerPath, System.Text.Json.JsonSerializer.Serialize(updated));
 
@@ -103,7 +114,9 @@ public class MixedFormatTests
         Assert.Contains($"=== {workspace.XmlResourcePath} ===", output);
         Assert.Contains($"=== {workspace.JsonResourcePath} ===", output);
         Assert.Contains($"=== {envResourcePath} ===", output);
-        Assert.Contains("API_URL=https://prod.example.com", output); // environment layer applied
+        Assert.Contains($"=== {yamlResourcePath} ===", output);
+        Assert.Contains("API_URL=https://prod.example.com", output); // .env environment layer applied
+        Assert.Contains("ApiUrl: https://prod-yaml.example.com", output); // YAML environment layer applied
     }
 
     [Fact]

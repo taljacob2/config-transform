@@ -295,28 +295,45 @@ The real `.env.production`/`.env.local` multi-file naming convention some toolin
 via `.configtransform/Environments/` — deliberately not also parsed; a resource is still exactly
 one real file, matched by extension the same way as every other format.
 
-### 5.6 Future format extensibility: YAML (not implemented — documented intentionally)
+### 5.6 YAML
 
-XML, JSON, and `.env` (§5.2, §5.3, §5.5) now cover every known current need (App.config, Web.config,
-NLog.config, ConnectionStrings.config, appsettings.json, `.env`). This design is deliberately
-future-proofed for one more format that may come up later, without requiring a redesign when
-that happens:
+Implemented (`ConfigTransform.Yaml`). Structurally the same as JSON — hierarchical, keyed — so it
+reuses the exact same build-time flatten-and-merge *architecture* as `ConfigTransform.Json`
+(§5.3): `Microsoft.Extensions.Configuration`, but with `NetEscapades.Configuration.Yaml`'s
+`AddYamlFile` in place of `AddJsonFile`. Per this repo's own per-format independent-library
+convention (`CLAUDE.md`'s "Repo structure"), `ConfigTransform.Yaml` shares no code with
+`ConfigTransform.Json` — the merge/serialize logic is ported, not reused, and the read side
+(`NetEscapades.Configuration.Yaml`) and write side (`YamlDotNet`'s high-level `ISerializer`,
+needed directly since NetEscapades only reads) are both real NuGet dependencies, unlike `.env`
+(§5.5), which needed none.
 
-- **YAML**: structurally the same as JSON — hierarchical, keyed. Would use
-  `Microsoft.Extensions.Configuration` with a YAML file provider in place of `AddJsonFile`,
-  reusing the exact same build-time flatten-and-merge approach as `ConfigTransform.Json`
-  (§5.3). Recognized by `resources[].path`'s own `.yaml`/`.yml` extension — consistent with how
-  XML/JSON/`.env` dispatch already works (`MANIFEST_SCHEMA.md`'s "Which engine handles a
-  resource"), never a separately declared field. Would register as one more `FormatEngine` in
-  `ConfigTransform.Cli`'s `FormatEngineRegistry`, now proven to generalize past two engines by
-  `.env`'s own landing — no orchestration changes needed, purely a new registration plus the
-  merge engine itself.
+Recognized by `resources[].path`'s own `.yaml`/`.yml` extension — both map to the same engine
+(a two-extension `FormatEngine`, the same pattern XML already uses for `[".config", ".xml"]`).
+Registered as the fourth `FormatEngine` in `ConfigTransform.Cli`'s `FormatEngineRegistry`, with
+zero orchestration changes needed — the dispatcher generalizing to a fourth engine (after `.env`
+already proved a third) with no changes outside the new registration and merge engine itself.
 
-Doesn't need a change to the `configtransform.json` schema's shape, the `.configtransform/`
-directory layout, the encryption approach, or the CI trigger design — only extension-based
-dispatch recognizing a new suffix and its corresponding merge implementation, built when the need
-is actually confirmed by real project content. Not being built now; recorded here so the
-"no redesign needed later" analysis isn't lost.
+Merge semantics: array-override-by-index and empty-map/empty-sequence-round-trips-as-absent
+behavior are inherited from `IConfiguration`'s own flattening, identically to JSON (§5.3) — not
+YAML-specific, and not new gaps this format introduces.
+
+Known, real limitation (verified empirically, not assumed): YAML itself is case-sensitive, but
+`Microsoft.Extensions.Configuration` is not. Two sibling keys differing only in case (e.g. `Foo:`
+and `foo:` at the same level) throw a duplicate-key exception at parse time via
+`NetEscapades.Configuration.Yaml`. Accepted as a known quirk of the underlying library, the same
+way JSON's array-index-override and `.env`'s comment-dropping are documented rather than "fixed."
+
+`set` (`YamlFieldAuthor`) covers the plain-field path only — updating an existing key or creating
+a new one via `--match key=<path>`/`--match literal-key=<path>` (`:`-separated nested paths, same
+model as JSON's own, including the same nested-path-vs-literal-key collision detection). Matching
+an item inside an array of objects (YAML's equivalent of JSON's `$elemMatch`, §7) is **not**
+implemented — a `--match` shape with more than one coordinate is refused with a clear "not yet
+supported" error rather than guessed at, the same posture this tool already takes for XML's own
+unimplemented array-of-objects matching and `Insert`. `JsonElemMatchResolver` (§7) is ~200 lines
+tightly coupled to `System.Text.Json.Nodes` types; porting it to YAML's own object-graph shape is
+real, separable work, deliberately deferred rather than bundled into YAML's first version — this
+repo's own precedent for JSON itself, where `$elemMatch` landed in a later PR than JSON's first
+`set`.
 
 ## 6. Transform tool CLI
 
@@ -691,8 +708,6 @@ deliberate owner decision to call it otherwise, documented here when made) chang
 - **Deployment transport mechanism** (§8.3) — how CI actually gets the built, resolved artifact
   onto the target Windows servers (self-hosted runner with network access, WinRM/PowerShell
   remoting, or a dedicated tool like Octopus Deploy) is not decided.
-- **YAML support** — see §5.6: confirmed to fit the existing design without a redesign,
-  intentionally not built now (`.env` support, §5.5, has since shipped).
 - **No repository has been chosen for implementation yet** — the tool has its own dedicated
   repo (`config-transform`, implemented and released) and a *synthetic* solution-repo pilot
   (`config-transform-pilot`) now exists and validated the design end to end — see that repo's

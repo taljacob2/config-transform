@@ -473,10 +473,37 @@ stripped, no escape processing), only a whole-line `#` counts as a comment — s
 reasoning. 327 tests passing solution-wide (a new 31-test `ConfigTransform.Env.Tests` project,
 plus 7 new `ConfigTransform.Cli.Tests`). Versioned as `0.15.0-alpha`
 (`docs/CHANGELOG.md` section moved out of `[Unreleased]` in the same change, per
-`docs/RELEASING.md` step 1) — merged as `taljacob2/config-transform#27`; the owner still needs
-to tag and push `0.15.0-alpha` from current `main`; `config-transform-pilot` should be re-pinned
-to it, with a new `.env`-based pilot project added, once that tag exists and `publish.yml` has
-run green.
+`docs/RELEASING.md` step 1) — merged as `taljacob2/config-transform#27`. `0.15.0-alpha` has
+since been tagged and pushed by the owner, `publish.yml` ran green, and `config-transform-pilot`
+is re-pinned to it with a new `.env`-based `NotificationWorker` pilot project added and verified
+via real CI (`config-transform-pilot#6`, merged).
+
+**YAML format support implemented** — the item below in "Next up" flagged as "confirmed
+compatible without a redesign... not needed yet" has now landed: a fourth `FormatEngine`
+(`ConfigTransform.Yaml`), registered alongside XML, JSON, and `.env` with zero orchestration
+changes needed — the dispatcher generalizing to a fourth engine, not just three. Reuses the same
+build-time flatten-and-merge *architecture* as JSON (`Microsoft.Extensions.Configuration`), via
+`NetEscapades.Configuration.Yaml`'s `AddYamlFile` on the read side and `YamlDotNet`'s high-level
+`ISerializer` on the write side (needed directly, since NetEscapades only reads) — no code shared
+with `ConfigTransform.Json`, per this repo's per-format independent-library convention. Merge
+semantics (array-override-by-index, empty-container-round-trips-as-absent) are inherited from
+`IConfiguration`'s own flattening, identically to JSON. One real, verified limitation: YAML is
+case-sensitive but `IConfiguration` isn't, so sibling keys differing only in case throw a
+duplicate-key error at parse time — documented, not treated as a bug. `set` (`YamlFieldAuthor`)
+covers the plain-field path only — updating an existing key or creating a new one, the same
+`:`-separated nested-path model as JSON's own plain-field case. **Matching an item inside a YAML
+array of objects is not implemented** — refused with a clear "not yet supported" message, the
+same posture this tool already takes for XML's own unimplemented array-of-objects matching;
+porting `JsonElemMatchResolver` to YAML's object-graph shape is real, separable work, deliberately
+deferred rather than bundled into this first version — the same sequencing JSON's own `$elemMatch`
+followed (see "Next up" below, which folds XML's, JSON's-already-closed, and now YAML's
+array-of-objects status into one list). See `docs/CONFIG_MANAGEMENT.md` §5.6 and
+`docs/FIELD_AUTHORING_DESIGN.md`'s "JSON / YAML" section and decision log for the full mechanism,
+dependency choices, and case-sensitivity caveat. 352 tests passing solution-wide (a new 19-test
+`ConfigTransform.Yaml.Tests` project, plus 6 new `ConfigTransform.Cli.Tests`). Versioned as the
+next `0.x-alpha` after `0.15.0-alpha` in `docs/CHANGELOG.md`'s `[Unreleased]` section — not yet
+cut, tagged, or pushed; re-pinning `config-transform-pilot` and adding a YAML-based pilot project
+is a separate follow-up once this ships and is tagged, same sequencing as `.env`'s own pilot work.
 
 ## Next up
 
@@ -486,10 +513,11 @@ repo owner can make. Not a "next slice" in the same sense as the ones before thi
 from below (or something new) when ready, rather than assuming the next item in this list is the
 default next step.
 
-- **Finish `set`** — XML's "update an existing element" case, JSON's single-key-path case, and
-  JSON's array-of-objects matching (`$elemMatch`) all shipped (see "Current state" above); two
-  gaps remain, both scoped to XML, both real design questions rather than unimplemented happy
-  paths, and both actionable now without a solution repo or an owner decision:
+- **Finish `set`** — XML's "update an existing element" case, JSON's single-key-path case and
+  array-of-objects matching (`$elemMatch`), `.env`'s single case, and YAML's single-key-path case
+  all shipped (see "Current state" above); three gaps remain, all real design/scope questions
+  rather than unimplemented happy paths, and all actionable now without a solution repo or an
+  owner decision:
   1. **XML's `Insert` case** (a genuinely brand-new element) — needs an actual design decision
      first (how the parent location/tag name gets specified — a new flag, XPath, something
      else), not just an implementation pass. See `docs/FIELD_AUTHORING_DESIGN.md`'s "Open items"
@@ -499,6 +527,12 @@ default next step.
      existing* array item is mechanically answerable the same way an XML element match already
      is, so this could in principle be implemented independently of `Insert` — not done only for
      lack of time, not a design blocker. See `docs/FIELD_AUTHORING_DESIGN.md`'s "Open items".
+  3. **YAML's array-of-objects matching** — deliberately deferred out of YAML's first `set`
+     version, mirroring how JSON's own `$elemMatch` landed in a later PR than JSON's first `set`.
+     `JsonElemMatchResolver`'s `DeepEquals`/`DeepClone`/index-preserving-rewrite logic is tightly
+     coupled to `System.Text.Json.Nodes` types; porting it to YAML's `Dictionary<string, object>`/
+     `List<object>` object graph is real, separable work, not a design blocker. See
+     `docs/FIELD_AUTHORING_DESIGN.md`'s "JSON / YAML" section and "Open items".
 - **`docs/MANIFEST_SCHEMA.md`'s filename vs. its content** — now describes the
   `configtransform.json` schema in full (the self-describing-overlays implementation above), but
   kept its old filename to avoid a large cross-reference rename across `docs/`. Worth revisiting
@@ -509,7 +543,9 @@ default next step.
   end to end and found/fixed one real bug (see "Current state" above and the pilot's
   `FINDINGS.md`). What that pilot deliberately couldn't validate, since it's synthetic: a real
   inventory against actual solution-repo content, the deployment transport mechanism, key
-  rotation, per-client key splitting, YAML/`.env` formats. A pilot against the *actual*
+  rotation, per-client key splitting. (`.env` has since been validated against the pilot's own
+  `NotificationWorker` project; YAML has not yet — see the pilot follow-up note in "Current
+  state" above.) A pilot against the *actual*
   employer-owned multi-client repo this design targets still needs a separate session in that
   organization's own Claude Code environment — this repo's own conversations can't touch that
   repo directly. **Migration off `manifest.json` complete as of `0.7.0-alpha2`**: contrary to
@@ -526,9 +562,6 @@ default next step.
   this repo's concern directly, but blocks the consuming architecture's
   `build-transformed.yml`. `CONFIG_MANAGEMENT.md` §8.3.
 - **git-crypt key rotation trigger** — deferred by design, not blocking.
-- **YAML format support** — confirmed compatible with the existing design without a redesign,
-  see `docs/CONFIG_MANAGEMENT.md` §5.6. Not needed yet. (`.env` support has since shipped, see
-  "Current state" above.)
 - **A real (non-`-alpha`) `1.0.0` release** — once the solution-repo pilot validates the design
   against real content, worth promoting out of pre-release.
 - **A TUI (`configtransform-tui`) and/or a cross-platform GUI (`configtransform-gui`)** —
