@@ -147,7 +147,7 @@ Confirmed directly by the repo owner — treat these as fixed, not open to silen
 1. **File format: JSON, not YAML** (`configtransform.json`). This tool has zero YAML parsing
    anywhere today (`System.Text.Json` covers everything, including the current `manifest.json`)
    — YAML here would have meant a new dependency (`YamlDotNet` or similar) purely for tooling
-   metadata, not for any config file this tool actually merges (`CONFIG_MANAGEMENT.md` §5.5
+   metadata, not for any config file this tool actually merges (`CONFIG_MANAGEMENT.md` §5.6
    already treats YAML-as-a-*merged-format* as a distinct, separately-still-not-needed question —
    this would have been YAML parsing for an unrelated reason, the manifest shape). The "looks
    like `kustomization.yaml`" motivation was real but aesthetic once the shape itself is adopted —
@@ -404,7 +404,8 @@ also implemented, as its own separately-scoped pass, versioned `0.8.0-alpha`. `C
 `FormatEngineRegistry`, `ConfigTransform.Core`) and dispatches each resource to the right one by
 its own file extension — the interim "skip the other format with a stderr note" behavior is gone;
 that skip now only fires for a genuinely unregistered extension (e.g. a future YAML resource,
-`CONFIG_MANAGEMENT.md` §5.5), and is still reported, never silently dropped.
+`CONFIG_MANAGEMENT.md` §5.6 — `.env` is a third registered engine now, `CONFIG_MANAGEMENT.md`
+§5.5, no longer an example of an unregistered one), and is still reported, never silently dropped.
 `XmlLayerMerger`/`JsonLayerMerger`/`XmlFieldAuthor`/`JsonFieldAuthor` did stay as internal engines,
 exactly as anticipated here — `ConfigTransform.Xml`/`ConfigTransform.Json` are now internal
 libraries rather than their own packaged tools. `configtransform` is no longer a placeholder

@@ -137,8 +137,9 @@ live in this repo. It lives in its own dedicated repository and is consumed as a
   tree). **Not** a `.csproj` reference — the tool never opens or validates anything at this path,
   only resolves it against the repo root. This is why the tool has no `TargetFramework` coupling
   (§11, confirmed via the pilot's net35 project), and why it works identically for a
-  Node.js/Angular/React app's JSON config — the only real constraint is the config file format
-  (XML or JSON today), not the language or ecosystem of the project it belongs to.
+  Node.js/Angular/React app's JSON config or `.env` file — the only real constraint is the
+  config file format (XML, JSON, or `.env` today), not the language or ecosystem of the project
+  it belongs to.
 - `resources[].patch` (optional): the overlay file for this resource at this layer — omitted
   entirely for a resource this layer doesn't touch, which just passes through untouched. Also
   repo-root-relative, uniformly with `extends`/`path` — no same-directory shorthand, a deliberate
@@ -254,29 +255,67 @@ static string ResolveCaseInsensitive(string directory, string fileName)
 This removes the hazard at the source rather than requiring `configtransform.json` entries to
 record exact casing or adding a separate CI lint step to catch drift.
 
-### 5.5 Future format extensibility (not implemented — documented intentionally)
+### 5.5 `.env`
 
-XML and JSON cover every known current need (App.config, Web.config, NLog.config,
-ConnectionStrings.config, appsettings.json). This design is deliberately future-proofed for
-two formats that may come up later, without requiring a redesign when that happens:
+Implemented (`ConfigTransform.Env`, no XML/JSON precedent to follow since it's the first flat,
+nesting-free format this tool handles). Recognized by `resources[].path`'s own `.env` extension,
+registered as a third `FormatEngine` in `ConfigTransform.Cli`'s `FormatEngineRegistry` — no
+orchestration changes were needed at all, confirming the "register a new engine, nothing else
+changes" claim `CLAUDE.md`/`SELF_DESCRIBING_OVERLAYS_DESIGN.md` make for the dispatcher, for a
+third format and not just two. Needs **no NuGet package at all** — parsing/serializing flat
+`KEY=VALUE` text needs nothing beyond the BCL, unlike JSON's `Microsoft.Extensions.Configuration`
+dependency.
+
+Merge semantics mirror JSON's flat key-override, simpler still since there's no nesting or
+arrays to disambiguate: the base file parses into an ordered `KEY→VALUE` map, and each patch in
+the resolved chain (in `extends` order) overrides matching keys and appends new ones. There is no
+formal `.env` spec — real tooling disagrees on edge cases — so this tool's own grammar was picked
+deliberately (`EnvFile.cs` carries the authoritative rule list; see
+`docs/FIELD_AUTHORING_DESIGN.md`'s decision log for the reasoning behind each one):
+
+- Blank lines and whole-line `#` comments are dropped on parse and never reappear on
+  serialize — this matches JSON's own existing behavior (`Microsoft.Extensions.Configuration`'s
+  JSON provider already drops comments/formatting on rebuild too), not a new gap this format
+  introduces.
+- An optional leading `export ` is stripped before parsing the key, supporting Bash-sourceable
+  files (a common real `.env` convention, e.g. `direnv`/Docker `env_file`).
+- A key must match the real POSIX env-var-name grammar (`[A-Za-z_][A-Za-z0-9_]*`); an invalid key
+  is refused rather than silently written, since a `.env` file with one can never actually be
+  `source`d.
+- A value wrapped in matching `"`/`'` has the quotes stripped, with no escape-sequence processing
+  and no `${VAR}` expansion — treated as opaque text, the one choice that doesn't depend on which
+  real `.env` tool's dialect you'd otherwise be guessing at.
+- Only a whole-line `#` is a comment — no inline (same-line trailing) comment stripping, to avoid
+  the real ambiguity of a value like `PASSWORD=abc#123`.
+- On serialize, a value is quoted only when it contains whitespace or `#`, or is empty, so the
+  common case stays readable as plain `KEY=value`.
+
+The real `.env.production`/`.env.local` multi-file naming convention some tooling uses is a
+**different, competing** mechanism for the same per-environment problem this tool already solves
+via `.configtransform/Environments/` — deliberately not also parsed; a resource is still exactly
+one real file, matched by extension the same way as every other format.
+
+### 5.6 Future format extensibility: YAML (not implemented — documented intentionally)
+
+XML, JSON, and `.env` (§5.2, §5.3, §5.5) now cover every known current need (App.config, Web.config,
+NLog.config, ConnectionStrings.config, appsettings.json, `.env`). This design is deliberately
+future-proofed for one more format that may come up later, without requiring a redesign when
+that happens:
 
 - **YAML**: structurally the same as JSON — hierarchical, keyed. Would use
   `Microsoft.Extensions.Configuration` with a YAML file provider in place of `AddJsonFile`,
   reusing the exact same build-time flatten-and-merge approach as `ConfigTransform.Json`
   (§5.3). Recognized by `resources[].path`'s own `.yaml`/`.yml` extension — consistent with how
-  XML/JSON dispatch already works (`MANIFEST_SCHEMA.md`'s "Which engine handles a resource"),
-  never a separately declared field. Would register as one more `FormatEngine` in
-  `ConfigTransform.Cli`'s `FormatEngineRegistry` (`docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`'s
-  CLI-unification pass) — no orchestration changes needed, purely a new registration plus the
+  XML/JSON/`.env` dispatch already works (`MANIFEST_SCHEMA.md`'s "Which engine handles a
+  resource"), never a separately declared field. Would register as one more `FormatEngine` in
+  `ConfigTransform.Cli`'s `FormatEngineRegistry`, now proven to generalize past two engines by
+  `.env`'s own landing — no orchestration changes needed, purely a new registration plus the
   merge engine itself.
-- **`.env`**: flat `KEY=VALUE` pairs, no nesting — actually *simpler* to merge than JSON, just
-  a dictionary union where later layers override matching keys. Recognized by its own `.env`
-  extension the same way.
 
-Neither needs a change to the `configtransform.json` schema's shape, the `.configtransform/`
+Doesn't need a change to the `configtransform.json` schema's shape, the `.configtransform/`
 directory layout, the encryption approach, or the CI trigger design — only extension-based
-dispatch recognizing a new suffix and its corresponding (small) merge implementation, built when
-the need is actually confirmed by real project content. Not being built now; recorded here so the
+dispatch recognizing a new suffix and its corresponding merge implementation, built when the need
+is actually confirmed by real project content. Not being built now; recorded here so the
 "no redesign needed later" analysis isn't lost.
 
 ## 6. Transform tool CLI
@@ -652,8 +691,8 @@ deliberate owner decision to call it otherwise, documented here when made) chang
 - **Deployment transport mechanism** (§8.3) — how CI actually gets the built, resolved artifact
   onto the target Windows servers (self-hosted runner with network access, WinRM/PowerShell
   remoting, or a dedicated tool like Octopus Deploy) is not decided.
-- **YAML/`.env` support** — see §5.5: confirmed to fit the existing design without a redesign,
-  intentionally not built now.
+- **YAML support** — see §5.6: confirmed to fit the existing design without a redesign,
+  intentionally not built now (`.env` support, §5.5, has since shipped).
 - **No repository has been chosen for implementation yet** — the tool has its own dedicated
   repo (`config-transform`, implemented and released) and a *synthetic* solution-repo pilot
   (`config-transform-pilot`) now exists and validated the design end to end — see that repo's

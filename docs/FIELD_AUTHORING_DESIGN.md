@@ -12,7 +12,10 @@ per format" → XML below), for elements like `customErrors`/`compilation`/`http
 no identifying attribute at all — a real, previously-undesigned gap reported against the published
 tool, found the same way the JSON array-of-objects gap was: by a real user hitting it. See
 `docs/USAGE.md`'s `set` section and `docs/CHANGELOG.md`'s `[0.6.0-alpha]`/`[0.7.0-alpha]` entries
-for exactly what's live and where. **Not yet implemented**: XML's `Insert`
+for exactly what's live and where. `ConfigTransform.Env`'s `set` is also implemented — the
+simplest of the three, since a `.env` file is always flat: no nested-path disambiguation (JSON)
+and no update-vs-insert branch (XML) to make at all, just `--match key=<NAME> --set
+value=<value>` writing or overwriting a key directly. **Not yet implemented**: XML's `Insert`
 case (a genuinely brand-new element), and XML's array-of-objects matching (see "Open items" below
 for both — JSON's version of the array-of-objects gap, once a real, previously-undesigned problem
 found during implementation, is now closed). This document otherwise still reflects the original
@@ -228,7 +231,7 @@ See `src/ConfigTransform.Json/JsonElemMatchResolver.cs` for the resolver itself 
 resolution), and `docs/USAGE.md`'s `set` section for more worked examples (compound conditions,
 a second patch in the same overlay, progressive layering across Environment/Client).
 
-YAML is not designed separately from JSON here: `docs/CONFIG_MANAGEMENT.md` §5.5 already
+YAML is not designed separately from JSON here: `docs/CONFIG_MANAGEMENT.md` §5.6 already
 confirmed YAML fits the existing design without a redesign (same tree-of-maps/lists/scalars
 data model, different serialization) — this command's model inherits that, once YAML support
 itself lands (still "not needed yet" per `docs/ROADMAP.md`; this design doesn't change that
@@ -238,14 +241,19 @@ timeline, it just means `set` won't need separate design work when it does).
 
 Same shape as XML's simple case, because the shapes really are the same: a `.env` line
 (`FOO=bar`) and an `appSettings` entry (`<add key="FOO" value="bar"/>`) are both "one identity,
-one value."
+one value" — except simpler in practice, since a `.env` file has no nesting at all, so there's
+never a disambiguation question to ask (unlike JSON's nested-path-vs-literal-key collision).
 
 ```
 set --match key=FOO --set value=bar
 ```
 
-(`.env` support itself is also still "not needed yet" per `docs/ROADMAP.md` — same note as
-YAML above.)
+Implemented (`ConfigTransform.Env.EnvFieldAuthor`): `matches` must be exactly one `key=<NAME>`
+(bare shorthand already defaults to `key`), `setFields` exactly one `value=<value>` (bare
+shorthand defaults to `value`), and the key is validated against the real POSIX env-var-name
+grammar (`EnvFile.ValidateKey`) before writing — see `docs/CONFIG_MANAGEMENT.md` §5.5 for the
+full grammar. `isBaseTarget` doesn't change the logic at all: a base write and an overlay write
+both just parse-or-start-empty, set the key, and reserialize.
 
 ## Defaults: bare `--match`/`--set`
 
@@ -357,6 +365,7 @@ No case needed a bespoke resolution; each was the same rule applied once more.
 | Rewritten-position representation inside `Merge`'s pre-processing pass | A `JsonObject` keyed by numeric-string index (`{"1": {...}}`), fed to `Microsoft.Extensions.Configuration` via `AddJsonStream` | A `JsonArray` literal with placeholder entries for skipped indices | A real array can't express "touch only index 1, leave 0 and 2+ alone" without placeholder nulls at the skipped positions, and those nulls would themselves flatten to real `IConfiguration` keys and clobber the base layer's actual values there — the same hazard `JsonLayerMerger`'s own doc comment already warns about for plain overlay arrays. A numeric-string object key has no such constraint, and empirically flattens to the identical `IConfiguration` path as a real array index (verified for both `AddJsonFile` and, since this design switches overlay layers to in-memory streams, `AddJsonStream` specifically — not just inferred from the file case). |
 | No match for a patch's conditions | Upsert: create a new item, combining the `$elemMatch` condition fields as its identity plus whatever `--set` wrote | Treat "no match" as an error, requiring a separate insert-only command or flag | Mirrors MongoDB's own upsert semantics for the same shape (a filter document plus an update document) — a known convention again, not an invented one. Keeps the overlay file's shape identical regardless of whether a given patch will update or create, which is the whole point: that decision is made at resolution time, not authoring time. |
 | XML tag-only matching for a singleton element (found the same way as the JSON array-of-objects gap: a real user hitting it) | A reserved `tag=` `--match` coordinate; writes no `xdt:Locator` at all when it's the only coordinate given, mirroring real XDT's own default-match-by-name behavior | Require the user to invent a synthetic identifying attribute; guess a default attribute name (e.g. always try `mode`) | `customErrors`/`compilation`/`httpRuntime`-shaped elements genuinely have no identifying attribute — there is nothing to guess without breaking "never guessed" (above). A dedicated reserved coordinate names the real thing (the tag) instead of faking an attribute-shaped answer to a non-attribute question, and mirrors real XDT's own idiom for the exact same case. |
+| `.env` grammar: quoting, escaping, `export`, inline comments | A value is opaque text (matching quotes stripped, no escape processing, no `${VAR}` expansion); only a whole-line `#` is a comment; an optional leading `export ` is stripped | Full shell-style escape processing; treat any `#` (including mid-value) as starting a comment; ignore `export` as invalid syntax | There's no formal `.env` spec and real tooling disagrees on all of these — treating a value as opaque text is the one choice that doesn't depend on guessing which dialect a given file follows; a mid-value `#` (e.g. a password) would be silently truncated under an inline-comment rule; `export` is common enough (Bash-sourceable files) that rejecting it would break real files for no benefit. |
 
 ## Open items for implementation
 
@@ -379,9 +388,9 @@ No case needed a bespoke resolution; each was the same rule applied once more.
   `Microsoft.Extensions.Configuration` merges arrays purely by index with no native
   value-matching to port from XDT — is now closed; see the "JSON / YAML" section above for the
   `$elemMatch` mechanism that closed it, and the decision log for why.)
-- YAML and `.env` support don't exist in this tool at all yet (`docs/ROADMAP.md`: both "not
-  needed yet") — this document's per-format sections for them are forward-looking, not
-  something `set` can ship against today.
+- YAML support doesn't exist in this tool at all yet (`docs/ROADMAP.md`: "not needed yet") — this
+  document's YAML section is forward-looking, not something `set` can ship against today.
+  `.env` support has since shipped; its section above now describes real, implemented behavior.
 - One deliberate deviation from the design above, decided during implementation: the verified
   "found a different real attribute" case (XML's `key`/`value` defaults section, and "Errors,
   warnings, and suggestions") always refuses and shows the corrected command now, rather than
@@ -393,6 +402,7 @@ No case needed a bespoke resolution; each was the same rule applied once more.
 - [`GETTING_STARTED.md`](GETTING_STARTED.md) — the three-way XDT branching this design
   automates, explained for a human doing it by hand today.
 - [`USAGE.md`](USAGE.md) — the CLI reference, including `set`'s own section.
-- [`CONFIG_MANAGEMENT.md`](CONFIG_MANAGEMENT.md) §5.5 — YAML/`.env` format compatibility.
+- [`CONFIG_MANAGEMENT.md`](CONFIG_MANAGEMENT.md) §5.5 — `.env` merge semantics and grammar;
+  §5.6 — YAML format compatibility (still forward-looking).
 - [`ROADMAP.md`](ROADMAP.md) — `init` (since shipped, `docs/INIT_COMMAND_DESIGN.md`) and the
   still-deferred TUI/GUI entries this document partially unblocked.

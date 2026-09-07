@@ -6,9 +6,10 @@ result, built around self-describing `configtransform.json` layers
 addressed by `--client`/`--environment`, spanning every resource (project config file) that layer
 touches, in **any** registered format, in one call. Each resource is dispatched to the right merge
 engine by its own file extension — `.config`/`.xml` via `Microsoft.Web.Xdt`, `.json` via
-`Microsoft.Extensions.Configuration` — so a mixed-format layer resolves with no skipping and no
-separate tool invocation per format; a resource whose extension no registered engine handles is
-reported, not silently dropped (see "Single resource vs. every resource" below). The `set` verb
+`Microsoft.Extensions.Configuration`, `.env` via a dependency-free flat `KEY=VALUE` merge
+(`ConfigTransform.Env`) — so a mixed-format layer resolves with no skipping and no separate tool
+invocation per format; a resource whose extension no registered engine handles is reported, not
+silently dropped (see "Single resource vs. every resource" below). The `set` verb
 (below) works the same way, dispatching by the *target* resource's own extension; what it actually
 supports differs by format for reasons that come from the format itself, not an arbitrary gap.
 
@@ -119,7 +120,7 @@ in one invocation:
   layer at the time, silently changing the day a second resource is added.
 - A resource whose extension no registered format engine handles is skipped with a note on stderr
   (e.g. "Skipped 1 resource(s) with no registered format handler; supported formats: .config,
-  .xml, .json.") — not an error, and not silently dropped. This is the only remaining skip case:
+  .xml, .json, .env.") — not an error, and not silently dropped. This is the only remaining skip case:
   every currently-supported format resolves in the same call, with no note at all, which is the
   actual capability CLI unification delivers over the old two-tool split.
 - If `--environment`/`--client` names a layer with no `configtransform.json` at all (most often a
@@ -302,9 +303,9 @@ separate step to remember.
 Client-layer write, defaulting its `extends` to the matching Environment layer's path even if that
 file doesn't exist on disk yet either (a missing `extends` target is "nothing to inherit," not an
 error). **When the resource isn't listed there yet**, `set` appends a `resources` entry pointing
-at a newly-authored patch file, named `patch-<resource path, "/" replaced with "-">.<xml|json>`
+at a newly-authored patch file, named `patch-<resource path, "/" replaced with "-">.<xml|json|env>`
 (the patch extension always reflects the *transform's own* format — `.xml` for an XDT transform
-regardless of the base resource's own extension, `.json` for JSON) sitting alongside the
+regardless of the base resource's own extension, `.json` for JSON, `.env` for `.env`) sitting alongside the
 `configtransform.json` that references it — a single shared `configtransform.json` can (and
 routinely will) end up listing both an `.xml`-patched and a `.json`-patched resource side by side,
 each authored by its own engine, entirely independently. **When it's already listed with a
@@ -332,6 +333,11 @@ full reasoning behind each:
   native concept of matching a field's value the way XDT's `Locator` does for XML, so this isn't a
   direct port of XML's mechanism — see `docs/FIELD_AUTHORING_DESIGN.md`'s "JSON / YAML" section
   and decision log for the full reasoning.
+- **`.env`** (`.env` resources): the simplest of the three — a `.env` file is always flat, so
+  there's no nested-path disambiguation to make (unlike JSON) and no update-vs-insert branch
+  (unlike XML). `--match key=<NAME>` (bare shorthand defaults to `key=`) identifies the variable,
+  `--set value=<value>` (bare shorthand defaults to `value=`) is its new value; the key is
+  validated against the real POSIX env-var-name grammar before writing.
 
 ```bash
 # XML, appSettings — the simple case: one identity attribute, one value attribute.
@@ -402,6 +408,12 @@ dotnet run --project src/ConfigTransform.Cli -- set \
   --resource BillingApi.Core/appsettings.json \
   --client Acme --environment Production \
   --match key=Rules --match role=Auditor --set enabled=true
+
+# .env -- one identity, one value, same shape as XML's simple case. Bare --match/--set default
+# to key=/value= here too.
+dotnet run --project src/ConfigTransform.Cli -- set \
+  --resource OrderProcessor.Framework/.env \
+  --client Acme --environment Production --match API_URL --set https://acme.example.com
 ```
 
 Zero matching fields fails rather than guessing: for XML, with a suggested

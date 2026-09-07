@@ -5,13 +5,14 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>configtransform</ToolCommandName>
     <PackageId>ConfigTransform.Cli</PackageId>
-    <Description>Unified base + Environments + Clients layered resolution for App.config, Web.config, appsettings.json, and other XML/JSON config files — dispatches each resource to the right merge engine by its own file extension, in one call. Replaces the separate ConfigTransform.Xml/ConfigTransform.Json tools. See CONFIG_MANAGEMENT.md §5.2/§5.3/§6.</Description>
+    <Description>Unified base + Environments + Clients layered resolution for App.config, Web.config, appsettings.json, .env, and other XML/JSON/.env config files — dispatches each resource to the right merge engine by its own file extension, in one call. Replaces the separate ConfigTransform.Xml/ConfigTransform.Json tools. See CONFIG_MANAGEMENT.md §5.2/§5.3/§5.6/§6.</Description>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\ConfigTransform.Core\ConfigTransform.Core.csproj" />
     <ProjectReference Include="..\ConfigTransform.Xml\ConfigTransform.Xml.csproj" />
     <ProjectReference Include="..\ConfigTransform.Json\ConfigTransform.Json.csproj" />
+    <ProjectReference Include="..\ConfigTransform.Env\ConfigTransform.Env.csproj" />
   </ItemGroup>
 
 </Project>
