@@ -110,29 +110,11 @@ public static class CliRunner
         stdout.WriteLine($"Wrote merged result to '{outputPath}'.");
     }
 
-    /// <summary>
-    /// Prints the base→arrow→layer chain for one resource: a two-line entry per layer (its
-    /// configtransform.json label, then an indented "patched in: &lt;path&gt;"/"not patched in"
-    /// detail line) since patch paths are too long to trail on the label line in a normal
-    /// terminal width — see the "clearer chain output" design note in CONFIG_MANAGEMENT.md.
-    /// </summary>
+    /// <summary>Prints the "Resolving '&lt;path&gt;'" header, then the shared chain rendering — see <see cref="LayerChain.PrintChain"/>.</summary>
     private static void PrintResolutionReport(TextWriter stdout, string resourcePath, ResolvedResource resolved)
     {
         stdout.WriteLine($"Resolving '{resourcePath}'");
-
-        stdout.WriteLine("    base");
-        stdout.WriteLine($"      {resourcePath}");
-        if (resolved.Steps.Count > 0)
-            stdout.WriteLine("      ↓");
-
-        for (var i = 0; i < resolved.Steps.Count; i++)
-        {
-            var step = resolved.Steps[i];
-            stdout.WriteLine($"    {step.Label}");
-            stdout.WriteLine(step.PatchPath is null ? "      not patched in" : $"      patched in: {step.PatchPath}");
-            if (i < resolved.Steps.Count - 1)
-                stdout.WriteLine("      ↓");
-        }
+        LayerChain.PrintChain(stdout, resourcePath, resolved);
     }
 
     /// <summary>

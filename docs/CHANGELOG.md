@@ -6,6 +6,22 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.18.0-alpha] - 2026-09-08
+
+### Fixed
+
+- **`--list` now shows the same chain rendering the single-resource resolution report
+  (`--dry-run`/`--diff`/a real run) already uses** — real, repo-relative patch file paths
+  (`patched in: <path>`) instead of a bare `patched in`, base rows showing the resource's own
+  path instead of `(always applied)`, and the same detail-line-per-layer shape — reported by a
+  real user who noticed the two commands rendered the same chain two different ways.
+  `LayerLister.ListLayer` now reuses `LayerChain.ResolveResource`/the new shared
+  `LayerChain.PrintChain` instead of its own inline, less detailed rendering. A real
+  consequence, not a side effect to work around: `--list` now also throws the same
+  `FileNotFoundException` `--dry-run`/`--diff`/a real run already do when a layer declares a
+  `patch` that doesn't exist on disk — previously `--list` silently reported that as `patched
+  in`, undetected.
+
 ## [0.17.0-alpha] - 2026-09-08
 
 ### Added

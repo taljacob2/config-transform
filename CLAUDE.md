@@ -248,6 +248,13 @@ real element to read a tag/location from the way an update does. `Microsoft.Web.
 missing ancestor with `Insert` inserts its whole subtree as one unit — which is what
 `XmlFieldAuthor` now does (`FindOrCreateOverlayPath`, walking the overlay and the real resolved
 document in lockstep). See `docs/FIELD_AUTHORING_DESIGN.md`'s "Reserved coordinate: `parent=`"
-for the full design. Versioned as `0.17.0-alpha`. See `docs/ROADMAP.md`'s "Next up" for what's
+for the full design. Versioned as `0.17.0-alpha`. A further real-user report has since landed:
+`--list` used to render the resolved chain differently from the single-resource resolution report
+(`--dry-run`/`--diff`/a real run) — a bare `patched in` with no patch path, versus the report's
+`patched in: <path>`. `LayerLister.ListLayer` now reuses `LayerChain.ResolveResource` and a new
+shared `LayerChain.PrintChain` (also used by the report), so both commands render the exact same
+chain the exact same way; a deliberate side effect is `--list` now also throws when a layer
+declares a `patch` that doesn't exist on disk, matching every other mode's existing behavior for a
+broken patch reference. Versioned as `0.18.0-alpha`. See `docs/ROADMAP.md`'s "Next up" for what's
 actionable now versus what needs either a solution repo that doesn't exist yet or an owner
 decision — YAML's own array-of-objects matching is the one remaining `set` gap.
