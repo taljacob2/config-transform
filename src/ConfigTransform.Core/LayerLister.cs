@@ -28,21 +28,8 @@ public static class LayerLister
             stdout.WriteLine();
             stdout.WriteLine($"  {resourcePath}");
 
-            var rows = new List<(string Label, string Status)> { ("base", "(always applied)") };
-            foreach (var layer in chain)
-            {
-                var entry = layer.Manifest.Resources.FirstOrDefault(r => LayerChain.PathsEqual(root, r.Path, resourcePath));
-                var status = entry?.Patch is not null ? "patched in" : "not patched in";
-                rows.Add((LayerChain.ToRepoRelative(root, layer.Path), status));
-            }
-
-            var width = rows.Max(row => row.Label.Length);
-            for (var i = 0; i < rows.Count; i++)
-            {
-                stdout.WriteLine($"    {rows[i].Label.PadRight(width)}  {rows[i].Status}");
-                if (i < rows.Count - 1)
-                    stdout.WriteLine("      ↓");
-            }
+            var resolved = LayerChain.ResolveResource(root, chain, resourcePath);
+            LayerChain.PrintChain(stdout, resourcePath, resolved);
         }
     }
 

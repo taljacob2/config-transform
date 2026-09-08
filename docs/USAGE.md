@@ -143,15 +143,21 @@ Two modes:
 
 - **Given `--client`/`--environment`** (client optional, environment required): shows that
   layer's own `extends` and every resource it touches, as its full chain in real application
-  order — `base` first, then every layer outermost-first, each one either `patched in` or
-  `not patched in`, connected by `↓`:
+  order — `base` first, then every layer outermost-first, each one either `patched in: <path>` or
+  `not patched in`, connected by `↓`. This is the exact same rendering the single-resource
+  resolution report (`--dry-run`/`--diff`/a real run, below) prints for one resource — `--list`
+  just does it for every resource a layer touches, so the two never show the chain two different
+  ways:
   ```
     OrderProcessor.Framework/App.config
-      base                                                             (always applied)
+      base
+        OrderProcessor.Framework/App.config
         ↓
-      .configtransform/Environments/Production/configtransform.json    patched in
+      .configtransform/Environments/Production/configtransform.json
+        patched in: .configtransform/Environments/Production/patch-OrderProcessor.Framework-App.config.xml
         ↓
-      .configtransform/Clients/Acme/Production/configtransform.json    patched in
+      .configtransform/Clients/Acme/Production/configtransform.json
+        patched in: .configtransform/Clients/Acme/Production/patch-OrderProcessor.Framework-App.config.xml
   ```
 - **Given `--resource` instead** (no `--client`/`--environment`): a tree-wide reverse lookup —
   every `configtransform.json` anywhere under `.configtransform/` that patches this one resource,

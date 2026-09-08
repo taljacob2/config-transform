@@ -198,6 +198,15 @@ patch the resource is reported as not doing so — without the tool trying to be
 whether an absence was intentional. A blank line always separates this report from the merged
 content or diff that follows it, so the two are never visually run together.
 
+`--list` (given `--client`/`--environment`) prints this exact same chain rendering — same real
+patch paths, same `↓` connectors — once per resource the layer touches
+(`LayerChain.PrintChain`, shared by both call sites in `src/ConfigTransform.Core/`), so a real
+user reading `--list`'s output sees the same facts, in the same shape, as the single-resource
+report above. Before this, `--list` showed a different, less detailed rendering of the same
+chain — `patched in` with no path, and no `File.Exists` check on the declared patch — a real
+inconsistency a user noticed and reported; reusing `LayerChain.ResolveResource` for `--list` too
+closed both gaps at once (see `docs/CHANGELOG.md`'s entry for the exact fix).
+
 ### 5.2 XML (.NET Framework)
 
 Uses `Microsoft.Web.Xdt`'s `XmlTransformation`/`XmlTransformableDocument`, applied once per patch

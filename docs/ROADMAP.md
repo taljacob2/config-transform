@@ -560,6 +560,21 @@ through real `Microsoft.Web.Xdt` at merge time, mirroring `XmlLayerMergerArrayMa
 role for compound-`Locator` matching. This is real feature work, unlike the two closures above —
 needs a version cut once merged.
 
+**`--list` now shares the exact chain rendering the single-resource resolution report uses**,
+reported by a real user who noticed the two commands showed the same base→arrow→layer chain two
+different ways: `--list` used to print a bare `patched in`/`not patched in` per layer with no
+patch path and a `(always applied)` annotation on the base row, while `--dry-run`/`--diff`/a real
+run's `Resolving '<path>'` report showed the real patch file path per layer
+(`patched in: <path>`) and the resource's own path on the base row. `LayerLister.ListLayer` now
+calls `LayerChain.ResolveResource` per resource (the same function the single-resource report
+already used) and a new shared `LayerChain.PrintChain` renders the chain identically for both —
+one rendering, two call sites, instead of two renderings of the same facts. A real, deliberate
+side effect: `--list` now also throws the same `FileNotFoundException` the other modes already do
+when a layer declares a `patch` that doesn't exist on disk, instead of silently reporting it as
+`patched in` — consistent with `docs/CONFIG_MANAGEMENT.md`'s own stated principle that a declared-
+but-missing patch is always an error, the same way a missing base file is. Versioned as
+`0.18.0-alpha`.
+
 ## Next up
 
 One item below is now actionable purely within this repo (see the first bullet); every other

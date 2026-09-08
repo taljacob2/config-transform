@@ -119,6 +119,33 @@ public static class LayerChain
         return new ResolvedResource(basePath, patches, report, steps);
     }
 
+    /// <summary>
+    /// Prints the base→arrow→layer chain for one already-resolved resource: a two-line entry per
+    /// layer (its configtransform.json label, then an indented "patched in: &lt;path&gt;"/"not
+    /// patched in" detail line) since patch paths are too long to trail on the label line in a
+    /// normal terminal width — see the "clearer chain output" design note in
+    /// docs/CONFIG_MANAGEMENT.md §5.1. Shared by the single-resource resolution report
+    /// (--dry-run/--diff/a real run, in <see cref="CliRunner"/>) and <see cref="LayerLister"/>'s
+    /// --list, so the two always agree instead of drifting into two different renderings of the
+    /// same facts.
+    /// </summary>
+    public static void PrintChain(TextWriter stdout, string resourcePath, ResolvedResource resolved, string indent = "    ")
+    {
+        stdout.WriteLine($"{indent}base");
+        stdout.WriteLine($"{indent}  {resourcePath}");
+        if (resolved.Steps.Count > 0)
+            stdout.WriteLine($"{indent}  ↓");
+
+        for (var i = 0; i < resolved.Steps.Count; i++)
+        {
+            var step = resolved.Steps[i];
+            stdout.WriteLine($"{indent}{step.Label}");
+            stdout.WriteLine(step.PatchPath is null ? $"{indent}  not patched in" : $"{indent}  patched in: {step.PatchPath}");
+            if (i < resolved.Steps.Count - 1)
+                stdout.WriteLine($"{indent}  ↓");
+        }
+    }
+
     /// <summary>The union of every `resources[].path` mentioned anywhere in the chain — for a no-`--resource` invocation.</summary>
     public static IReadOnlyList<string> ResolveAllResources(IReadOnlyList<ResolvedLayer> chain) =>
         chain

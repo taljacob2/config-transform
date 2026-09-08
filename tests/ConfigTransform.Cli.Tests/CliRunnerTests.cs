@@ -398,6 +398,56 @@ public class CliRunnerTests
         Assert.True(environmentIndex < clientIndex);
     }
 
+    [Fact]
+    public void List_shows_the_same_chain_rendering_the_single_resource_report_uses_including_real_patch_paths()
+    {
+        using var workspace = new TempCliWorkspace();
+
+        var listStdout = new StringWriter();
+        var listExitCode = CliRunner.Run(new[]
+        {
+            "--list", "--client", "ClientA", "--environment", "Production"
+        }, listStdout, new StringWriter(), FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(0, listExitCode);
+        var listOutput = listStdout.ToString();
+
+        // --list shows the real patch file path per layer, not just "patched in" -- the same
+        // detail the single-resource report already prints, extracted from the same
+        // LayerChain.PrintChain so the two never drift into two different renderings. This is
+        // the exact chain block PrintChain produces for the XML resource in this workspace.
+        var expectedChain = string.Join('\n',
+        [
+            "    base",
+            $"      {workspace.XmlResourcePath}",
+            "      ↓",
+            "    .configtransform/Environments/Production/configtransform.json",
+            "      patched in: .configtransform/Environments/Production/patch-Project-App.config.xml",
+            "      ↓",
+            "    .configtransform/Clients/ClientA/Production/configtransform.json",
+            "      patched in: .configtransform/Clients/ClientA/Production/patch-Project-App.config.xml"
+        ]);
+        Assert.Contains(expectedChain, listOutput);
+    }
+
+    [Fact]
+    public void List_throws_the_same_way_the_single_resource_report_does_when_a_declared_patch_file_is_missing()
+    {
+        using var workspace = new TempCliWorkspace();
+        File.Delete(Path.Combine(workspace.RootPath, ".configtransform", "Clients", "ClientA", "Production", "patch-Project-App.config.xml"));
+
+        var stdout = new StringWriter();
+        var stderr = new StringWriter();
+
+        var exitCode = CliRunner.Run(new[]
+        {
+            "--list", "--client", "ClientA", "--environment", "Production"
+        }, stdout, stderr, FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("no file exists at", stderr.ToString());
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
