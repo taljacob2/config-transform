@@ -99,4 +99,58 @@ public class EnvFileTests
         var exception = Record.Exception(() => EnvFile.ValidateKey("_valid_KEY9"));
         Assert.Null(exception);
     }
+
+    [Fact]
+    public void A_value_containing_a_literal_equals_sign_keeps_everything_after_the_first_one()
+    {
+        // IndexOf('=') finds only the first '=' -- a connection-string-shaped value with its own
+        // '=' characters (e.g. a query string) must not be truncated at the second one.
+        var pairs = EnvFile.Parse("URL=https://example.com/?a=1&b=2");
+        Assert.Equal("https://example.com/?a=1&b=2", pairs[0].Value);
+    }
+
+    [Fact]
+    public void An_empty_value_round_trips_through_Parse()
+    {
+        var pairs = EnvFile.Parse("FOO=");
+        Assert.Equal("", pairs[0].Value);
+    }
+
+    [Fact]
+    public void An_empty_quoted_value_round_trips_through_Parse()
+    {
+        var pairs = EnvFile.Parse("FOO=\"\"");
+        Assert.Equal("", pairs[0].Value);
+    }
+
+    [Fact]
+    public void Incidental_whitespace_around_the_key_and_value_is_trimmed()
+    {
+        var pairs = EnvFile.Parse("  FOO  =  bar  ");
+        Assert.Equal("FOO", pairs[0].Key);
+        Assert.Equal("bar", pairs[0].Value);
+    }
+
+    [Fact]
+    public void Windows_line_endings_are_handled_the_same_as_Unix_ones()
+    {
+        var pairs = EnvFile.Parse("FOO=bar\r\nBAZ=qux\r\n");
+        Assert.Equal([new("FOO", "bar"), new("BAZ", "qux")], pairs);
+    }
+
+    [Fact]
+    public void A_file_with_no_trailing_newline_parses_the_same_as_one_with_it()
+    {
+        var pairs = EnvFile.Parse("FOO=bar\nBAZ=qux");
+        Assert.Equal([new("FOO", "bar"), new("BAZ", "qux")], pairs);
+    }
+
+    [Fact]
+    public void Export_is_case_sensitive_and_ordinal_a_capitalized_Export_is_not_recognized()
+    {
+        // "Export FOO=bar" doesn't match the literal "export " prefix, so it's parsed as a plain
+        // line -- and "Export FOO" (with the space) fails key validation, since a real shell's
+        // own `export` keyword is lowercase-only too.
+        Assert.Throws<InvalidOperationException>(() => EnvFile.Parse("Export FOO=bar"));
+    }
 }
