@@ -21,6 +21,23 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   this out — the XML analogue of `JsonLayerMergerElemMatchTests.cs`'s role for JSON's
   `$elemMatch`. Creating a brand-new array item remains open, folded into the `Insert` gap.
 
+### Fixed
+
+- **`.env` cleanup pass** — no functional bugs found (every documented grammar rule was checked
+  line-by-line against `EnvFile.cs`/`EnvLayerMerger.cs`/`EnvFieldAuthor.cs`; all matched exactly).
+  Closes real test-coverage gaps instead: seven new `EnvFileTests.cs` cases (a value containing a
+  literal `=`, an empty value round-tripping through `Parse`, incidental whitespace around
+  key/`=`/value, `\r\n` input, a file with no trailing newline, `Export` — capitalized — not
+  being recognized as the `export` prefix) and two new `EnvLayerMergerGrammarTests.cs` cases (a
+  duplicate key within one real file exercised through the merger, and key case-sensitivity
+  across layers, both previously untested). `docs/CONFIG_MANAGEMENT.md` §5.5 now documents the
+  case-sensitivity behavior explicitly (a deliberate consequence of ordinal `Dictionary`
+  comparisons, matching real POSIX/shell env-var semantics) rather than leaving it silently
+  unstated. Also fixes two stale doc comments in `ConfigTransform.Core/FormatEngine.cs`'s
+  `LayerMerge`/`FieldAuthor` delegates that still named only `XmlLayerMerger.Merge`/
+  `JsonFieldAuthor.Author` — unchanged since before `.env`/YAML shipped, now naming all four real
+  implementations.
+
 ## [0.16.0-alpha] - 2026-09-07
 
 ### Added

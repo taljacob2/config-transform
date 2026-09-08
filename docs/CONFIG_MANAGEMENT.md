@@ -289,6 +289,11 @@ deliberately (`EnvFile.cs` carries the authoritative rule list; see
   the real ambiguity of a value like `PASSWORD=abc#123`.
 - On serialize, a value is quoted only when it contains whitespace or `#`, or is empty, so the
   common case stays readable as plain `KEY=value`.
+- Keys are matched **case-sensitively across layers** — `FOO=1` in the base and `foo=2` in an
+  overlay are two independent keys, and both survive a merge — matching real POSIX/shell
+  env-var semantics, where case genuinely distinguishes one variable from another. Not a
+  discovered bug; a deliberate consequence of ordinal `Dictionary<string,string>` comparisons
+  throughout `ConfigTransform.Env`, stated here explicitly rather than left to be inferred.
 
 The real `.env.production`/`.env.local` multi-file naming convention some tooling uses is a
 **different, competing** mechanism for the same per-environment problem this tool already solves
