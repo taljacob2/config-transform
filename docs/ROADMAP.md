@@ -493,7 +493,7 @@ duplicate-key error at parse time — documented, not treated as a bug. `set` (`
 covers the plain-field path only — updating an existing key or creating a new one, the same
 `:`-separated nested-path model as JSON's own plain-field case. **Matching an item inside a YAML
 array of objects is not implemented** — refused with a clear "not yet supported" message, the
-same posture this tool already takes for XML's own unimplemented array-of-objects matching;
+same posture this tool already takes for XML's own unimplemented `Insert` case;
 porting `JsonElemMatchResolver` to YAML's object-graph shape is real, separable work, deliberately
 deferred rather than bundled into this first version — the same sequencing JSON's own `$elemMatch`
 followed (see "Next up" below, which folds XML's, JSON's-already-closed, and now YAML's
@@ -506,6 +506,27 @@ out of `[Unreleased]` in the same change, per `docs/RELEASING.md` step 1); re-pi
 `config-transform-pilot` and adding a YAML-based pilot project is a separate follow-up once this
 ships and `publish.yml` runs green, same sequencing as `.env`'s own pilot work.
 
+**XML's array-of-objects matching — matching an *existing* item — is closed, with zero new
+production code.** `docs/FIELD_AUTHORING_DESIGN.md`'s own "Open items" already predicted this:
+`XmlFieldAuthor`'s existing element-matching machinery (`FindMatchingElements`) already ANDs an
+arbitrary number of `--match` coordinates and already writes a comma-joined
+`xdt:Locator="Match(a,b,...)"` for a compound match — true before this closed, just never proven
+against a real repeated-sibling scenario, since none of the three existing XML fixture sets
+contained two elements sharing a tag distinguishable only by more than one attribute. Closed
+purely with a new fixture (`Fixtures/IisWebConfig/ArrayMatch/`, two real `<rule>` siblings
+sharing one attribute value but differing on another) and tests: three new
+`XmlFieldAuthorTests.cs` cases (single-attribute match is genuinely ambiguous among the siblings;
+a compound match disambiguates and writes the right `Locator`; re-running the same compound match
+updates in place) plus a new `XmlLayerMergerArrayMatchTests.cs` proving a hand-authored compound-
+`Locator` overlay resolves correctly through real `Microsoft.Web.Xdt` at merge time, not just at
+set-authoring time — the XML analogue of `JsonLayerMergerElemMatchTests.cs`'s role for JSON's
+`$elemMatch`, except XML needed no merge-time pre-processing pass of its own, since `xdt:Locator`
+is native XDT vocabulary `XmlLayerMerger.Merge` already hands straight to
+`XmlTransformation.Apply`. **Creating** a brand-new array item remains open, folded into the
+`Insert` gap below since it's the same underlying problem (nothing to derive a new item's shape
+from on create). No version cut needed — this PR ships no production code change, only tests,
+fixtures, and docs.
+
 ## Next up
 
 One item below is now actionable purely within this repo (see the first bullet); every other
@@ -514,21 +535,16 @@ repo owner can make. Not a "next slice" in the same sense as the ones before thi
 from below (or something new) when ready, rather than assuming the next item in this list is the
 default next step.
 
-- **Finish `set`** — XML's "update an existing element" case, JSON's single-key-path case and
-  array-of-objects matching (`$elemMatch`), `.env`'s single case, and YAML's single-key-path case
-  all shipped (see "Current state" above); three gaps remain, all real design/scope questions
-  rather than unimplemented happy paths, and all actionable now without a solution repo or an
-  owner decision:
+- **Finish `set`** — XML's "update an existing element" case (including matching an existing
+  item among repeated siblings — closed, see "Current state" above), JSON's single-key-path case
+  and array-of-objects matching (`$elemMatch`), `.env`'s single case, and YAML's single-key-path
+  case all shipped; two gaps remain, both real design/scope questions rather than unimplemented
+  happy paths, and both actionable now without a solution repo or an owner decision:
   1. **XML's `Insert` case** (a genuinely brand-new element) — needs an actual design decision
      first (how the parent location/tag name gets specified — a new flag, XPath, something
      else), not just an implementation pass. See `docs/FIELD_AUTHORING_DESIGN.md`'s "Open items"
      for why this is a real gap, not a checkbox.
-  2. **XML's array-of-objects matching** — scoped out alongside `Insert` above (same underlying
-     reason: nothing to derive a brand-new array item's shape from on create); *matching an
-     existing* array item is mechanically answerable the same way an XML element match already
-     is, so this could in principle be implemented independently of `Insert` — not done only for
-     lack of time, not a design blocker. See `docs/FIELD_AUTHORING_DESIGN.md`'s "Open items".
-  3. **YAML's array-of-objects matching** — deliberately deferred out of YAML's first `set`
+  2. **YAML's array-of-objects matching** — deliberately deferred out of YAML's first `set`
      version, mirroring how JSON's own `$elemMatch` landed in a later PR than JSON's first `set`.
      `JsonElemMatchResolver`'s `DeepEquals`/`DeepClone`/index-preserving-rewrite logic is tightly
      coupled to `System.Text.Json.Nodes` types; porting it to YAML's `Dictionary<string, object>`/
@@ -579,10 +595,12 @@ default next step.
      syntax — but the command still has to know which of the three XML cases it's in, which
      needs the base document's real shape, not just a key/value pair. **This half is now mostly
      built**: `SetAttributes` (update an existing key/attribute) is implemented for
-     `ConfigTransform.Xml`, and JSON's `set` covers update, create, and array-of-objects matching
-     (`$elemMatch`) — see "Current state" above. `Insert` (the client-only-field case named above,
-     XML-specific by nature) and XML's own array-of-objects matching are not — see
-     `docs/FIELD_AUTHORING_DESIGN.md` and this section's first "Next up" bullet.
+     `ConfigTransform.Xml` (including matching an existing item among repeated siblings — closed,
+     see "Current state" above), and JSON's `set` covers update, create, and array-of-objects
+     matching (`$elemMatch`) — see "Current state" above. `Insert` (the client-only-field case
+     named above, XML-specific by nature — creating a brand-new array item is the same
+     underlying gap) is not — see `docs/FIELD_AUTHORING_DESIGN.md` and this section's first
+     "Next up" bullet.
   2. Same validation gap that deferred `init`, more so: designing a UI's workflows now would be
      guessing at real usage patterns from one synthetic pilot, not real per-repo variation.
      `--diff`/`--dry-run` already cover "see the merged result easily" without either UI.

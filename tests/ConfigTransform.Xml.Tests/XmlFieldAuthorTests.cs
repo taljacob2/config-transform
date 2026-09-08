@@ -300,6 +300,102 @@ public class XmlFieldAuthorTests
     }
 
     [Fact]
+    public void A_single_attribute_match_is_ambiguous_among_repeated_siblings_sharing_it()
+    {
+        // Two real siblings sharing one attribute value but differing on another -- the actual
+        // "array of objects" shape this repo's own docs describe (docs/ROADMAP.md's "Finish
+        // set"), unlike Ambiguous_match_throws_and_lists_every_candidate above, which uses two
+        // *unrelated* elements in different parents that happen to share a key.
+        const string baseXml = """
+            <configuration>
+              <system.webServer>
+                <rewrite>
+                  <rules>
+                    <rule name="Redirect" enabled="false" stopProcessing="true" />
+                    <rule name="Redirect" enabled="false" stopProcessing="false" />
+                  </rules>
+                </rewrite>
+              </system.webServer>
+            </configuration>
+            """;
+
+        var ex = Assert.Throws<InvalidOperationException>(() => XmlFieldAuthor.Author(
+            baseXml, existingTargetXml: null, isBaseTarget: false,
+            matches: [new MatchSpec("name", "Redirect", WasDefaulted: false)],
+            setFields: [new MatchSpec("enabled", "true", WasDefaulted: false)]));
+
+        Assert.Contains("More than one element matches", ex.Message);
+        Assert.Contains("stopProcessing=\"true\"", ex.Message);
+        Assert.Contains("stopProcessing=\"false\"", ex.Message);
+    }
+
+    [Fact]
+    public void A_compound_match_disambiguates_one_item_among_repeated_siblings()
+    {
+        const string baseXml = """
+            <configuration>
+              <system.webServer>
+                <rewrite>
+                  <rules>
+                    <rule name="Redirect" enabled="false" stopProcessing="true" />
+                    <rule name="Redirect" enabled="false" stopProcessing="false" />
+                  </rules>
+                </rewrite>
+              </system.webServer>
+            </configuration>
+            """;
+
+        var result = XmlFieldAuthor.Author(
+            baseXml, existingTargetXml: null, isBaseTarget: false,
+            matches:
+            [
+                new MatchSpec("name", "Redirect", WasDefaulted: false),
+                new MatchSpec("stopProcessing", "true", WasDefaulted: false)
+            ],
+            setFields: [new MatchSpec("enabled", "true", WasDefaulted: false)]);
+
+        Assert.Contains("xdt:Locator=\"Match(name,stopProcessing)\"", result);
+        Assert.Contains("stopProcessing=\"true\"", result);
+        Assert.Contains("enabled=\"true\"", result);
+        // The overlay carries only the one matched rule's identity, not both siblings'.
+        Assert.DoesNotContain("stopProcessing=\"false\"", result);
+    }
+
+    [Fact]
+    public void Re_running_a_compound_match_among_repeated_siblings_updates_the_same_item_in_place()
+    {
+        const string baseXml = """
+            <configuration>
+              <system.webServer>
+                <rewrite>
+                  <rules>
+                    <rule name="Redirect" enabled="false" stopProcessing="true" />
+                    <rule name="Redirect" enabled="false" stopProcessing="false" />
+                  </rules>
+                </rewrite>
+              </system.webServer>
+            </configuration>
+            """;
+
+        var matches = new MatchSpec[]
+        {
+            new("name", "Redirect", WasDefaulted: false),
+            new("stopProcessing", "true", WasDefaulted: false)
+        };
+
+        var first = XmlFieldAuthor.Author(
+            baseXml, existingTargetXml: null, isBaseTarget: false,
+            matches: matches, setFields: [new MatchSpec("enabled", "true", WasDefaulted: false)]);
+
+        var second = XmlFieldAuthor.Author(
+            baseXml, existingTargetXml: first, isBaseTarget: false,
+            matches: matches, setFields: [new MatchSpec("enabled", "false", WasDefaulted: false)]);
+
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(second, "<rule "));
+        Assert.Contains("enabled=\"false\"", second);
+    }
+
+    [Fact]
     public void Adding_to_an_existing_overlay_file_preserves_its_other_content()
     {
         var withApiUrl = XmlFieldAuthor.Author(

@@ -6,6 +6,21 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+### Added
+
+- **Test/fixture proof that XML's `set` already matches an existing item among repeated
+  siblings** (`docs/FIELD_AUTHORING_DESIGN.md`'s "Open items") — no production code change:
+  `XmlFieldAuthor`'s element-matching machinery already ANDs an arbitrary number of `--match`
+  coordinates and already writes a comma-joined `xdt:Locator="Match(a,b,...)"` for a compound
+  match, but none of the three existing XML fixture sets contained two elements sharing a tag
+  distinguishable only by more than one attribute, so this was unproven. A new
+  `Fixtures/IisWebConfig/ArrayMatch/` fixture (two real `<rule>` siblings sharing one attribute
+  value but differing on another) plus three new `XmlFieldAuthorTests.cs` cases and a new
+  `XmlLayerMergerArrayMatchTests.cs` (proving a hand-authored compound-`Locator` overlay resolves
+  correctly through real `Microsoft.Web.Xdt` at merge time, not just at set-authoring time) close
+  this out — the XML analogue of `JsonLayerMergerElemMatchTests.cs`'s role for JSON's
+  `$elemMatch`. Creating a brand-new array item remains open, folded into the `Insert` gap.
+
 ## [0.16.0-alpha] - 2026-09-07
 
 ### Added

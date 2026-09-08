@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<configuration xmlns:xdt="http://schemas.microsoft.com/XML-Document-Transform">
+  <system.webServer>
+    <rewrite>
+      <rules>
+        <rule name="Redirect" stopProcessing="false" enabled="true"
+              xdt:Transform="SetAttributes" xdt:Locator="Match(name,stopProcessing)" />
+      </rules>
+    </rewrite>
+  </system.webServer>
+</configuration>
