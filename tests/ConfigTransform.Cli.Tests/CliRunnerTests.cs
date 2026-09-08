@@ -416,7 +416,9 @@ public class CliRunnerTests
         // detail the single-resource report already prints, extracted from the same
         // LayerChain.PrintChain so the two never drift into two different renderings. This is
         // the exact chain block PrintChain produces for the XML resource in this workspace.
-        var expectedChain = string.Join('\n',
+        // StringWriter.WriteLine emits Environment.NewLine (\r\n on Windows), so the expected
+        // text must join on that too, not a hardcoded '\n'.
+        var expectedChain = string.Join(Environment.NewLine,
         [
             "    base",
             $"      {workspace.XmlResourcePath}",
