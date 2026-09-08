@@ -17,11 +17,13 @@ simplest of the four, since a `.env` file is always flat: no nested-path disambi
 and no update-vs-insert branch (XML) to make at all, just `--match key=<NAME> --set
 value=<value>` writing or overwriting a key directly. `ConfigTransform.Yaml`'s `set` is
 implemented for its plain-field path (update an existing key, or create a new one) — the same
-model as JSON's own plain-field case, since YAML shares JSON's exact nesting. **Not yet
-implemented**: XML's `Insert` case (a genuinely brand-new element), XML's array-of-objects
-matching, and YAML's array-of-objects matching (see "Open items" below for all three — JSON's
-version of the array-of-objects gap, once a real, previously-undesigned problem found during
-implementation, is now closed). This document otherwise still reflects the original completed
+model as JSON's own plain-field case, since YAML shares JSON's exact nesting. XML's array-of-
+objects matching — matching an *existing* item among repeated siblings — is also closed, with
+zero new production code (the existing element-matching machinery already handled it; see "Open
+items" below). **Not yet implemented**: XML's `Insert` case (a genuinely brand-new element) and
+YAML's array-of-objects matching (see "Open items" below for both — JSON's version of the
+array-of-objects gap, once a real, previously-undesigned problem found during implementation, is
+now closed). This document otherwise still reflects the original completed
 design from a product-brainstorming session; treat any specific claim about *current* behavior as
 superseded by `docs/CHANGELOG.md` where the two differ.
 
@@ -241,8 +243,10 @@ contain a colon. The one real difference from JSON's `set` is scope, not model: 
 version covers the plain-field path only (update an existing key, or create a new one) — matching
 an item inside an array of objects (the `$elemMatch` case above) is **not** ported for YAML.
 A `--match` shape with more than one coordinate is refused with a clear "not yet supported"
-error rather than guessed at, mirroring how XML's own array-of-objects matching and `Insert`
-are refused today. This is a genuine, named scope gap, not an oversight: `JsonElemMatchResolver`
+error rather than guessed at, mirroring how XML's own `Insert` (creating a brand-new array item)
+is refused today — XML's *matching an existing* array item, by contrast, already works, the same
+way an ordinary XML element match does. This is a genuine, named scope gap, not an oversight:
+`JsonElemMatchResolver`
 is ~200 lines tightly coupled to `System.Text.Json.Nodes` types (`JsonNode`/`JsonObject`/
 `JsonArray`) — porting its `DeepEquals`/`DeepClone`/index-preserving-rewrite logic to YAML's own
 `Dictionary<string, object>`/`List<object>` object graph is real, separable work, deliberately
@@ -393,15 +397,25 @@ No case needed a bespoke resolution; each was the same rule applied once more.
   parent) or some other source of that information — not designed here, deliberately, rather than
   bolting on an under-thought flag under time pressure. Shipped behavior: `set` refuses with a
   clear "not yet supported" message (naming this document) instead of guessing a location.
-- **XML's array-of-objects matching is not implemented.** Scoped out alongside `Insert` above
-  (same underlying reason: nothing to derive a brand-new item's shape from on create) — though
-  *matching an existing* array item, unlike creating one, is mechanically answerable the same way
-  an XML element match already is, so this could in principle be implemented independently of
-  `Insert`; not done here only for lack of time, not a design blocker. (JSON's equivalent gap —
-  once a real, previously-undesigned problem found during implementation, since
-  `Microsoft.Extensions.Configuration` merges arrays purely by index with no native
-  value-matching to port from XDT — is now closed; see the "JSON / YAML" section above for the
-  `$elemMatch` mechanism that closed it, and the decision log for why.)
+- **XML's array-of-objects matching — *matching an existing item* — is closed.** As this section
+  originally predicted, it needed no new production code at all: `XmlFieldAuthor`'s existing
+  element-matching machinery (`FindMatchingElements`) already ANDs an arbitrary number of
+  `--match` coordinates with no cap at one, and already writes a comma-joined
+  `xdt:Locator="Match(a,b,...)"` for a compound match — this was true before this bullet closed,
+  just never proven against a real repeated-sibling scenario. Closed purely with fixture/test
+  coverage: `XmlFieldAuthorTests.cs`'s
+  `A_single_attribute_match_is_ambiguous_among_repeated_siblings_sharing_it`/
+  `A_compound_match_disambiguates_one_item_among_repeated_siblings`/
+  `Re_running_a_compound_match_among_repeated_siblings_updates_the_same_item_in_place`, plus a new
+  merge-time proof (`XmlLayerMergerArrayMatchTests.cs`, against a new
+  `Fixtures/IisWebConfig/ArrayMatch/` fixture with two real `<rule>` siblings sharing one
+  attribute value but differing on another) that a hand-authored compound `Locator` overlay
+  resolves correctly through real `Microsoft.Web.Xdt` at merge time, not just at set-authoring
+  time — the XML analogue of `JsonLayerMergerElemMatchTests.cs`'s role for JSON's `$elemMatch`.
+  Unlike JSON, XML needed no merge-time pre-processing pass of its own: `xdt:Locator` is native
+  XDT vocabulary `XmlLayerMerger.Merge` already hands straight to `XmlTransformation.Apply`.
+  **Creating** a brand-new array item remains the `Insert` gap above — scoped separately, since
+  it's the one that actually needs new code and a real design decision.
 - **YAML's own array-of-objects matching is not implemented** — the same named, deferred gap as
   XML's, described in the "JSON / YAML" section above alongside YAML's own plain-field `set`.
 - `.env` and YAML support have both since shipped; their sections above now describe real,
