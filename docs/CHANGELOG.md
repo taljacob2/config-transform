@@ -6,6 +6,8 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.17.0-alpha] - 2026-09-08
+
 ### Added
 
 - **Test/fixture proof that XML's `set` already matches an existing item among repeated
@@ -20,6 +22,21 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   correctly through real `Microsoft.Web.Xdt` at merge time, not just at set-authoring time) close
   this out — the XML analogue of `JsonLayerMergerElemMatchTests.cs`'s role for JSON's
   `$elemMatch`. Creating a brand-new array item remains open, folded into the `Insert` gap.
+- **XML `set` now supports `Insert`** (a genuinely brand-new element) via a new reserved
+  `parent=<ancestor/tag/path>` `--match` coordinate, always paired with `tag=<NewElementName>` —
+  `--match`/`--set` alone don't carry a new element's tag or parent location, and there's nothing
+  in an existing document to derive either from for a true insert, so both are named explicitly.
+  `set` only falls back to Insert when zero real elements match at all; a real match always wins
+  over a `parent` hint even when both are given. Covers inserting into an existing parent
+  container (writes `xdt:Transform="Insert"` with no `Locator` unless a real identifying
+  attribute beyond `tag` is also given) and into a parent container that doesn't exist yet in the
+  target document (`Microsoft.Web.Xdt` doesn't auto-create missing ancestors — verified
+  empirically before writing any code — so only the *shallowest* missing ancestor is marked
+  `Insert`, which inserts its entire subtree as one unit), plus idempotent re-run and base-target
+  Insert (no `--client`/`--environment` — edits the real document directly, no `xdt:` markers at
+  all). See `docs/FIELD_AUTHORING_DESIGN.md`'s "Reserved coordinate: `parent=`" for the full
+  design and decision log. New `XmlFieldAuthorTests.cs` Insert cases plus
+  `XmlLayerMergerInsertTests.cs` (merge-time proof against real `Microsoft.Web.Xdt`).
 
 ### Fixed
 

@@ -321,13 +321,18 @@ full reasoning behind each:
 
 - **XML** (`.config`/`.xml` resources): covers updating a field that already exists somewhere in
   the resolved document — the common case (overriding an existing value for one
-  environment/client). Creating a genuinely new element (`Insert`) is not implemented:
-  `--match`/`--set` don't carry the new element's tag name or parent location, and there's nothing
-  in an existing document to derive them from for a true insert, so `set` refuses rather than
-  guessing. For a singleton element with no identifying attribute at all (`customErrors`,
+  environment/client) — and, for repeated siblings sharing a tag (e.g. two `<rule>` elements),
+  disambiguates via a compound `--match` (`Locator="Match(a,b,...)"`, comma-joined, no cap at
+  one). For a singleton element with no identifying attribute at all (`customErrors`,
   `compilation`, `httpRuntime`...), `--match tag=<ElementName>` matches by element name alone and
   writes no `xdt:Locator` at all — mirroring real XDT's own default-match behavior for exactly
-  this case. `tag` is a reserved coordinate, not a real attribute.
+  this case. `tag` is a reserved coordinate, not a real attribute. **Creating a genuinely new
+  element (`Insert`)** is also covered: since there's no real element to read a new element's tag
+  or parent location from, both are named explicitly via `--match parent=<ancestor/tag/path>`
+  (a `/`-separated ancestor tag path relative to the document root) paired with `--match
+  tag=<NewElementName>` — `set` only falls back to Insert when zero real elements match at all, so
+  a real match always wins over a `parent` hint even if one is given. See
+  `docs/FIELD_AUTHORING_DESIGN.md`'s "Reserved coordinate: `parent=`" for the full design.
 - **JSON** (`.json` resources): covers a single key path (nested or top-level) — both updating an
   existing key *and* creating a brand-new one, since JSON has no XDT-style Transform/Locator
   distinction to make (any layer can introduce a key; `set` just writes it) — **and matching or
@@ -374,6 +379,16 @@ dotnet run --project src/ConfigTransform.Cli -- set \
 dotnet run --project src/ConfigTransform.Cli -- set \
   --resource OrderProcessor.Framework/Web.config \
   --environment Production --match tag=customErrors --set mode=RemoteOnly
+
+# XML, Insert — a genuinely brand-new element, nested under a container that may not exist yet.
+# --match parent=<ancestor/tag/path> (relative to the document root, root tag not included) names
+# where it goes; --match tag=<NewElementName> names the new element itself. Written as
+# xdt:Transform="Insert" with no Locator (no --set-beyond-tag identifying attribute given here).
+dotnet run --project src/ConfigTransform.Cli -- set \
+  --resource OrderProcessor.Framework/Web.config \
+  --environment Production \
+  --match parent=system.webServer/rewrite/rules --match tag=rule \
+  --set name=WWW-Redirect --set enabled=true --set stopProcessing=true
 
 # JSON — a nested key, ':'-separated (matches Microsoft.Extensions.Configuration's own
 # flattening convention, and ASP.NET Core's own command-line config override syntax) — not '.',

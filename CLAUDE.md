@@ -231,5 +231,23 @@ reasoning. Merged as `taljacob2/config-transform#29` and versioned as `0.16.0-al
 (`docs/CHANGELOG.md` section moved out of `[Unreleased]` in the same change, per
 `docs/RELEASING.md` step 1); re-pinning `config-transform-pilot` and adding a YAML-based pilot
 project is a separate follow-up once this ships and `publish.yml` runs green, same sequencing as
-`.env`'s own pilot work. See `docs/ROADMAP.md`'s "Next up" for what's actionable now versus what
-needs either a solution repo that doesn't exist yet or an owner decision.
+`.env`'s own pilot work. Three more closures have since landed as three independent PRs. First,
+XML's array-of-objects matching — matching an *existing* item among repeated siblings — turned
+out to already be fully implemented (`FindMatchingElements` already ANDs an arbitrary number of
+`--match` coordinates and writes a comma-joined `Locator`), closed purely with a new fixture and
+tests proving it, zero production code (merged `taljacob2/config-transform#31`). Second, a `.env`
+cleanup pass found zero functional bugs and closed real test-coverage gaps plus a documentation
+gap (case-sensitivity across layers, now stated as deliberate in `docs/CONFIG_MANAGEMENT.md`
+§5.5) and a stale doc-comment drift in `FormatEngine.cs` (merged
+`taljacob2/config-transform#32`). Third, XML's `Insert` case (a genuinely brand-new element) —
+the one real remaining design gap — is now closed too, via a new reserved
+`parent=<ancestor/tag/path>` `--match` coordinate always paired with `tag=`, since Insert has no
+real element to read a tag/location from the way an update does. `Microsoft.Web.Xdt`'s actual
+`Insert` behavior was verified empirically before writing any production code: it needs no
+`Locator`, doesn't auto-create missing ancestor containers, and marking only the shallowest
+missing ancestor with `Insert` inserts its whole subtree as one unit — which is what
+`XmlFieldAuthor` now does (`FindOrCreateOverlayPath`, walking the overlay and the real resolved
+document in lockstep). See `docs/FIELD_AUTHORING_DESIGN.md`'s "Reserved coordinate: `parent=`"
+for the full design. Versioned as `0.17.0-alpha`. See `docs/ROADMAP.md`'s "Next up" for what's
+actionable now versus what needs either a solution repo that doesn't exist yet or an owner
+decision — YAML's own array-of-objects matching is the one remaining `set` gap.
