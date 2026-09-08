@@ -527,6 +527,39 @@ is native XDT vocabulary `XmlLayerMerger.Merge` already hands straight to
 from on create). No version cut needed — this PR ships no production code change, only tests,
 fixtures, and docs.
 
+**`.env` cleanup pass is closed — no functional bugs found.** Every documented grammar rule
+(`docs/CONFIG_MANAGEMENT.md` §5.5, `docs/FIELD_AUTHORING_DESIGN.md`'s `.env` section) was checked
+line-by-line against `EnvFile.cs`/`EnvLayerMerger.cs`/`EnvFieldAuthor.cs`; all matched exactly, no
+`TODO`/`FIXME`/`NotImplementedException` anywhere in `ConfigTransform.Env` or its tests. Closed
+real gaps instead: seven new `EnvFileTests.cs` cases covering previously-untested-but-correct
+edge cases (a literal `=` inside a value, an empty value round-tripping through `Parse`,
+incidental whitespace, `\r\n` input, no trailing newline, capitalized `Export` correctly *not*
+recognized) and two new `EnvLayerMergerGrammarTests.cs` cases (a duplicate key within one real
+file exercised through the merger, and key case-sensitivity across layers) — plus a real, silent
+documentation gap closed (`docs/CONFIG_MANAGEMENT.md` §5.5 now states the case-sensitivity
+behavior explicitly as deliberate) and a stale doc-comment drift fixed
+(`ConfigTransform.Core/FormatEngine.cs`'s `LayerMerge`/`FieldAuthor` delegate comments now name
+all four real implementations, not just two). 366 tests passing solution-wide. No version cut
+needed — test/doc content only.
+
+**XML's `Insert` case (a genuinely brand-new element) is closed**, via a new reserved
+`parent=<ancestor/tag/path>` `--match` coordinate, always paired with `tag=` — this is the item
+"Next up" below used to list as needing a real design decision first; that decision is made (see
+`docs/FIELD_AUTHORING_DESIGN.md`'s "Reserved coordinate: `parent=`" and its decision log for the
+full reasoning, including the empirically-verified real `Microsoft.Web.Xdt` `Insert` behavior a
+throwaway xUnit harness confirmed before any production code was written). `set` only falls back
+to Insert when zero real elements match at all — a real match always wins even when `parent` is
+also given. Covers both an existing parent container and one that doesn't exist yet in the target
+document at all (XDT doesn't auto-create missing ancestors the way `set`'s own update path does,
+so `XmlFieldAuthor` marks only the shallowest missing ancestor with `xdt:Transform="Insert"`,
+which inserts its whole subtree as one unit), plus idempotent re-run and base-target Insert (no
+`--client`/`--environment`, edits the real document directly with no `xdt:` markers at all).
+Fixture-backed: new `XmlFieldAuthorTests.cs` Insert cases plus a new
+`XmlLayerMergerInsertTests.cs` proving a hand-authored `Insert` overlay actually applies correctly
+through real `Microsoft.Web.Xdt` at merge time, mirroring `XmlLayerMergerArrayMatchTests.cs`'s
+role for compound-`Locator` matching. This is real feature work, unlike the two closures above —
+needs a version cut once merged.
+
 ## Next up
 
 One item below is now actionable purely within this repo (see the first bullet); every other
@@ -536,15 +569,11 @@ from below (or something new) when ready, rather than assuming the next item in 
 default next step.
 
 - **Finish `set`** — XML's "update an existing element" case (including matching an existing
-  item among repeated siblings — closed, see "Current state" above), JSON's single-key-path case
-  and array-of-objects matching (`$elemMatch`), `.env`'s single case, and YAML's single-key-path
-  case all shipped; two gaps remain, both real design/scope questions rather than unimplemented
-  happy paths, and both actionable now without a solution repo or an owner decision:
-  1. **XML's `Insert` case** (a genuinely brand-new element) — needs an actual design decision
-     first (how the parent location/tag name gets specified — a new flag, XPath, something
-     else), not just an implementation pass. See `docs/FIELD_AUTHORING_DESIGN.md`'s "Open items"
-     for why this is a real gap, not a checkbox.
-  2. **YAML's array-of-objects matching** — deliberately deferred out of YAML's first `set`
+  item among repeated siblings, and now `Insert` for a genuinely brand-new element — all closed,
+  see "Current state" above), JSON's single-key-path case and array-of-objects matching
+  (`$elemMatch`), `.env`'s single case, and YAML's single-key-path case all shipped; one gap
+  remains, actionable now without a solution repo or an owner decision:
+  1. **YAML's array-of-objects matching** — deliberately deferred out of YAML's first `set`
      version, mirroring how JSON's own `$elemMatch` landed in a later PR than JSON's first `set`.
      `JsonElemMatchResolver`'s `DeepEquals`/`DeepClone`/index-preserving-rewrite logic is tightly
      coupled to `System.Text.Json.Nodes` types; porting it to YAML's `Dictionary<string, object>`/
@@ -593,14 +622,13 @@ default next step.
      `docs/GETTING_STARTED.md`'s "One real difference between XML and JSON when the key is
      brand new"). JSON's version is simpler — any layer can introduce a new key with no special
      syntax — but the command still has to know which of the three XML cases it's in, which
-     needs the base document's real shape, not just a key/value pair. **This half is now mostly
-     built**: `SetAttributes` (update an existing key/attribute) is implemented for
-     `ConfigTransform.Xml` (including matching an existing item among repeated siblings — closed,
-     see "Current state" above), and JSON's `set` covers update, create, and array-of-objects
-     matching (`$elemMatch`) — see "Current state" above. `Insert` (the client-only-field case
-     named above, XML-specific by nature — creating a brand-new array item is the same
-     underlying gap) is not — see `docs/FIELD_AUTHORING_DESIGN.md` and this section's first
-     "Next up" bullet.
+     needs the base document's real shape, not just a key/value pair. **This half is now built**:
+     `SetAttributes` (update an existing key/attribute, including matching an existing item among
+     repeated siblings) and `Insert` (the client-only-field case named above, via
+     `--match parent=`/`tag=`) are both implemented for `ConfigTransform.Xml`, and JSON's `set`
+     covers update, create, and array-of-objects matching (`$elemMatch`) — see "Current state"
+     above for all three. Only YAML's own array-of-objects matching remains — see
+     `docs/FIELD_AUTHORING_DESIGN.md` and this section's first "Next up" bullet.
   2. Same validation gap that deferred `init`, more so: designing a UI's workflows now would be
      guessing at real usage patterns from one synthetic pilot, not real per-repo variation.
      `--diff`/`--dry-run` already cover "see the merged result easily" without either UI.
