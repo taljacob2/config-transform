@@ -1,0 +1,11 @@
+Logging:
+  LogLevel:
+    Default: Information
+ApiUrl: https://dev.example.com
+RetryCount: 3
+Features:
+  EnableBeta: false
+AllowedOrigins:
+  - https://a.example.com
+  - https://b.example.com
+AllowedHosts: "*"

@@ -48,7 +48,8 @@ gets full consistency *and* short paths.
 
 Inferred from `resources[].path`'s file extension — `.config`/`.xml` → the XML engine
 (`ConfigTransform.Xml`), `.json` → the JSON engine (`ConfigTransform.Json`), `.env` → the `.env`
-engine (`ConfigTransform.Env`) — never a declared field. Consistent with this tool's existing
+engine (`ConfigTransform.Env`), `.yaml`/`.yml` → the YAML engine (`ConfigTransform.Yaml`) — never
+a declared field. Consistent with this tool's existing
 stance that format is the only real constraint, never redundantly declared (`CLAUDE.md`'s "Core
 concepts"). A `configtransform.json` can freely mix resources of any registered formats in one
 file — the unified `configtransform` CLI (`ConfigTransform.Cli`) dispatches each one to the right
@@ -116,13 +117,13 @@ file created by hand (or scripted) if it should inherit the Environment layer.
 
 Nothing in this schema — or anywhere else in this tool — assumes a `.csproj`, a specific
 `TargetFramework`, or even a .NET project. `resources[].path` is genuinely just a path to a real
-XML, JSON, or `.env` file; the tool never opens, parses, or validates anything about the project
-that file belongs to (`CliRunner`/`LayerChain`, in `ConfigTransform.Core`). A `.NET` project on
-net35 works exactly the same as one on net8.0 — and the same is true for a Node.js, Angular,
-React, or Flutter project's own JSON config or `.env` file, since `resources[].path` can point
-anywhere in the repo. The only real constraint is the config file's *format*: XML, JSON, or
-`.env` today, not the ecosystem or TFM it happens to live in. See `CLAUDE.md`'s "Core concepts"
-for the fuller version of this claim.
+XML, JSON, `.env`, or YAML file; the tool never opens, parses, or validates anything about the
+project that file belongs to (`CliRunner`/`LayerChain`, in `ConfigTransform.Core`). A `.NET`
+project on net35 works exactly the same as one on net8.0 — and the same is true for a Node.js,
+Angular, React, or Flutter project's own JSON, `.env`, or YAML config file, since
+`resources[].path` can point anywhere in the repo. The only real constraint is the config file's
+*format*: XML, JSON, `.env`, or YAML today, not the ecosystem or TFM it happens to live in. See
+`CLAUDE.md`'s "Core concepts" for the fuller version of this claim.
 
 ## Web.config
 

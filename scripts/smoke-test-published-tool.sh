@@ -9,9 +9,9 @@
 # release.
 #
 # Builds a real 2-layer configtransform.json chain (Environment -> Client) with an XML, a JSON,
-# AND a .env resource all in the SAME layer, and asserts a single omitted-`--resource` call
-# resolves all three in one invocation with no skip note -- the actual capability CLI unification
-# delivers, not just "the binary starts and parses its args."
+# a .env, AND a YAML resource all in the SAME layer, and asserts a single omitted-`--resource`
+# call resolves all four in one invocation with no skip note -- the actual capability CLI
+# unification delivers, not just "the binary starts and parses its args."
 #
 # Usage: smoke-test-published-tool.sh <version> <github-user> <github-token>
 set -euo pipefail
@@ -51,6 +51,10 @@ cat > smoke/Project/.env <<'CONFIG'
 API_URL=https://dev.example.com
 CONFIG
 
+cat > smoke/Project/settings.yaml <<'CONFIG'
+ApiUrl: https://dev.example.com
+CONFIG
+
 cat > smoke/.configtransform/Environments/Smoke/patch-Project-App.config.xml <<'PATCH'
 <?xml version="1.0" encoding="utf-8"?>
 <configuration xmlns:xdt="http://schemas.microsoft.com/XML-Document-Transform">
@@ -69,11 +73,16 @@ cat > smoke/.configtransform/Environments/Smoke/patch-Project-.env <<'PATCH'
 API_URL=https://smoke-env.example.com
 PATCH
 
+cat > smoke/.configtransform/Environments/Smoke/patch-Project-settings.yaml <<'PATCH'
+ApiUrl: https://smoke-yaml.example.com
+PATCH
+
 cat > smoke/.configtransform/Environments/Smoke/configtransform.json <<'LAYER'
 { "resources": [
     { "path": "Project/App.config", "patch": ".configtransform/Environments/Smoke/patch-Project-App.config.xml" },
     { "path": "Project/appsettings.json", "patch": ".configtransform/Environments/Smoke/patch-Project-appsettings.json.json" },
-    { "path": "Project/.env", "patch": ".configtransform/Environments/Smoke/patch-Project-.env" }
+    { "path": "Project/.env", "patch": ".configtransform/Environments/Smoke/patch-Project-.env" },
+    { "path": "Project/settings.yaml", "patch": ".configtransform/Environments/Smoke/patch-Project-settings.yaml" }
 ] }
 LAYER
 
@@ -97,17 +106,23 @@ grep -q 'https://smoke-json.example.com' /tmp/smoke-json-output.txt
   | tee /tmp/smoke-env-output.txt
 grep -q 'https://smoke-env.example.com' /tmp/smoke-env-output.txt
 
-echo "--- Omitting --resource: all three formats in ONE call, no skip note ---"
+( cd smoke && dotnet tool run configtransform -- \
+    --resource Project/settings.yaml --client SmokeClient --environment Smoke --dry-run ) \
+  | tee /tmp/smoke-yaml-output.txt
+grep -q 'https://smoke-yaml.example.com' /tmp/smoke-yaml-output.txt
+
+echo "--- Omitting --resource: all four formats in ONE call, no skip note ---"
 ( cd smoke && dotnet tool run configtransform -- \
     --client SmokeClient --environment Smoke --dry-run ) \
   2>/tmp/smoke-mixed-stderr.txt | tee /tmp/smoke-mixed-output.txt
 grep -q 'https://smoke-xml.example.com' /tmp/smoke-mixed-output.txt
 grep -q 'https://smoke-json.example.com' /tmp/smoke-mixed-output.txt
 grep -q 'https://smoke-env.example.com' /tmp/smoke-mixed-output.txt
+grep -q 'https://smoke-yaml.example.com' /tmp/smoke-mixed-output.txt
 if [ -s /tmp/smoke-mixed-stderr.txt ]; then
   echo "FAIL: expected no stderr output for a fully-registered mixed-format layer, got:"
   cat /tmp/smoke-mixed-stderr.txt
   exit 1
 fi
 
-echo "Smoke test passed: ConfigTransform.Cli $VERSION installs and runs correctly from GitHub Packages, resolving XML, JSON, and .env resources -- including all three in a single call."
+echo "Smoke test passed: ConfigTransform.Cli $VERSION installs and runs correctly from GitHub Packages, resolving XML, JSON, .env, and YAML resources -- including all four in a single call."

@@ -473,10 +473,107 @@ stripped, no escape processing), only a whole-line `#` counts as a comment — s
 reasoning. 327 tests passing solution-wide (a new 31-test `ConfigTransform.Env.Tests` project,
 plus 7 new `ConfigTransform.Cli.Tests`). Versioned as `0.15.0-alpha`
 (`docs/CHANGELOG.md` section moved out of `[Unreleased]` in the same change, per
-`docs/RELEASING.md` step 1) — merged as `taljacob2/config-transform#27`; the owner still needs
-to tag and push `0.15.0-alpha` from current `main`; `config-transform-pilot` should be re-pinned
-to it, with a new `.env`-based pilot project added, once that tag exists and `publish.yml` has
-run green.
+`docs/RELEASING.md` step 1) — merged as `taljacob2/config-transform#27`. `0.15.0-alpha` has
+since been tagged and pushed by the owner, `publish.yml` ran green, and `config-transform-pilot`
+is re-pinned to it with a new `.env`-based `NotificationWorker` pilot project added and verified
+via real CI (`config-transform-pilot#6`, merged).
+
+**YAML format support implemented** — the item below in "Next up" flagged as "confirmed
+compatible without a redesign... not needed yet" has now landed: a fourth `FormatEngine`
+(`ConfigTransform.Yaml`), registered alongside XML, JSON, and `.env` with zero orchestration
+changes needed — the dispatcher generalizing to a fourth engine, not just three. Reuses the same
+build-time flatten-and-merge *architecture* as JSON (`Microsoft.Extensions.Configuration`), via
+`NetEscapades.Configuration.Yaml`'s `AddYamlFile` on the read side and `YamlDotNet`'s high-level
+`ISerializer` on the write side (needed directly, since NetEscapades only reads) — no code shared
+with `ConfigTransform.Json`, per this repo's per-format independent-library convention. Merge
+semantics (array-override-by-index, empty-container-round-trips-as-absent) are inherited from
+`IConfiguration`'s own flattening, identically to JSON. One real, verified limitation: YAML is
+case-sensitive but `IConfiguration` isn't, so sibling keys differing only in case throw a
+duplicate-key error at parse time — documented, not treated as a bug. `set` (`YamlFieldAuthor`)
+covers the plain-field path only — updating an existing key or creating a new one, the same
+`:`-separated nested-path model as JSON's own plain-field case. **Matching an item inside a YAML
+array of objects is not implemented** — refused with a clear "not yet supported" message, the
+same posture this tool already takes for XML's own unimplemented `Insert` case;
+porting `JsonElemMatchResolver` to YAML's object-graph shape is real, separable work, deliberately
+deferred rather than bundled into this first version — the same sequencing JSON's own `$elemMatch`
+followed (see "Next up" below, which folds XML's, JSON's-already-closed, and now YAML's
+array-of-objects status into one list). See `docs/CONFIG_MANAGEMENT.md` §5.6 and
+`docs/FIELD_AUTHORING_DESIGN.md`'s "JSON / YAML" section and decision log for the full mechanism,
+dependency choices, and case-sensitivity caveat. 352 tests passing solution-wide (a new 19-test
+`ConfigTransform.Yaml.Tests` project, plus 6 new `ConfigTransform.Cli.Tests`). Merged as
+`taljacob2/config-transform#29`. Versioned as `0.16.0-alpha` (`docs/CHANGELOG.md` section moved
+out of `[Unreleased]` in the same change, per `docs/RELEASING.md` step 1); re-pinning
+`config-transform-pilot` and adding a YAML-based pilot project is a separate follow-up once this
+ships and `publish.yml` runs green, same sequencing as `.env`'s own pilot work.
+
+**XML's array-of-objects matching — matching an *existing* item — is closed, with zero new
+production code.** `docs/FIELD_AUTHORING_DESIGN.md`'s own "Open items" already predicted this:
+`XmlFieldAuthor`'s existing element-matching machinery (`FindMatchingElements`) already ANDs an
+arbitrary number of `--match` coordinates and already writes a comma-joined
+`xdt:Locator="Match(a,b,...)"` for a compound match — true before this closed, just never proven
+against a real repeated-sibling scenario, since none of the three existing XML fixture sets
+contained two elements sharing a tag distinguishable only by more than one attribute. Closed
+purely with a new fixture (`Fixtures/IisWebConfig/ArrayMatch/`, two real `<rule>` siblings
+sharing one attribute value but differing on another) and tests: three new
+`XmlFieldAuthorTests.cs` cases (single-attribute match is genuinely ambiguous among the siblings;
+a compound match disambiguates and writes the right `Locator`; re-running the same compound match
+updates in place) plus a new `XmlLayerMergerArrayMatchTests.cs` proving a hand-authored compound-
+`Locator` overlay resolves correctly through real `Microsoft.Web.Xdt` at merge time, not just at
+set-authoring time — the XML analogue of `JsonLayerMergerElemMatchTests.cs`'s role for JSON's
+`$elemMatch`, except XML needed no merge-time pre-processing pass of its own, since `xdt:Locator`
+is native XDT vocabulary `XmlLayerMerger.Merge` already hands straight to
+`XmlTransformation.Apply`. **Creating** a brand-new array item remains open, folded into the
+`Insert` gap below since it's the same underlying problem (nothing to derive a new item's shape
+from on create). No version cut needed — this PR ships no production code change, only tests,
+fixtures, and docs.
+
+**`.env` cleanup pass is closed — no functional bugs found.** Every documented grammar rule
+(`docs/CONFIG_MANAGEMENT.md` §5.5, `docs/FIELD_AUTHORING_DESIGN.md`'s `.env` section) was checked
+line-by-line against `EnvFile.cs`/`EnvLayerMerger.cs`/`EnvFieldAuthor.cs`; all matched exactly, no
+`TODO`/`FIXME`/`NotImplementedException` anywhere in `ConfigTransform.Env` or its tests. Closed
+real gaps instead: seven new `EnvFileTests.cs` cases covering previously-untested-but-correct
+edge cases (a literal `=` inside a value, an empty value round-tripping through `Parse`,
+incidental whitespace, `\r\n` input, no trailing newline, capitalized `Export` correctly *not*
+recognized) and two new `EnvLayerMergerGrammarTests.cs` cases (a duplicate key within one real
+file exercised through the merger, and key case-sensitivity across layers) — plus a real, silent
+documentation gap closed (`docs/CONFIG_MANAGEMENT.md` §5.5 now states the case-sensitivity
+behavior explicitly as deliberate) and a stale doc-comment drift fixed
+(`ConfigTransform.Core/FormatEngine.cs`'s `LayerMerge`/`FieldAuthor` delegate comments now name
+all four real implementations, not just two). 366 tests passing solution-wide. No version cut
+needed — test/doc content only.
+
+**XML's `Insert` case (a genuinely brand-new element) is closed**, via a new reserved
+`parent=<ancestor/tag/path>` `--match` coordinate, always paired with `tag=` — this is the item
+"Next up" below used to list as needing a real design decision first; that decision is made (see
+`docs/FIELD_AUTHORING_DESIGN.md`'s "Reserved coordinate: `parent=`" and its decision log for the
+full reasoning, including the empirically-verified real `Microsoft.Web.Xdt` `Insert` behavior a
+throwaway xUnit harness confirmed before any production code was written). `set` only falls back
+to Insert when zero real elements match at all — a real match always wins even when `parent` is
+also given. Covers both an existing parent container and one that doesn't exist yet in the target
+document at all (XDT doesn't auto-create missing ancestors the way `set`'s own update path does,
+so `XmlFieldAuthor` marks only the shallowest missing ancestor with `xdt:Transform="Insert"`,
+which inserts its whole subtree as one unit), plus idempotent re-run and base-target Insert (no
+`--client`/`--environment`, edits the real document directly with no `xdt:` markers at all).
+Fixture-backed: new `XmlFieldAuthorTests.cs` Insert cases plus a new
+`XmlLayerMergerInsertTests.cs` proving a hand-authored `Insert` overlay actually applies correctly
+through real `Microsoft.Web.Xdt` at merge time, mirroring `XmlLayerMergerArrayMatchTests.cs`'s
+role for compound-`Locator` matching. This is real feature work, unlike the two closures above —
+needs a version cut once merged.
+
+**`--list` now shares the exact chain rendering the single-resource resolution report uses**,
+reported by a real user who noticed the two commands showed the same base→arrow→layer chain two
+different ways: `--list` used to print a bare `patched in`/`not patched in` per layer with no
+patch path and a `(always applied)` annotation on the base row, while `--dry-run`/`--diff`/a real
+run's `Resolving '<path>'` report showed the real patch file path per layer
+(`patched in: <path>`) and the resource's own path on the base row. `LayerLister.ListLayer` now
+calls `LayerChain.ResolveResource` per resource (the same function the single-resource report
+already used) and a new shared `LayerChain.PrintChain` renders the chain identically for both —
+one rendering, two call sites, instead of two renderings of the same facts. A real, deliberate
+side effect: `--list` now also throws the same `FileNotFoundException` the other modes already do
+when a layer declares a `patch` that doesn't exist on disk, instead of silently reporting it as
+`patched in` — consistent with `docs/CONFIG_MANAGEMENT.md`'s own stated principle that a declared-
+but-missing patch is always an error, the same way a missing base file is. Versioned as
+`0.18.0-alpha`.
 
 ## Next up
 
@@ -486,19 +583,17 @@ repo owner can make. Not a "next slice" in the same sense as the ones before thi
 from below (or something new) when ready, rather than assuming the next item in this list is the
 default next step.
 
-- **Finish `set`** — XML's "update an existing element" case, JSON's single-key-path case, and
-  JSON's array-of-objects matching (`$elemMatch`) all shipped (see "Current state" above); two
-  gaps remain, both scoped to XML, both real design questions rather than unimplemented happy
-  paths, and both actionable now without a solution repo or an owner decision:
-  1. **XML's `Insert` case** (a genuinely brand-new element) — needs an actual design decision
-     first (how the parent location/tag name gets specified — a new flag, XPath, something
-     else), not just an implementation pass. See `docs/FIELD_AUTHORING_DESIGN.md`'s "Open items"
-     for why this is a real gap, not a checkbox.
-  2. **XML's array-of-objects matching** — scoped out alongside `Insert` above (same underlying
-     reason: nothing to derive a brand-new array item's shape from on create); *matching an
-     existing* array item is mechanically answerable the same way an XML element match already
-     is, so this could in principle be implemented independently of `Insert` — not done only for
-     lack of time, not a design blocker. See `docs/FIELD_AUTHORING_DESIGN.md`'s "Open items".
+- **Finish `set`** — XML's "update an existing element" case (including matching an existing
+  item among repeated siblings, and now `Insert` for a genuinely brand-new element — all closed,
+  see "Current state" above), JSON's single-key-path case and array-of-objects matching
+  (`$elemMatch`), `.env`'s single case, and YAML's single-key-path case all shipped; one gap
+  remains, actionable now without a solution repo or an owner decision:
+  1. **YAML's array-of-objects matching** — deliberately deferred out of YAML's first `set`
+     version, mirroring how JSON's own `$elemMatch` landed in a later PR than JSON's first `set`.
+     `JsonElemMatchResolver`'s `DeepEquals`/`DeepClone`/index-preserving-rewrite logic is tightly
+     coupled to `System.Text.Json.Nodes` types; porting it to YAML's `Dictionary<string, object>`/
+     `List<object>` object graph is real, separable work, not a design blocker. See
+     `docs/FIELD_AUTHORING_DESIGN.md`'s "JSON / YAML" section and "Open items".
 - **`docs/MANIFEST_SCHEMA.md`'s filename vs. its content** — now describes the
   `configtransform.json` schema in full (the self-describing-overlays implementation above), but
   kept its old filename to avoid a large cross-reference rename across `docs/`. Worth revisiting
@@ -509,7 +604,9 @@ default next step.
   end to end and found/fixed one real bug (see "Current state" above and the pilot's
   `FINDINGS.md`). What that pilot deliberately couldn't validate, since it's synthetic: a real
   inventory against actual solution-repo content, the deployment transport mechanism, key
-  rotation, per-client key splitting, YAML/`.env` formats. A pilot against the *actual*
+  rotation, per-client key splitting. (`.env` has since been validated against the pilot's own
+  `NotificationWorker` project; YAML has not yet — see the pilot follow-up note in "Current
+  state" above.) A pilot against the *actual*
   employer-owned multi-client repo this design targets still needs a separate session in that
   organization's own Claude Code environment — this repo's own conversations can't touch that
   repo directly. **Migration off `manifest.json` complete as of `0.7.0-alpha2`**: contrary to
@@ -526,9 +623,6 @@ default next step.
   this repo's concern directly, but blocks the consuming architecture's
   `build-transformed.yml`. `CONFIG_MANAGEMENT.md` §8.3.
 - **git-crypt key rotation trigger** — deferred by design, not blocking.
-- **YAML format support** — confirmed compatible with the existing design without a redesign,
-  see `docs/CONFIG_MANAGEMENT.md` §5.6. Not needed yet. (`.env` support has since shipped, see
-  "Current state" above.)
 - **A real (non-`-alpha`) `1.0.0` release** — once the solution-repo pilot validates the design
   against real content, worth promoting out of pre-release.
 - **A TUI (`configtransform-tui`) and/or a cross-platform GUI (`configtransform-gui`)** —
@@ -543,11 +637,12 @@ default next step.
      `docs/GETTING_STARTED.md`'s "One real difference between XML and JSON when the key is
      brand new"). JSON's version is simpler — any layer can introduce a new key with no special
      syntax — but the command still has to know which of the three XML cases it's in, which
-     needs the base document's real shape, not just a key/value pair. **This half is now mostly
-     built**: `SetAttributes` (update an existing key/attribute) is implemented for
-     `ConfigTransform.Xml`, and JSON's `set` covers update, create, and array-of-objects matching
-     (`$elemMatch`) — see "Current state" above. `Insert` (the client-only-field case named above,
-     XML-specific by nature) and XML's own array-of-objects matching are not — see
+     needs the base document's real shape, not just a key/value pair. **This half is now built**:
+     `SetAttributes` (update an existing key/attribute, including matching an existing item among
+     repeated siblings) and `Insert` (the client-only-field case named above, via
+     `--match parent=`/`tag=`) are both implemented for `ConfigTransform.Xml`, and JSON's `set`
+     covers update, create, and array-of-objects matching (`$elemMatch`) — see "Current state"
+     above for all three. Only YAML's own array-of-objects matching remains — see
      `docs/FIELD_AUTHORING_DESIGN.md` and this section's first "Next up" bullet.
   2. Same validation gap that deferred `init`, more so: designing a UI's workflows now would be
      guessing at real usage patterns from one synthetic pilot, not real per-repo variation.

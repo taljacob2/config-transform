@@ -6,6 +6,102 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.18.0-alpha] - 2026-09-08
+
+### Fixed
+
+- **`--list` now shows the same chain rendering the single-resource resolution report
+  (`--dry-run`/`--diff`/a real run) already uses** — real, repo-relative patch file paths
+  (`patched in: <path>`) instead of a bare `patched in`, base rows showing the resource's own
+  path instead of `(always applied)`, and the same detail-line-per-layer shape — reported by a
+  real user who noticed the two commands rendered the same chain two different ways.
+  `LayerLister.ListLayer` now reuses `LayerChain.ResolveResource`/the new shared
+  `LayerChain.PrintChain` instead of its own inline, less detailed rendering. A real
+  consequence, not a side effect to work around: `--list` now also throws the same
+  `FileNotFoundException` `--dry-run`/`--diff`/a real run already do when a layer declares a
+  `patch` that doesn't exist on disk — previously `--list` silently reported that as `patched
+  in`, undetected.
+
+## [0.17.0-alpha] - 2026-09-08
+
+### Added
+
+- **Test/fixture proof that XML's `set` already matches an existing item among repeated
+  siblings** (`docs/FIELD_AUTHORING_DESIGN.md`'s "Open items") — no production code change:
+  `XmlFieldAuthor`'s element-matching machinery already ANDs an arbitrary number of `--match`
+  coordinates and already writes a comma-joined `xdt:Locator="Match(a,b,...)"` for a compound
+  match, but none of the three existing XML fixture sets contained two elements sharing a tag
+  distinguishable only by more than one attribute, so this was unproven. A new
+  `Fixtures/IisWebConfig/ArrayMatch/` fixture (two real `<rule>` siblings sharing one attribute
+  value but differing on another) plus three new `XmlFieldAuthorTests.cs` cases and a new
+  `XmlLayerMergerArrayMatchTests.cs` (proving a hand-authored compound-`Locator` overlay resolves
+  correctly through real `Microsoft.Web.Xdt` at merge time, not just at set-authoring time) close
+  this out — the XML analogue of `JsonLayerMergerElemMatchTests.cs`'s role for JSON's
+  `$elemMatch`. Creating a brand-new array item remains open, folded into the `Insert` gap.
+- **XML `set` now supports `Insert`** (a genuinely brand-new element) via a new reserved
+  `parent=<ancestor/tag/path>` `--match` coordinate, always paired with `tag=<NewElementName>` —
+  `--match`/`--set` alone don't carry a new element's tag or parent location, and there's nothing
+  in an existing document to derive either from for a true insert, so both are named explicitly.
+  `set` only falls back to Insert when zero real elements match at all; a real match always wins
+  over a `parent` hint even when both are given. Covers inserting into an existing parent
+  container (writes `xdt:Transform="Insert"` with no `Locator` unless a real identifying
+  attribute beyond `tag` is also given) and into a parent container that doesn't exist yet in the
+  target document (`Microsoft.Web.Xdt` doesn't auto-create missing ancestors — verified
+  empirically before writing any code — so only the *shallowest* missing ancestor is marked
+  `Insert`, which inserts its entire subtree as one unit), plus idempotent re-run and base-target
+  Insert (no `--client`/`--environment` — edits the real document directly, no `xdt:` markers at
+  all). See `docs/FIELD_AUTHORING_DESIGN.md`'s "Reserved coordinate: `parent=`" for the full
+  design and decision log. New `XmlFieldAuthorTests.cs` Insert cases plus
+  `XmlLayerMergerInsertTests.cs` (merge-time proof against real `Microsoft.Web.Xdt`).
+
+### Fixed
+
+- **`.env` cleanup pass** — no functional bugs found (every documented grammar rule was checked
+  line-by-line against `EnvFile.cs`/`EnvLayerMerger.cs`/`EnvFieldAuthor.cs`; all matched exactly).
+  Closes real test-coverage gaps instead: seven new `EnvFileTests.cs` cases (a value containing a
+  literal `=`, an empty value round-tripping through `Parse`, incidental whitespace around
+  key/`=`/value, `\r\n` input, a file with no trailing newline, `Export` — capitalized — not
+  being recognized as the `export` prefix) and two new `EnvLayerMergerGrammarTests.cs` cases (a
+  duplicate key within one real file exercised through the merger, and key case-sensitivity
+  across layers, both previously untested). `docs/CONFIG_MANAGEMENT.md` §5.5 now documents the
+  case-sensitivity behavior explicitly (a deliberate consequence of ordinal `Dictionary`
+  comparisons, matching real POSIX/shell env-var semantics) rather than leaving it silently
+  unstated. Also fixes two stale doc comments in `ConfigTransform.Core/FormatEngine.cs`'s
+  `LayerMerge`/`FieldAuthor` delegates that still named only `XmlLayerMerger.Merge`/
+  `JsonFieldAuthor.Author` — unchanged since before `.env`/YAML shipped, now naming all four real
+  implementations.
+
+## [0.16.0-alpha] - 2026-09-07
+
+### Added
+
+- **YAML format support** — a fourth `FormatEngine` (`ConfigTransform.Yaml`), registered
+  alongside XML, JSON, and `.env` in `ConfigTransform.Cli`'s `FormatEngineRegistry` with zero
+  orchestration changes needed, confirming the dispatcher generalizes to a fourth format (not
+  just three). Recognized by `resources[].path`'s own `.yaml`/`.yml` extension (both map to the
+  same engine, the same two-extension pattern XML already uses for `.config`/`.xml`). Reuses the
+  exact same build-time flatten-and-merge *architecture* as JSON (`Microsoft.Extensions.Configuration`),
+  swapping `NetEscapades.Configuration.Yaml`'s `AddYamlFile` in for `AddJsonFile` on the read
+  side, and `YamlDotNet`'s high-level `ISerializer` for the write side (needed directly, since
+  NetEscapades only reads) — no code shared with `ConfigTransform.Json`, per this repo's
+  per-format independent-library convention. Merge semantics — array-override-by-index,
+  empty-container-round-trips-as-absent — are inherited from `IConfiguration`'s own flattening,
+  identically to JSON. One known, real, verified limitation: YAML itself is case-sensitive but
+  `IConfiguration` isn't, so two sibling keys differing only in case throw a duplicate-key error
+  at parse time. `set` (`YamlFieldAuthor`) covers the plain-field path only — updating an
+  existing key or creating a new one via `--match key=<path>`/`--match literal-key=<path>`, the
+  same `:`-separated nested-path model and nested-vs-literal collision detection as JSON's own
+  plain-field case. Matching an item inside an array of objects (YAML's equivalent of JSON's
+  `$elemMatch`) is **not** implemented — refused with a clear "not yet supported" message, the
+  same posture this tool already takes for XML's own unimplemented array-of-objects matching and
+  `Insert`; porting `JsonElemMatchResolver` to YAML's object-graph shape is real, separable work,
+  deliberately deferred rather than bundled into this first version — the same sequencing JSON's
+  own `$elemMatch` followed. See `docs/CONFIG_MANAGEMENT.md` §5.6 for the full merge semantics
+  and the case-sensitivity caveat, and `docs/FIELD_AUTHORING_DESIGN.md`'s "JSON / YAML" section
+  and decision log for the `set` design and dependency choices. 352 tests passing solution-wide
+  (a new 19-test `ConfigTransform.Yaml.Tests` project, plus 6 new `ConfigTransform.Cli.Tests`
+  covering a genuine 4-format single-call resolution and `set` end-to-end).
+
 ## [0.15.0-alpha] - 2026-09-07
 
 ### Added

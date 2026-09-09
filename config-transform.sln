@@ -10,6 +10,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConfigTransform.Json", "src
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConfigTransform.Env", "src\ConfigTransform.Env\ConfigTransform.Env.csproj", "{2B621DA1-8CA3-4020-A6EE-22B6058469C2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConfigTransform.Yaml", "src\ConfigTransform.Yaml\ConfigTransform.Yaml.csproj", "{30881B89-165F-4561-BD22-E121D1825DCE}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConfigTransform.Core.Tests", "tests\ConfigTransform.Core.Tests\ConfigTransform.Core.Tests.csproj", "{74A24E75-45A6-4EC8-8BF8-81BE20301014}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConfigTransform.Xml.Tests", "tests\ConfigTransform.Xml.Tests\ConfigTransform.Xml.Tests.csproj", "{B53B4E56-4ED4-4A2D-92F5-13A5C600AAEF}"
@@ -25,6 +27,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConfigTransform.Cli.Tests", "tests\ConfigTransform.Cli.Tests\ConfigTransform.Cli.Tests.csproj", "{D8C096B3-0705-4772-8CB9-71F29321C620}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConfigTransform.Env.Tests", "tests\ConfigTransform.Env.Tests\ConfigTransform.Env.Tests.csproj", "{72CD2999-DAD5-49A2-9AE3-2DFDD724D3F4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConfigTransform.Yaml.Tests", "tests\ConfigTransform.Yaml.Tests\ConfigTransform.Yaml.Tests.csproj", "{56BB6292-FB6A-47E9-80A5-10212FE6337F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -72,6 +76,14 @@ Global
 		{72CD2999-DAD5-49A2-9AE3-2DFDD724D3F4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{72CD2999-DAD5-49A2-9AE3-2DFDD724D3F4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{72CD2999-DAD5-49A2-9AE3-2DFDD724D3F4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{30881B89-165F-4561-BD22-E121D1825DCE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{30881B89-165F-4561-BD22-E121D1825DCE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{30881B89-165F-4561-BD22-E121D1825DCE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{30881B89-165F-4561-BD22-E121D1825DCE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{56BB6292-FB6A-47E9-80A5-10212FE6337F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{56BB6292-FB6A-47E9-80A5-10212FE6337F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{56BB6292-FB6A-47E9-80A5-10212FE6337F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{56BB6292-FB6A-47E9-80A5-10212FE6337F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -80,5 +92,6 @@ Global
 		{DF3494A3-77EB-4E40-8B4D-F5A8093D2BCE} = {DE5908A5-4672-46BE-8CB1-2C4FCAC1601D}
 		{D8C096B3-0705-4772-8CB9-71F29321C620} = {866B3C44-3447-4C36-BD67-3EB4203896F8}
 		{72CD2999-DAD5-49A2-9AE3-2DFDD724D3F4} = {866B3C44-3447-4C36-BD67-3EB4203896F8}
+		{56BB6292-FB6A-47E9-80A5-10212FE6337F} = {866B3C44-3447-4C36-BD67-3EB4203896F8}
 	EndGlobalSection
 EndGlobal

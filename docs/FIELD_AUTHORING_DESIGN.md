@@ -13,14 +13,20 @@ no identifying attribute at all — a real, previously-undesigned gap reported a
 tool, found the same way the JSON array-of-objects gap was: by a real user hitting it. See
 `docs/USAGE.md`'s `set` section and `docs/CHANGELOG.md`'s `[0.6.0-alpha]`/`[0.7.0-alpha]` entries
 for exactly what's live and where. `ConfigTransform.Env`'s `set` is also implemented — the
-simplest of the three, since a `.env` file is always flat: no nested-path disambiguation (JSON)
+simplest of the four, since a `.env` file is always flat: no nested-path disambiguation (JSON)
 and no update-vs-insert branch (XML) to make at all, just `--match key=<NAME> --set
-value=<value>` writing or overwriting a key directly. **Not yet implemented**: XML's `Insert`
-case (a genuinely brand-new element), and XML's array-of-objects matching (see "Open items" below
-for both — JSON's version of the array-of-objects gap, once a real, previously-undesigned problem
-found during implementation, is now closed). This document otherwise still reflects the original
-completed design from a product-brainstorming session; treat any specific claim about *current*
-behavior as superseded by `docs/CHANGELOG.md` where the two differ.
+value=<value>` writing or overwriting a key directly. `ConfigTransform.Yaml`'s `set` is
+implemented for its plain-field path (update an existing key, or create a new one) — the same
+model as JSON's own plain-field case, since YAML shares JSON's exact nesting. XML's array-of-
+objects matching — matching an *existing* item among repeated siblings — is also closed, with
+zero new production code (the existing element-matching machinery already handled it; see "Open
+items" below). XML's `Insert` case (a genuinely brand-new element) is also now closed, via a new
+reserved `parent=` `--match` coordinate (see "Reserved coordinate: `parent=`" above and "Open
+items" below). **Not yet implemented**: YAML's own array-of-objects matching (see "Open items"
+below — JSON's version of the same gap, once a real, previously-undesigned problem found during
+implementation, is now closed, and so is XML's). This document otherwise still reflects the original completed
+design from a product-brainstorming session; treat any specific claim about *current* behavior as
+superseded by `docs/CHANGELOG.md` where the two differ.
 
 ## Why this exists, and why now
 
@@ -100,8 +106,13 @@ set --match name=Prod --set connectionString="Data Source=new;..." --set provide
 **Operation decision** (`SetAttributes` vs. `Insert` vs. base-file edit) is resolved
 mechanically, not asked for: resolve the target overlay layer as it exists today; if the
 matched element is already present in the fully-resolved document up to that layer, the
-operation is `SetAttributes`; if absent, `Insert`; a `set` with no `--client`/`--environment`
-writes the base file directly (a new key meant for everyone).
+operation is `SetAttributes`; a `set` with no `--client`/`--environment` writes the base file
+directly (a new key meant for everyone). If no real element matches at all, `set` falls back to
+`Insert` **only when a `--match parent=<ancestor/tag/path>` and a `--match tag=<NewElementName>`
+are also given** — for an update, the element's tag and ancestry are read straight off the real
+match; for Insert there's nothing to read them from, so the caller has to name both explicitly
+(see "Reserved coordinate: `parent=`" below). Without `parent`, a genuine no-match still refuses
+with a clear error rather than guessing a location.
 
 **Reserved coordinate: `tag=`.** Some elements have no identifying attribute at all —
 `customErrors`, `compilation`, `httpRuntime`, `sessionState`, and similar `system.web`/
@@ -132,6 +143,45 @@ stated there (the overlay element's own tag already carries it). This is a small
 exception to XML's otherwise-open attribute vocabulary ("no fixed heuristic," above) — parallel to
 JSON's own reserved `key`/`literal-key` coordinates below, and accepted for the same reason: a real
 schema having an attribute literally named `tag` is a theoretical collision, not a practical one.
+
+**Reserved coordinate: `parent=`.** `Insert` (a genuinely brand-new element, matching nothing that
+exists yet) needs the same two things an update gets for free — the new element's tag, and where
+in the document it belongs — but there's no real match to read either from. `set` exposes this via
+a second reserved `--match` coordinate, `parent=<ancestor/tag/path>`: a `/`-separated ancestor tag
+path **relative to the document root** (never including the root tag itself — the same convention
+`AncestorTagPath` already uses internally for the update case), naming the container the new
+element goes under. It's always paired with `tag=` (the new element's own tag name — `parent`
+alone doesn't say what to call the thing being created):
+
+```
+set --resource Web/Web.config --environment Production \
+  --match parent=system.webServer/rewrite/rules --match tag=rule \
+  --set name=WWW-Redirect --set enabled=true --set stopProcessing=true
+```
+
+`parent` is pure location metadata, exactly like `tag` — never a real attribute, never matched
+against the document, never written to the overlay. It's also never consulted unless
+`FindMatchingElements` finds **zero** real candidates first: a real match always wins over an
+Insert hint, even when `parent` is also given (a defensive convenience, not something a normal
+workflow relies on — see `A_real_matching_element_always_wins_over_parent_even_when_parent_is_also_given`).
+Given `parent`+`tag` with nothing else, `Insert` is written with no `xdt:Locator` at all (like
+bare `tag=`); given additional real attribute matches too, they become both the written
+attributes *and* a `Locator="Match(...)"`, so a second, distinct new element with the same tag
+under the same parent can be told apart from the first on a later `set` — with zero identifying
+attributes beyond `tag`, a second identical Insert call updates the same first-inserted element
+in place rather than creating a genuinely new one (documented on `XmlFieldAuthor.AuthorInsert`'s
+own doc comment, not a bug).
+
+If `parent`'s ancestor path doesn't exist yet in the target document either, it's created too —
+verified empirically against real `Microsoft.Web.Xdt` (see the "Insert" decision-log row below):
+`xdt:Transform="Insert"` needs no `xdt:Locator`, but XDT does **not** auto-create missing
+ancestor containers the way `set`'s own overlay-writing code does for the update case — applying
+an overlay whose ancestor path doesn't exist for real throws `XmlNodeException`. The fix is to
+mark only the **shallowest missing ancestor** element with `xdt:Transform="Insert"`, which inserts
+its entire subtree (however deep) as one unit — so `set` walks the target overlay and the real
+resolved document in lockstep, and marks exactly one element, the first point where they diverge.
+Base-target Insert (no `--client`/`--environment`) needs no `xdt:` markers at all, same as every
+other base-file write — it edits the missing containers into the real document directly.
 
 ### JSON / YAML
 
@@ -231,11 +281,22 @@ See `src/ConfigTransform.Json/JsonElemMatchResolver.cs` for the resolver itself 
 resolution), and `docs/USAGE.md`'s `set` section for more worked examples (compound conditions,
 a second patch in the same overlay, progressive layering across Environment/Client).
 
-YAML is not designed separately from JSON here: `docs/CONFIG_MANAGEMENT.md` §5.6 already
-confirmed YAML fits the existing design without a redesign (same tree-of-maps/lists/scalars
-data model, different serialization) — this command's model inherits that, once YAML support
-itself lands (still "not needed yet" per `docs/ROADMAP.md`; this design doesn't change that
-timeline, it just means `set` won't need separate design work when it does).
+YAML is implemented (`YamlFieldAuthor`, `docs/CONFIG_MANAGEMENT.md` §5.6) and, as predicted here,
+needed no separate design: same tree-of-maps/lists/scalars data model as JSON, same `:`-separated
+nested-path grammar, same `key=`/`literal-key=` disambiguation for a literal key that happens to
+contain a colon. The one real difference from JSON's `set` is scope, not model: YAML's first
+version covers the plain-field path only (update an existing key, or create a new one) — matching
+an item inside an array of objects (the `$elemMatch` case above) is **not** ported for YAML.
+A `--match` shape with more than one coordinate is refused with a clear "not yet supported"
+error rather than guessed at, mirroring how XML's own `Insert` (creating a brand-new array item)
+is refused today — XML's *matching an existing* array item, by contrast, already works, the same
+way an ordinary XML element match does. This is a genuine, named scope gap, not an oversight:
+`JsonElemMatchResolver`
+is ~200 lines tightly coupled to `System.Text.Json.Nodes` types (`JsonNode`/`JsonObject`/
+`JsonArray`) — porting its `DeepEquals`/`DeepClone`/index-preserving-rewrite logic to YAML's own
+`Dictionary<string, object>`/`List<object>` object graph is real, separable work, deliberately
+deferred rather than bundled into YAML's first version. This repo's own precedent is the same:
+JSON's own `$elemMatch` landed in a later PR than JSON's first `set`.
 
 ### `.env`
 
@@ -361,36 +422,68 @@ No case needed a bespoke resolution; each was the same rule applied once more.
 | Single-segment JSON key vs. the nested/literal collision check | Skip the collision check entirely when the key has no `:` at all | Apply the same nested-vs-literal check uniformly to every key length | A colon-free key (e.g. `ApiUrl`) has only one possible reading — "nested" and "literal" are the same thing for it. Applying the check anyway made the single most common shape a JSON `set` will see (`--match ApiUrl`) always report as ambiguous, a real bug caught by manual smoke-testing, not a design choice. |
 | JSON array-of-objects overlay syntax (closing the row above) | `$elemMatch` — MongoDB's own operator name for "match an array element by field conditions" | Inventing a new name (e.g. `$match`); padding an overlay array with `{}` placeholders up to the target index; addressing the item by a plain numeric index in the overlay file | The user explicitly required that no array index ever be visible anywhere, including in the persisted overlay file — ruling out index-based and padding-based approaches outright. `$elemMatch` is a real, already-known convention (this project's own "prefer a known convention over inventing one" principle, same reasoning as `:` over `.` above) — closer in spirit to XDT's `Locator` than any index-shaped alternative. |
 | Canonical shape for the `$elemMatch` overlay: always a list of patches, even for one condition set | A list under the array's key (`{"Rules": [{"$elemMatch": {...}, ...}]}`), never a bare single object | A bare `{"$elemMatch": {...}, ...}` object for the single-condition-set case, promoted to a list only when a second patch is added | One shape to parse everywhere (set-authoring, merge-time rewrite, hand-editing) beats two; a bare-object shape has nowhere to put a second `set` call against the same array in the same overlay file (different conditions) without either colliding or silently changing shape between the first and second write. |
+| YAML `set` scope for its first version | Plain-field path only (update/create a key); array-of-objects matching refused with a named "not yet supported" error | Port `$elemMatch` to YAML in the same PR | `JsonElemMatchResolver` is tightly coupled to `System.Text.Json.Nodes` types; porting it to a `Dictionary<string, object>`/`List<object>` graph is real, separable work. Matches this repo's own precedent — JSON's own `$elemMatch` landed in a later PR than JSON's first `set` — and keeps YAML's first PR reviewable. |
+| YAML dependency shape | `NetEscapades.Configuration.Yaml` (read, via `AddYamlFile`) + `YamlDotNet` directly (write, via `ISerializer`) | A single library for both directions; a lower-level YamlDotNet node-tree API for writing | No single maintained library does both `Microsoft.Extensions.Configuration` integration and serialization; `YamlDotNet`'s high-level `SerializerBuilder` already makes sensible block/flow-style and quoting choices for a plain object graph, so there's no need to hand-manage YAML tags or emitter state the way the lower-level node-tree API would require. |
 | Where `$elemMatch` conditions resolve to a real position | At real merge time (`JsonLayerMerger.Merge`, via a new pre-processing pass), re-run on every merge, progressively per layer (Environment resolves against base; Client resolves against base+Environment-merged) | Resolve once, at `set`-authoring time only, and bake the resolved position into the overlay file | The "no index in the persisted file" requirement rules out baking anything in. A hand-written overlay (never touched by `set`) still needs to resolve correctly, and a later merge can see a different array shape than the one `set` saw when it wrote the file (e.g. another layer inserted an item first) — only a fresh, real merge-time resolution is correct in general. `set` still does the same resolution eagerly too, for immediate UX (ambiguous/not-found errors surface right away) — but that check is advisory, not authoritative. |
 | Rewritten-position representation inside `Merge`'s pre-processing pass | A `JsonObject` keyed by numeric-string index (`{"1": {...}}`), fed to `Microsoft.Extensions.Configuration` via `AddJsonStream` | A `JsonArray` literal with placeholder entries for skipped indices | A real array can't express "touch only index 1, leave 0 and 2+ alone" without placeholder nulls at the skipped positions, and those nulls would themselves flatten to real `IConfiguration` keys and clobber the base layer's actual values there — the same hazard `JsonLayerMerger`'s own doc comment already warns about for plain overlay arrays. A numeric-string object key has no such constraint, and empirically flattens to the identical `IConfiguration` path as a real array index (verified for both `AddJsonFile` and, since this design switches overlay layers to in-memory streams, `AddJsonStream` specifically — not just inferred from the file case). |
 | No match for a patch's conditions | Upsert: create a new item, combining the `$elemMatch` condition fields as its identity plus whatever `--set` wrote | Treat "no match" as an error, requiring a separate insert-only command or flag | Mirrors MongoDB's own upsert semantics for the same shape (a filter document plus an update document) — a known convention again, not an invented one. Keeps the overlay file's shape identical regardless of whether a given patch will update or create, which is the whole point: that decision is made at resolution time, not authoring time. |
 | XML tag-only matching for a singleton element (found the same way as the JSON array-of-objects gap: a real user hitting it) | A reserved `tag=` `--match` coordinate; writes no `xdt:Locator` at all when it's the only coordinate given, mirroring real XDT's own default-match-by-name behavior | Require the user to invent a synthetic identifying attribute; guess a default attribute name (e.g. always try `mode`) | `customErrors`/`compilation`/`httpRuntime`-shaped elements genuinely have no identifying attribute — there is nothing to guess without breaking "never guessed" (above). A dedicated reserved coordinate names the real thing (the tag) instead of faking an attribute-shaped answer to a non-attribute question, and mirrors real XDT's own idiom for the exact same case. |
 | `.env` grammar: quoting, escaping, `export`, inline comments | A value is opaque text (matching quotes stripped, no escape processing, no `${VAR}` expansion); only a whole-line `#` is a comment; an optional leading `export ` is stripped | Full shell-style escape processing; treat any `#` (including mid-value) as starting a comment; ignore `export` as invalid syntax | There's no formal `.env` spec and real tooling disagrees on all of these — treating a value as opaque text is the one choice that doesn't depend on guessing which dialect a given file follows; a mid-value `#` (e.g. a password) would be silently truncated under an inline-comment rule; `export` is common enough (Bash-sourceable files) that rejecting it would break real files for no benefit. |
+| XML `Insert` (a genuinely brand-new element): how to name its tag and location | A reserved `parent=<ancestor/tag/path>` `--match` coordinate, always paired with `tag=` | A new top-level `--parent`/`--tag` CLI flag pair | The shared `FieldAuthor` delegate signature (`src/ConfigTransform.Core/FormatEngine.cs`) is identical across all four formats — a new top-level flag would touch `JsonFieldAuthor`/`EnvFieldAuthor`/`YamlFieldAuthor` for a flag none of them use. A reserved `--match` coordinate needs zero delegate/CLI signature changes, is purely additive parsing inside `XmlFieldAuthor.Author`, and directly extends the precedent the existing `tag=` coordinate already established for the same reason. |
+| XML Insert into a missing ancestor container: how deep to mark `xdt:Transform="Insert"` | Mark only the shallowest missing ancestor element; let it carry its whole newly-built subtree | Mark every newly-created level with its own `xdt:Transform="Insert"` | Verified empirically (throwaway xUnit harness against real `Microsoft.Web.Xdt`) that marking only the shallowest missing ancestor inserts its entire subtree correctly as one unit — marking deeper levels too isn't just unnecessary, it was never tested as needed and adds nothing `XmlTransformation.Apply` requires. |
+| XML Insert: which ancestor-path-building function to reuse | A new `FindOrCreateOverlayPath`, walking the target overlay and the real resolved document in lockstep to find the one divergence point | Reuse the existing `FindOrCreateAncestorPath` (target-only, comparison-free) for both the update case and the new Insert-into-overlay case | `FindOrCreateAncestorPath` has no way to know which of its newly-created elements are genuinely new vs. already real — it only walks one tree. Insert-into-an-overlay needs to compare against the real resolved document to decide where to place `xdt:Transform="Insert"`, so it needs a second, parallel walk. The old function is kept unchanged and still used directly for base-target Insert (no overlay, no comparison needed, and reusing the dual-walk version there would alias `target`/`precedingRoot` onto the same document and misreport "already existed" for a node the mutation just created in the same iteration). |
 
 ## Open items for implementation
 
-- **XML's `Insert` case (a genuinely brand-new element) is not implemented.** This isn't an
-  oversight or a missed corner — it's a real gap this design never fully closed: `--match`/`--set`
-  say which *attributes* to write, but not the new element's **tag name** or **where in the
-  document it belongs** (which parent element to nest it under). For an update, that information
-  comes for free — the tool finds the real element and reads its tag/ancestry directly. For an
-  Insert, there is nothing to find, so nothing to read it from. Closing this needs either a new
-  flag (e.g. an explicit parent path/XPath, or a `--tag <name>` alongside a way to name the
-  parent) or some other source of that information — not designed here, deliberately, rather than
-  bolting on an under-thought flag under time pressure. Shipped behavior: `set` refuses with a
-  clear "not yet supported" message (naming this document) instead of guessing a location.
-- **XML's array-of-objects matching is not implemented.** Scoped out alongside `Insert` above
-  (same underlying reason: nothing to derive a brand-new item's shape from on create) — though
-  *matching an existing* array item, unlike creating one, is mechanically answerable the same way
-  an XML element match already is, so this could in principle be implemented independently of
-  `Insert`; not done here only for lack of time, not a design blocker. (JSON's equivalent gap —
-  once a real, previously-undesigned problem found during implementation, since
-  `Microsoft.Extensions.Configuration` merges arrays purely by index with no native
-  value-matching to port from XDT — is now closed; see the "JSON / YAML" section above for the
-  `$elemMatch` mechanism that closed it, and the decision log for why.)
-- YAML support doesn't exist in this tool at all yet (`docs/ROADMAP.md`: "not needed yet") — this
-  document's YAML section is forward-looking, not something `set` can ship against today.
-  `.env` support has since shipped; its section above now describes real, implemented behavior.
+- **XML's `Insert` case (a genuinely brand-new element) is closed**, via a new reserved
+  `parent=<ancestor/tag/path>` `--match` coordinate, always paired with `tag=` (see "Reserved
+  coordinate: `parent=`" above for the full design and worked example). The gap this closes was
+  real, not an oversight: `--match`/`--set` say which *attributes* to write, but not the new
+  element's tag name or where in the document it belongs, and for Insert there's no real element
+  to read either from — `parent`+`tag` name both explicitly, the same shape `tag=` alone already
+  established for singleton-element matching. `Microsoft.Web.Xdt`'s real `Insert` behavior was
+  verified empirically (a throwaway xUnit harness, since deleted) before writing any production
+  code, per this repo's standing discipline for new library integration: (1) `xdt:Transform=
+  "Insert"` needs no `xdt:Locator` at all; (2) XDT does **not** auto-create missing ancestor
+  containers — an overlay referencing a path that doesn't exist for real throws
+  `XmlNodeException`; (3) marking only the **shallowest missing ancestor** with
+  `xdt:Transform="Insert"` inserts its whole subtree as one unit, which is what closes (2)
+  without needing an `xdt:Transform` on every intermediate level. `XmlFieldAuthor` walks the
+  target overlay and the real resolved document in lockstep (`FindOrCreateOverlayPath`) to find
+  exactly the one element to mark. Idempotent re-run reuses the existing
+  `FindExistingOverlayElement` lookup unchanged — a second Insert call with the same identifying
+  attributes (beyond `tag`) updates the same element in place; with none beyond `tag`, a second
+  call still updates the same first-inserted element (there's nothing to disambiguate a second,
+  distinct new element without a real attribute — documented on `AuthorInsert`'s own doc
+  comment, not a bug). Fixture-backed:
+  `XmlFieldAuthorTests.cs`'s Insert cases (existing-container Insert, brand-new nested-container
+  Insert, `parent`-without-`tag` refusal, re-run-updates-in-place, real-match-always-wins-over-
+  parent, base-target Insert) plus a merge-time proof
+  (`XmlLayerMergerInsertTests.cs`, against real `Microsoft.Web.Xdt`) mirroring
+  `XmlLayerMergerArrayMatchTests.cs`'s role for compound-Locator matching.
+- **XML's array-of-objects matching — *matching an existing item* — is closed.** As this section
+  originally predicted, it needed no new production code at all: `XmlFieldAuthor`'s existing
+  element-matching machinery (`FindMatchingElements`) already ANDs an arbitrary number of
+  `--match` coordinates with no cap at one, and already writes a comma-joined
+  `xdt:Locator="Match(a,b,...)"` for a compound match — this was true before this bullet closed,
+  just never proven against a real repeated-sibling scenario. Closed purely with fixture/test
+  coverage: `XmlFieldAuthorTests.cs`'s
+  `A_single_attribute_match_is_ambiguous_among_repeated_siblings_sharing_it`/
+  `A_compound_match_disambiguates_one_item_among_repeated_siblings`/
+  `Re_running_a_compound_match_among_repeated_siblings_updates_the_same_item_in_place`, plus a new
+  merge-time proof (`XmlLayerMergerArrayMatchTests.cs`, against a new
+  `Fixtures/IisWebConfig/ArrayMatch/` fixture with two real `<rule>` siblings sharing one
+  attribute value but differing on another) that a hand-authored compound `Locator` overlay
+  resolves correctly through real `Microsoft.Web.Xdt` at merge time, not just at set-authoring
+  time — the XML analogue of `JsonLayerMergerElemMatchTests.cs`'s role for JSON's `$elemMatch`.
+  Unlike JSON, XML needed no merge-time pre-processing pass of its own: `xdt:Locator` is native
+  XDT vocabulary `XmlLayerMerger.Merge` already hands straight to `XmlTransformation.Apply`.
+  **Creating** a brand-new array item remains the `Insert` gap above — scoped separately, since
+  it's the one that actually needs new code and a real design decision.
+- **YAML's own array-of-objects matching is not implemented** — the same named, deferred gap as
+  XML's, described in the "JSON / YAML" section above alongside YAML's own plain-field `set`.
+- `.env` and YAML support have both since shipped; their sections above now describe real,
+  implemented behavior rather than a forward-looking design.
 - One deliberate deviation from the design above, decided during implementation: the verified
   "found a different real attribute" case (XML's `key`/`value` defaults section, and "Errors,
   warnings, and suggestions") always refuses and shows the corrected command now, rather than
@@ -403,6 +496,6 @@ No case needed a bespoke resolution; each was the same rule applied once more.
   automates, explained for a human doing it by hand today.
 - [`USAGE.md`](USAGE.md) — the CLI reference, including `set`'s own section.
 - [`CONFIG_MANAGEMENT.md`](CONFIG_MANAGEMENT.md) §5.5 — `.env` merge semantics and grammar;
-  §5.6 — YAML format compatibility (still forward-looking).
+  §5.6 — YAML merge semantics, dependencies, and the case-sensitivity limitation.
 - [`ROADMAP.md`](ROADMAP.md) — `init` (since shipped, `docs/INIT_COMMAND_DESIGN.md`) and the
   still-deferred TUI/GUI entries this document partially unblocked.

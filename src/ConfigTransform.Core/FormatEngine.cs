@@ -1,9 +1,11 @@
 namespace ConfigTransform.Core;
 
-/// <summary>Signature of a format's layered merge: XmlLayerMerger.Merge / JsonLayerMerger.Merge.</summary>
+/// <summary>Signature of a format's layered merge: XmlLayerMerger.Merge / JsonLayerMerger.Merge /
+/// EnvLayerMerger.Merge / YamlLayerMerger.Merge.</summary>
 public delegate string LayerMerge(string basePath, IReadOnlyList<string> patchPathsInOrder);
 
-/// <summary>Signature of a format's `set` field authoring: XmlFieldAuthor.Author / JsonFieldAuthor.Author.</summary>
+/// <summary>Signature of a format's `set` field authoring: XmlFieldAuthor.Author / JsonFieldAuthor.Author /
+/// EnvFieldAuthor.Author / YamlFieldAuthor.Author.</summary>
 public delegate string FieldAuthor(
     string precedingContent,
     string? existingTargetContent,

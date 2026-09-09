@@ -1,0 +1,1 @@
+{ "resources": [ { "path": "Project/Web.config", "patch": ".configtransform/Environments/Production/patch-Project-Web.config.xml" } ] }

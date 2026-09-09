@@ -316,19 +316,28 @@ Confirmed directly by the repo owner — treat these as fixed, not open to silen
      extends: Environments/Production/configtransform.json
 
      OrderProcessor.Framework/App.config
-       base                                                        (always applied)
+       base
+         OrderProcessor.Framework/App.config
          ↓
-       Environments/Production/configtransform.json                patched in
+       Environments/Production/configtransform.json
+         patched in: Environments/Production/patch-OrderProcessor.Framework-App.config.xml
          ↓
-       Clients/Acme/Production/configtransform.json                patched in
+       Clients/Acme/Production/configtransform.json
+         patched in: Clients/Acme/Production/patch-OrderProcessor.Framework-App.config.xml
 
      BillingApi.Core/appsettings.json
-       base                                                        (always applied)
+       base
+         BillingApi.Core/appsettings.json
          ↓
-       Environments/Production/configtransform.json                patched in
+       Environments/Production/configtransform.json
+         patched in: Environments/Production/patch-BillingApi.Core-appsettings.json
          ↓
-       Clients/Acme/Production/configtransform.json                not patched in
+       Clients/Acme/Production/configtransform.json
+         not patched in
    ```
+   (This is the same chain rendering the single-resource resolution report uses for one resource
+   at a time — `--list` prints it for every resource a layer touches, so the two commands never
+   show the same facts two different ways.)
 
    `--list --resource` — the reverse lookup:
    ```
