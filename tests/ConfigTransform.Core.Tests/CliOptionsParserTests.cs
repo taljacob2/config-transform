@@ -95,6 +95,47 @@ public class CliOptionsParserTests
     }
 
     [Fact]
+    public void A_real_run_accepts_host_alongside_client_and_environment()
+    {
+        var options = CliOptionsParser.Parse(new[]
+        {
+            "--client", "Acme", "--environment", "Production", "--host", "192.168.10.10", "--dry-run"
+        });
+
+        Assert.Equal("192.168.10.10", options.Host);
+    }
+
+    [Fact]
+    public void Short_flag_dash_H_parses_the_same_as_long_form_host()
+    {
+        var options = CliOptionsParser.Parse(new[]
+        {
+            "-c", "Acme", "-e", "Production", "-H", "192.168.10.10", "--dry-run"
+        });
+
+        Assert.Equal("192.168.10.10", options.Host);
+    }
+
+    [Fact]
+    public void A_real_run_rejects_host_without_client_and_environment()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
+        {
+            "--host", "192.168.10.10", "--dry-run"
+        }));
+        Assert.Contains("--host requires --client and --environment", ex.Message);
+    }
+
+    [Fact]
+    public void A_real_run_rejects_host_with_environment_but_no_client()
+    {
+        Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
+        {
+            "--environment", "Production", "--host", "192.168.10.10", "--dry-run"
+        }));
+    }
+
+    [Fact]
     public void Missing_output_throws_for_a_real_run()
     {
         var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
@@ -184,6 +225,36 @@ public class CliOptionsParserTests
         Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
         {
             "--list", "--client", "Acme"
+        }));
+    }
+
+    [Fact]
+    public void List_accepts_client_environment_and_host()
+    {
+        var options = CliOptionsParser.Parse(new[]
+        {
+            "--list", "--client", "Acme", "--environment", "Production", "--host", "192.168.10.10"
+        });
+
+        Assert.Equal("192.168.10.10", options.Host);
+    }
+
+    [Fact]
+    public void List_rejects_host_without_client_and_environment()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
+        {
+            "--list", "--environment", "Production", "--host", "192.168.10.10"
+        }));
+        Assert.Contains("--host requires --client and --environment", ex.Message);
+    }
+
+    [Fact]
+    public void List_rejects_combining_resource_with_host()
+    {
+        Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
+        {
+            "--list", "--resource", "Project/App.config", "--host", "192.168.10.10"
         }));
     }
 
@@ -281,6 +352,29 @@ public class CliOptionsParserTests
             "--match", "key=ApiUrl", "--set", "value=X"
         }));
         Assert.Contains("--client requires --environment", ex.Message);
+    }
+
+    [Fact]
+    public void Set_verb_accepts_host_alongside_client_and_environment()
+    {
+        var options = CliOptionsParser.Parse(new[]
+        {
+            "set", "--resource", "Project/App.config", "--client", "Acme", "--environment", "Production",
+            "--host", "192.168.10.10", "--match", "key=ApiUrl", "--set", "value=X"
+        });
+
+        Assert.Equal("192.168.10.10", options.Host);
+    }
+
+    [Fact]
+    public void Set_verb_rejects_host_without_client_and_environment()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
+        {
+            "set", "--resource", "Project/App.config", "--host", "192.168.10.10",
+            "--match", "key=ApiUrl", "--set", "value=X"
+        }));
+        Assert.Contains("--host requires --client and --environment", ex.Message);
     }
 
     [Fact]
@@ -394,21 +488,23 @@ public class CliOptionsParserTests
     }
 
     [Fact]
-    public void Init_verb_collects_repeated_environment_client_and_resource_flags_into_their_own_lists()
+    public void Init_verb_collects_repeated_environment_client_host_and_resource_flags_into_their_own_lists()
     {
         var options = CliOptionsParser.Parse(new[]
         {
             "init", "--environment", "Production", "--environment", "Test",
-            "--client", "Acme", "--resource", "Project/App.config"
+            "--client", "Acme", "--host", "192.168.10.10", "--resource", "Project/App.config"
         });
 
         Assert.True(options.Init);
         Assert.Equal(new[] { "Production", "Test" }, options.InitEnvironments);
         Assert.Equal(new[] { "Acme" }, options.InitClients);
+        Assert.Equal(new[] { "192.168.10.10" }, options.InitHosts);
         Assert.Equal(new[] { "Project/App.config" }, options.InitResources);
         // The singular fields every other mode uses stay untouched -- init never sets them.
         Assert.Null(options.Client);
         Assert.Null(options.Environment);
+        Assert.Null(options.Host);
         Assert.Null(options.Resource);
     }
 
@@ -420,7 +516,42 @@ public class CliOptionsParserTests
         Assert.True(options.Init);
         Assert.Empty(options.InitEnvironments);
         Assert.Empty(options.InitClients);
+        Assert.Empty(options.InitHosts);
         Assert.Empty(options.InitResources);
+    }
+
+    [Fact]
+    public void Init_verb_rejects_host_without_client_and_environment()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
+        {
+            "init", "--environment", "Production", "--host", "192.168.10.10", "--resource", "x"
+        }));
+        Assert.Contains("--host requires --client and --environment", ex.Message);
+    }
+
+    [Fact]
+    public void Init_verb_rejects_host_with_client_but_no_environment()
+    {
+        // The existing "--client requires --environment" check fires first (client-without-
+        // environment is already invalid on its own, regardless of --host) -- still correctly
+        // rejected, just via that message rather than --host's own.
+        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
+        {
+            "init", "--client", "Acme", "--host", "192.168.10.10", "--resource", "x"
+        }));
+        Assert.Contains("--client requires --environment", ex.Message);
+    }
+
+    [Fact]
+    public void Init_verb_accepts_host_alongside_client_and_environment()
+    {
+        var options = CliOptionsParser.Parse(new[]
+        {
+            "init", "--environment", "Production", "--client", "Acme", "--host", "192.168.10.10"
+        });
+
+        Assert.Equal(new[] { "192.168.10.10" }, options.InitHosts);
     }
 
     [Fact]
@@ -487,6 +618,7 @@ public class CliOptionsParserTests
     [InlineData("--scan-root", "src")]
     [InlineData("--environment", "Production")]
     [InlineData("--client", "Acme")]
+    [InlineData("--host", "192.168.10.10")]
     [InlineData("--resource", "x")]
     public void Init_verb_rejects_template_combined_with_any_other_init_flag(string flag, string value)
     {

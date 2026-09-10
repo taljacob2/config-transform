@@ -19,6 +19,16 @@ the published tool and fixed properly in a follow-up change — `--client` now r
 `--environment` (no client-only layer) but neither is otherwise required, uniformly across every
 mode. The demo below is the original, correct design; no correction needed anymore.
 
+**`init` gained a fourth, optional axis: `--host`/`-H`** (`docs/HOST_LAYER_DESIGN.md`) — repeatable,
+cross-multiplied with every declared client × environment pair, the same way clients already
+cross-multiply with environments; requires both `--client` and `--environment`, same "requires the
+level above it" rule `--client` itself already follows. The interactive form gained one more
+prompt, asked only once at least one client was given (mirroring how the clients prompt is only
+meaningful once environments exist). A new Host layer's `extends` defaults to its matching
+Client/Environment layer — the same convention every other layer's default already follows, one
+level deeper. See "Manifest shape" and "Related fix to `SetTargetResolver`" below for how this
+threads through the rest of the design; nothing else in this document changed.
+
 ## Why this exists, and why now
 
 `docs/ROADMAP.md`'s "Later / not yet scheduled" and `docs/GETTING_STARTED.md`'s "Should there be

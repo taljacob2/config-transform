@@ -3,8 +3,9 @@ namespace ConfigTransform.Core;
 /// <summary>
 /// Which configtransform.json (if any) and which patch file <c>set</c>
 /// (docs/FIELD_AUTHORING_DESIGN.md, docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md "Settled decisions"
-/// #6) writes to, given a resource and optional --client/--environment: the base file itself
-/// with neither, the Environment layer with only --environment, or the Client layer with both.
+/// #6) writes to, given a resource and optional --client/--environment/--host: the base file
+/// itself with none, the Environment layer with only --environment, the Client layer with
+/// client+environment, or the Host layer (docs/HOST_LAYER_DESIGN.md) with all three.
 /// </summary>
 public sealed record SetTarget(
     /// <summary>Repo-root-relative, canonicalized from the resolved base file's actual on-disk path/casing.</summary>
@@ -32,25 +33,28 @@ public static class SetTargetResolver
     /// in docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md "Proposed shape".
     /// </param>
     public static SetTarget Resolve(
-        string root, string resourcePath, string? client, string? environment, string newPatchFileExtension)
+        string root, string resourcePath, string? client, string? environment, string? host, string newPatchFileExtension)
     {
         var basePath = LayerChain.ResolveResourceBasePath(root, resourcePath);
         var canonicalResourcePath = LayerChain.ToRepoRelative(root, basePath);
 
-        var targetLayerPath = LayerPathResolver.Resolve(root, client, environment);
+        var targetLayerPath = LayerPathResolver.Resolve(root, client, environment, host);
         if (targetLayerPath is null)
             return new SetTarget(canonicalResourcePath, basePath, IsBaseTarget: true, null, null, null, []);
 
         var targetLayerFullPath = Path.GetFullPath(targetLayerPath, root);
 
-        // A Client-layer target defaults `extends` to the matching Environment layer's path, even
-        // if that file doesn't exist on disk yet -- a missing `extends` target is "nothing to
-        // inherit," not an error (Settled decisions #6). An Environment-layer target has no
-        // `extends` at all. Trust an already-existing file's own `extends` over this default, in
-        // case it was hand-edited to something else.
-        var defaultExtends = client is null
-            ? null
-            : LayerChain.ToRepoRelative(root, LayerPathResolver.Resolve(root, client: null, environment)!);
+        // A Client-layer target defaults `extends` to the matching Environment layer's path, and a
+        // Host-layer target defaults `extends` to the matching Client/Environment layer's path
+        // (docs/HOST_LAYER_DESIGN.md) -- even if that file doesn't exist on disk yet, a missing
+        // `extends` target is "nothing to inherit," not an error (Settled decisions #6). An
+        // Environment-layer target has no `extends` at all. Trust an already-existing file's own
+        // `extends` over this default, in case it was hand-edited to something else.
+        var defaultExtends = host is not null
+            ? LayerChain.ToRepoRelative(root, LayerPathResolver.Resolve(root, client, environment)!)
+            : client is null
+                ? null
+                : LayerChain.ToRepoRelative(root, LayerPathResolver.Resolve(root, client: null, environment)!);
         var extends = File.Exists(targetLayerFullPath)
             ? LayerManifestLoader.Load(targetLayerFullPath).Extends
             : defaultExtends;

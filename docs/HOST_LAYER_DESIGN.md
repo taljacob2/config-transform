@@ -1,9 +1,12 @@
 # Host layer (`--host`) — design
 
-**Status: not implemented — design only.** Nothing below exists in code yet; this document
-captures the agreed shape so implementation can start from a settled design instead of guessing,
-the same role `FIELD_AUTHORING_DESIGN.md` and `INIT_COMMAND_DESIGN.md` played before their
-features were built.
+**Status: PR D (core: resolve/`--dry-run`/`--diff`/`--list`/`set`/`init` scaffolding) is
+implemented — see `docs/CHANGELOG.md`'s `[Unreleased]` entry and `docs/USAGE.md` for the current
+flag reference. PR E (decision log #7, `--template hosts`) is not yet implemented.** Every
+"Changes needed"/"No change needed" claim below was verified against the real code before this
+was written, and PR D's implementation follows this design directly — no changes to the design
+itself were needed along the way, only the two small precision fixes decision log #6/#7 already
+record.
 
 ## Why this exists, and why now
 

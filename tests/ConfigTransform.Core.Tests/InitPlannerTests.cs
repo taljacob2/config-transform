@@ -12,7 +12,7 @@ public class InitPlannerTests
 
         var files = InitPlanner.BuildPlan(
             root.Path, resources: ["Project/App.config", "Project/appsettings.json"],
-            environments: ["Production"], clients: []);
+            environments: ["Production"], clients: [], hosts: []);
 
         var envFile = Assert.Single(files, f => f.RepoRelativePath == ".configtransform/Environments/Production/configtransform.json");
         Assert.DoesNotContain("\"patch\"", envFile.Content);
@@ -27,7 +27,7 @@ public class InitPlannerTests
         using var root = new TempDirectory();
 
         var files = InitPlanner.BuildPlan(
-            root.Path, resources: ["Project/App.config"], environments: ["Production"], clients: ["Acme"]);
+            root.Path, resources: ["Project/App.config"], environments: ["Production"], clients: ["Acme"], hosts: []);
 
         var clientFile = Assert.Single(files, f => f.RepoRelativePath == ".configtransform/Clients/Acme/Production/configtransform.json");
         var manifest = LayerManifestLoader.Load(WriteAndReturn(clientFile));
@@ -42,7 +42,7 @@ public class InitPlannerTests
 
         var files = InitPlanner.BuildPlan(
             root.Path, resources: ["Project/App.config"],
-            environments: ["Production", "Test"], clients: ["Acme", "Globex"]);
+            environments: ["Production", "Test"], clients: ["Acme", "Globex"], hosts: []);
 
         // 2 environment layers + (2 environments x 2 clients) client layers.
         Assert.Equal(6, files.Count);
@@ -68,7 +68,7 @@ public class InitPlannerTests
 
         var files = InitPlanner.BuildPlan(
             root.Path, resources: ["Project/App.config", "Project/appsettings.json"],
-            environments: ["Production"], clients: []);
+            environments: ["Production"], clients: [], hosts: []);
 
         var envFile = Assert.Single(files, f => f.RepoRelativePath == ".configtransform/Environments/Production/configtransform.json");
         var manifest = LayerManifestLoader.Load(WriteAndReturn(envFile));
@@ -87,7 +87,7 @@ public class InitPlannerTests
         File.WriteAllText(Path.Combine(envDir, "configtransform.json"), """{ "resources": [ { "path": "Project/App.config" } ] }""");
 
         var files = InitPlanner.BuildPlan(
-            root.Path, resources: ["Project/App.config"], environments: ["Production"], clients: []);
+            root.Path, resources: ["Project/App.config"], environments: ["Production"], clients: [], hosts: []);
 
         var envFile = Assert.Single(files, f => f.RepoRelativePath == ".configtransform/Environments/Production/configtransform.json");
         var manifest = LayerManifestLoader.Load(WriteAndReturn(envFile));
@@ -105,11 +105,68 @@ public class InitPlannerTests
             """);
 
         var files = InitPlanner.BuildPlan(
-            root.Path, resources: ["Project/App.config"], environments: ["Production"], clients: ["Acme"]);
+            root.Path, resources: ["Project/App.config"], environments: ["Production"], clients: ["Acme"], hosts: []);
 
         var clientFile = Assert.Single(files, f => f.RepoRelativePath == ".configtransform/Clients/Acme/Production/configtransform.json");
         var manifest = LayerManifestLoader.Load(WriteAndReturn(clientFile));
         Assert.Equal(".configtransform/Environments/CustomBase/configtransform.json", manifest.Extends);
+    }
+
+    [Fact]
+    public void Host_layer_declares_extends_only_pointing_at_its_client_environment_layer()
+    {
+        using var root = new TempDirectory();
+
+        var files = InitPlanner.BuildPlan(
+            root.Path, resources: ["Project/App.config"], environments: ["Production"],
+            clients: ["Acme"], hosts: ["192.168.10.10"]);
+
+        var hostFile = Assert.Single(files,
+            f => f.RepoRelativePath == ".configtransform/Clients/Acme/Production/Hosts/192.168.10.10/configtransform.json");
+        var manifest = LayerManifestLoader.Load(WriteAndReturn(hostFile));
+        Assert.Equal(".configtransform/Clients/Acme/Production/configtransform.json", manifest.Extends);
+        Assert.Empty(manifest.Resources);
+    }
+
+    [Fact]
+    public void Hosts_cross_multiply_with_every_client_and_environment_pair()
+    {
+        using var root = new TempDirectory();
+
+        var files = InitPlanner.BuildPlan(
+            root.Path, resources: ["Project/App.config"], environments: ["Production", "Test"],
+            clients: ["Acme", "Globex"], hosts: ["Host-A", "Host-B"]);
+
+        // 2 environment layers + 4 client layers (2 env x 2 clients) + 8 host layers (4 client/env pairs x 2 hosts).
+        Assert.Equal(14, files.Count);
+        Assert.Contains(files, f => f.RepoRelativePath == ".configtransform/Clients/Acme/Production/Hosts/Host-A/configtransform.json");
+        Assert.Contains(files, f => f.RepoRelativePath == ".configtransform/Clients/Acme/Production/Hosts/Host-B/configtransform.json");
+        Assert.Contains(files, f => f.RepoRelativePath == ".configtransform/Clients/Acme/Test/Hosts/Host-A/configtransform.json");
+        Assert.Contains(files, f => f.RepoRelativePath == ".configtransform/Clients/Acme/Test/Hosts/Host-B/configtransform.json");
+        Assert.Contains(files, f => f.RepoRelativePath == ".configtransform/Clients/Globex/Production/Hosts/Host-A/configtransform.json");
+        Assert.Contains(files, f => f.RepoRelativePath == ".configtransform/Clients/Globex/Production/Hosts/Host-B/configtransform.json");
+        Assert.Contains(files, f => f.RepoRelativePath == ".configtransform/Clients/Globex/Test/Hosts/Host-A/configtransform.json");
+        Assert.Contains(files, f => f.RepoRelativePath == ".configtransform/Clients/Globex/Test/Hosts/Host-B/configtransform.json");
+    }
+
+    [Fact]
+    public void Re_running_a_host_layer_does_not_overwrite_an_already_set_extends()
+    {
+        using var root = new TempDirectory();
+        var hostDir = Path.Combine(root.Path, ".configtransform", "Clients", "Acme", "Production", "Hosts", "192.168.10.10");
+        Directory.CreateDirectory(hostDir);
+        File.WriteAllText(Path.Combine(hostDir, "configtransform.json"), """
+            { "extends": ".configtransform/Clients/Acme/CustomBase/configtransform.json", "resources": [] }
+            """);
+
+        var files = InitPlanner.BuildPlan(
+            root.Path, resources: ["Project/App.config"], environments: ["Production"],
+            clients: ["Acme"], hosts: ["192.168.10.10"]);
+
+        var hostFile = Assert.Single(files,
+            f => f.RepoRelativePath == ".configtransform/Clients/Acme/Production/Hosts/192.168.10.10/configtransform.json");
+        var manifest = LayerManifestLoader.Load(WriteAndReturn(hostFile));
+        Assert.Equal(".configtransform/Clients/Acme/CustomBase/configtransform.json", manifest.Extends);
     }
 
     private static string WriteAndReturn(InitFile file)

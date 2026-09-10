@@ -575,6 +575,26 @@ when a layer declares a `patch` that doesn't exist on disk, instead of silently 
 but-missing patch is always an error, the same way a missing base file is. Versioned as
 `0.18.0-alpha`.
 
+**A third, optional `--host` layer axis is implemented** (`docs/HOST_LAYER_DESIGN.md`, design
+finalized then built directly from it, no design changes needed along the way) — raised by the
+repo owner from a real deployment shape: a load-balanced Production environment where individual
+servers need genuinely different config from each other, not just from other clients/environments.
+Rejects the hyphenated-`Client-Host` workaround (breaks the `Client` concept, combinatorial, no
+natural inheritance from the real client) in favor of one more optional `extends` hop
+(`Clients/<C>/<E>/Hosts/<H>/configtransform.json`) — reuses the self-describing-layers chaining
+as-is: `LayerChain`'s `extends`-walk, `--list --resource`'s reverse lookup, and every format
+engine's `Merge` method needed zero changes (verified by reading the actual code, not assumed).
+`LayerPathResolver.Resolve` gains an optional `host` parameter; `SetTargetResolver` gains two
+small, real changes (threading `host` through, and a third `defaultExtends` case defaulting a new
+Host layer to its Client/Environment layer); `InitPlanner`/`InitRunner` gain `--host` scaffolding,
+cross-multiplied with every client × environment pair the same way clients already cross-multiply
+with environments. `--host`/`-H` (capital, a deliberate, documented tradeoff since lowercase `-h`
+is already `--help`) is the flag everywhere `--client`/`--environment` already apply. 31 new tests.
+Versioned as `0.19.0-alpha`. `init --template`'s own `--host`-aware variant
+(`docs/HOST_LAYER_DESIGN.md` decision log #7, `--template` becoming a value-taking flag) is
+deliberately a separate, deferred PR — see "Next up" below — and a pilot (`config-transform-pilot`)
+follow-up with a real multi-host scenario hasn't started either.
+
 ## Next up
 
 One item below is now actionable purely within this repo (see the first bullet); every other
@@ -583,18 +603,15 @@ repo owner can make. Not a "next slice" in the same sense as the ones before thi
 from below (or something new) when ready, rather than assuming the next item in this list is the
 default next step.
 
-- **A third, optional `--host` layer axis** (`docs/HOST_LAYER_DESIGN.md`, design only, not
-  started) — raised by the repo owner from a real deployment shape: a load-balanced Production
-  environment where individual servers need genuinely different config from each other, not just
-  from other clients/environments. Rejects the hyphenated-`Client-Host` workaround (breaks the
-  `Client` concept, combinatorial, no natural inheritance from the real client) in favor of one
-  more optional `extends` hop (`Clients/<C>/<E>/Hosts/<H>/configtransform.json`) — reuses the
-  self-describing-layers chaining as-is, needing zero changes to `LayerChain`, `ReverseLookup`, or
-  any format engine (verified, not assumed — see the design doc's "What changes... and what
-  doesn't"). `--host`/`-H` (capital, a deliberate, documented tradeoff since lowercase `-h` is
-  already `--help`) is the only new CLI surface for the read path (resolve/`--list`/`--dry-run`/
-  `--diff`); `set`/`init` scaffolding a new `Hosts/` layer and a pilot follow-up are named as open
-  items, not yet decided.
+- **`init --template`'s `--host`-aware variant** (`docs/HOST_LAYER_DESIGN.md` decision log #7) —
+  `--template` becomes a value-taking flag (`--template`/`--template hosts`) instead of a bare
+  switch; the `hosts` variant adds one worked `Hosts/<H>/` example to the canned tree. The core
+  `--host` axis itself is implemented (see "Current state" above) — this is purely the deferred
+  convenience/demo addition, not a design blocker.
+- **`config-transform-pilot` multi-host scenario** — the pilot has no real load-balanced-Production
+  scenario today; adding one (mirroring the `.env`/YAML pattern of a dedicated pilot addition once
+  a feature ships) is the natural way to validate `--host` against something more real than
+  `docs/HOST_LAYER_DESIGN.md`'s own worked example.
 - **Finish `set`** — XML's "update an existing element" case (including matching an existing
   item among repeated siblings, and now `Insert` for a genuinely brand-new element — all closed,
   see "Current state" above), JSON's single-key-path case and array-of-objects matching
