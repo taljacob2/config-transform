@@ -76,6 +76,9 @@ configtransform --client Acme --environment Production --host 192.168.10.10 --li
 # omitting --host still resolves at the Client/Environment layer, exactly as today —
 # clients/environments with no per-host variance are completely unaffected
 configtransform --client Acme --environment Production --dry-run
+
+# -H is the short alias (capital -- see decision log #2 for why)
+configtransform -c Acme -e Production -H 192.168.10.10 --dry-run
 ```
 
 ## What changes in the tool, and what doesn't
@@ -86,12 +89,12 @@ configtransform --client Acme --environment Production --dry-run
   of the Client/Environment path. Requires `client`+`environment` also be given — no
   host-without-client layer, the same "requires the level above it" rule `--client` already
   follows for `--environment`.
-- `CliOptions`/`CliOptionsParser` gain `--host` (long form only — see decision log below for why
-  there's no short alias) plus the matching validation: `--host` requires `--client` and
-  `--environment` (mirrors the existing `--client requires --environment` check verbatim, one
-  level up). Applies everywhere `--client`/`--environment` already do: a plain resolve,
-  `--dry-run`/`--diff`, `--list`, and `set`.
-- `HelpPrinter` gains `--host` in the flag reference wherever `--client`/`--environment` are
+- `CliOptions`/`CliOptionsParser` gain `--host`/`-H` (see decision log #2 below for the capital-`H`
+  choice and its accepted tradeoff against `-h`) plus the matching validation: `--host` requires
+  `--client` and `--environment` (mirrors the existing `--client requires --environment` check
+  verbatim, one level up). Applies everywhere `--client`/`--environment` already do: a plain
+  resolve, `--dry-run`/`--diff`, `--list`, and `set`.
+- `HelpPrinter` gains `--host`/`-H` in the flag reference wherever `--client`/`--environment` are
   already listed.
 - `init`'s interactive form gains an optional "does this client/environment need per-host
   overrides?" prompt, and its flag-driven quiet mode gains a repeatable `--host <name>` flag
