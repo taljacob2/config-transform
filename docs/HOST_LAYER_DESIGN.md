@@ -123,8 +123,14 @@ configtransform --client Acme --environment Production --dry-run
 - `LayerChain.ReverseLookup` (backs `--list --resource`) — already
   `Directory.EnumerateFiles(..., SearchOption.AllDirectories)` over every `configtransform.json`
   under `.configtransform/`, so a `Hosts/` subdirectory is picked up with zero changes.
-- Every format engine (`XmlLayerMerger`/`JsonLayerMerger`/`EnvLayerMerger`/`YamlLayerMerger`) —
-  they only ever see an ordered list of patch paths, never a layer's position in the tree.
+- `LayerLister` — `ListLayer` only ever takes an already-resolved `targetLayerPath` string (the
+  caller builds that path; see `LayerPathResolver`'s real change above) and calls `LayerChain`
+  functions on it; `ListReverseLookup` prints `entry.LayerPath` verbatim with no depth-aware
+  formatting anywhere. A `Hosts/<H>/` layer's path just prints as-is in either mode.
+- Every format engine's `Merge` method — checked the actual signatures, not inferred: all four
+  (`XmlLayerMerger`, `JsonLayerMerger`, `EnvLayerMerger`, `YamlLayerMerger`) are exactly
+  `Merge(string basePath, IReadOnlyList<string> patchPathsInOrder)`, verbatim. No depth or
+  position parameter anywhere to need changing.
 
 ## Decision log
 
