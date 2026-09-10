@@ -42,6 +42,80 @@ public class InitCommandCliTests
     }
 
     [Fact]
+    public void Quiet_mode_with_host_scaffolds_a_Hosts_layer_extending_the_client_environment_layer()
+    {
+        using var workspace = new TempDirectory();
+        WriteFile(workspace.Path, "Project/App.config", "<configuration/>");
+
+        var stdout = new StringWriter();
+        var stderr = new StringWriter();
+
+        var exitCode = CliRunner.Run(new[]
+        {
+            "init", "--environment", "Production", "--client", "Acme", "--host", "192.168.10.10",
+            "--resource", "Project/App.config"
+        }, stdout, stderr, FormatEngines.All, workspace.Path);
+
+        Assert.Equal(0, exitCode);
+        Assert.Empty(stderr.ToString());
+
+        var hostManifest = LayerManifestLoader.Load(Path.Combine(
+            workspace.Path, ".configtransform", "Clients", "Acme", "Production", "Hosts", "192.168.10.10", "configtransform.json"));
+        Assert.Equal(".configtransform/Clients/Acme/Production/configtransform.json", hostManifest.Extends);
+        Assert.Empty(hostManifest.Resources);
+    }
+
+    [Fact]
+    public void Quiet_mode_rejects_host_without_client_and_environment()
+    {
+        using var workspace = new TempDirectory();
+        WriteFile(workspace.Path, "Project/App.config", "<configuration/>");
+        var stderr = new StringWriter();
+
+        var exitCode = CliRunner.Run(new[]
+        {
+            "init", "--environment", "Production", "--host", "192.168.10.10", "--resource", "Project/App.config"
+        }, new StringWriter(), stderr, FormatEngines.All, workspace.Path);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("--host requires --client and --environment", stderr.ToString());
+    }
+
+    [Fact]
+    public void Interactive_mode_answering_hosts_scaffolds_a_Hosts_layer()
+    {
+        using var workspace = new TempDirectory();
+        WriteFile(workspace.Path, "Project/App.config", "<configuration/>");
+
+        var stdin = new StringReader("all\nProduction\nAcme\n192.168.10.10\n");
+        var stdout = new StringWriter();
+
+        var exitCode = CliRunner.Run(new[] { "init" },
+            stdout, new StringWriter(), FormatEngines.All, workspace.Path, stdin, interactiveAllowed: true);
+
+        Assert.Equal(0, exitCode);
+        Assert.True(File.Exists(Path.Combine(
+            workspace.Path, ".configtransform", "Clients", "Acme", "Production", "Hosts", "192.168.10.10", "configtransform.json")));
+    }
+
+    [Fact]
+    public void Interactive_mode_with_no_clients_never_prompts_for_hosts()
+    {
+        using var workspace = new TempDirectory();
+        WriteFile(workspace.Path, "Project/App.config", "<configuration/>");
+
+        // Blank clients answer, then nothing left in stdin -- if a hosts prompt fired anyway,
+        // this would throw on the unanswered question instead of succeeding.
+        var stdin = new StringReader("all\nProduction\n\n");
+        var stdout = new StringWriter();
+
+        var exitCode = CliRunner.Run(new[] { "init" },
+            stdout, new StringWriter(), FormatEngines.All, workspace.Path, stdin, interactiveAllowed: true);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
     public void Dry_run_prints_the_plan_and_writes_nothing_to_disk()
     {
         using var workspace = new TempDirectory();
@@ -140,7 +214,7 @@ public class InitCommandCliTests
         using var workspace = new TempDirectory();
         WriteFile(workspace.Path, "Project/App.config", "<configuration/>");
 
-        var stdin = new StringReader("all\nProduction,Test\nAcme,Globex\n");
+        var stdin = new StringReader("all\nProduction,Test\nAcme,Globex\n\n"); // blank hosts answer -- none
         var stdout = new StringWriter();
 
         var exitCode = CliRunner.Run(new[] { "init" },
@@ -276,6 +350,24 @@ public class InitCommandCliTests
         var exitCode = CliRunner.Run(new[]
         {
             "init", "--environment", "production", "--resource", "Project/App.config"
+        }, new StringWriter(), stderr, FormatEngines.All, workspace.Path);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("collides case-insensitively", stderr.ToString());
+    }
+
+    [Fact]
+    public void Host_name_colliding_case_insensitively_with_an_existing_one_errors()
+    {
+        using var workspace = new TempDirectory();
+        WriteFile(workspace.Path, "Project/App.config", "<configuration/>");
+        Directory.CreateDirectory(Path.Combine(
+            workspace.Path, ".configtransform", "Clients", "Acme", "Production", "Hosts", "Host-A"));
+
+        var stderr = new StringWriter();
+        var exitCode = CliRunner.Run(new[]
+        {
+            "init", "--environment", "Production", "--client", "Acme", "--host", "host-a", "--resource", "Project/App.config"
         }, new StringWriter(), stderr, FormatEngines.All, workspace.Path);
 
         Assert.Equal(1, exitCode);

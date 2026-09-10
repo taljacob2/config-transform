@@ -18,7 +18,7 @@ public static class SetRunner
         var matches = options.Match.Select(m => MatchSpec.Parse(m, "key")).ToList();
         var setFields = options.SetFields.Select(m => MatchSpec.Parse(m, "value")).ToList();
 
-        var target = SetTargetResolver.Resolve(root, options.Resource!, options.Client, options.Environment, engine.PatchExtension);
+        var target = SetTargetResolver.Resolve(root, options.Resource!, options.Client, options.Environment, options.Host, engine.PatchExtension);
 
         var preceding = target.IsBaseTarget
             ? File.ReadAllText(target.ResourceBasePath)

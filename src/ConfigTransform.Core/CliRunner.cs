@@ -50,11 +50,11 @@ public static class CliRunner
                 if (options.Resource is not null)
                     LayerLister.ListReverseLookup(root, options.Resource, stdout);
                 else
-                    LayerLister.ListLayer(root, LayerPathResolver.Resolve(root, options.Client, options.Environment)!, stdout);
+                    LayerLister.ListLayer(root, LayerPathResolver.Resolve(root, options.Client, options.Environment, options.Host)!, stdout);
                 return 0;
             }
 
-            var targetLayerPath = LayerPathResolver.Resolve(root, options.Client, options.Environment);
+            var targetLayerPath = LayerPathResolver.Resolve(root, options.Client, options.Environment, options.Host);
             var chain = LayerChain.Build(root, targetLayerPath);
 
             if (options.Resource is not null)
@@ -158,6 +158,8 @@ public static class CliRunner
                 var target = options.Client is not null
                     ? $"--client '{options.Client}' --environment '{options.Environment}'"
                     : $"--environment '{options.Environment}'";
+                if (options.Host is not null)
+                    target += $" --host '{options.Host}'";
                 stdout.WriteLine(
                     $"(no configtransform.json found for {target} -- expected at '{expected}'.\n" +
                     "Try: check the spelling, or run 'configtransform init' to scaffold it.)");

@@ -6,6 +6,35 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.19.0-alpha] - 2026-09-10
+
+### Added
+
+- **A third, optional layer axis: `--host`/`-H`** (`docs/HOST_LAYER_DESIGN.md`) — raised by the
+  repo owner from a real deployment shape: a load-balanced Production environment where
+  individual servers need genuinely different config from each other, not just from other
+  clients/environments. Rejects the hyphenated `Client-Host` naming workaround (e.g.
+  `Acme-192.168.10.10`) in favor of one more optional `extends` hop,
+  `.configtransform/Clients/<C>/<E>/Hosts/<H>/configtransform.json`, reusing the
+  self-describing-layers chaining as-is. `LayerPathResolver.Resolve` gains an optional `host`
+  parameter (requires `client`+`environment`, mirroring the existing `client`-requires-
+  `environment` rule one level up); applies uniformly to a plain resolve, `--dry-run`/`--diff`,
+  `--list` (both modes), and `set`. `set` into a new Host layer defaults its `extends` to the
+  matching Client/Environment layer, the same convention every other layer's default already
+  follows, one level deeper (`SetTargetResolver`). `init` gains a repeatable `--host` flag
+  (quiet mode) and one more interactive prompt (asked only once a client was given), cross-
+  multiplying with every declared client × environment pair the same way clients already
+  cross-multiply with environments (`InitPlanner`), plus a matching case-insensitive-collision
+  check. `-H` (capital) is the short alias — `-h` stays `--help`, a deliberate, documented
+  tradeoff (`docs/HOST_LAYER_DESIGN.md`'s decision log #2). Verified to need zero changes, by
+  reading the actual code rather than assuming: `LayerChain`'s `extends`-chain walk and
+  `--list --resource`'s reverse lookup already treat directory depth as arbitrary, and every
+  format engine's `Merge` method only ever sees an ordered patch-path list, never a layer's
+  position in the tree. 31 new tests across `ConfigTransform.Core.Tests`/
+  `ConfigTransform.Cli.Tests`. `init --template`'s own `--host`-aware variant
+  (`docs/HOST_LAYER_DESIGN.md` decision log #7) is deliberately deferred to a separate PR — the
+  fixed canned tree stays the minimal, no-decisions starter it's always been.
+
 ## [0.18.0-alpha] - 2026-09-08
 
 ### Fixed

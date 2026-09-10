@@ -18,17 +18,20 @@ supports differs by format for reasons that come from the format itself, not an 
 --resource, -r <repo-root-relative path>   optional for a resolve/--list — omit for every resource the layer touches; required for `set`
 --client, -c <ClientName>                  optional everywhere — requires --environment (no client-only layer); see "Resolving" below
 --environment, -e <EnvironmentName>        optional everywhere — see "Resolving" below
+--host, -H <HostName>                      optional everywhere — requires --client and --environment; a third layer axis for per-server config (see "Resolving" below and docs/HOST_LAYER_DESIGN.md)
 --output, -o <path>                        required for a real run (omit only with --dry-run/--diff) — a file with --resource, a directory without it
 --dry-run                                  print the fully merged result to stdout; nothing written to disk
 --diff                                     print a unified diff (unpatched vs. merged) via `git diff --no-index`; nothing written to disk
---list                                     show a layer's resources (--client/--environment), or a tree-wide reverse lookup (--resource) — see below
+--list                                     show a layer's resources (--client/--environment[/--host]), or a tree-wide reverse lookup (--resource) — see below
 help, --help, -h                           print the help page (see "Getting help" below) — also the default with no arguments at all
 init                                       scaffold a .configtransform/ tree — a different verb, see "init" below
 ```
 
-Every flag that takes a value also accepts the short form shown above (`-r`, `-c`, `-e`, `-o`) —
-meant for typing a command out by hand; scripts and CI can keep using the long forms for
-readability in a pipeline log. Both forms can be mixed freely in the same invocation.
+Every flag that takes a value also accepts the short form shown above (`-r`, `-c`, `-e`, `-H`,
+`-o`) — meant for typing a command out by hand; scripts and CI can keep using the long forms for
+readability in a pipeline log. Both forms can be mixed freely in the same invocation. `-H` is
+capital deliberately — lowercase `-h` is already `--help` and stays there; see
+`docs/HOST_LAYER_DESIGN.md`'s decision log #2 for the accepted tradeoff.
 
 Every path — `--resource`'s value, and everything a `configtransform.json` itself declares
 (`extends`, `resources[].path`, `resources[].patch`) — is **repo-root-relative**, resolved
@@ -79,28 +82,37 @@ isn't affected by this — `dotnet tool run configtransform -- -e Production -r 
 and even without the `--` separator both reach `configtransform` and print its help normally,
 since `dotnet tool run` doesn't treat a bare `help` token as one of its own options.
 
-## Resolving `--client`/`--environment` to a layer
+## Resolving `--client`/`--environment`/`--host` to a layer
 
-Both are optional, uniformly across every command (a resolve/dry-run/diff/real-run, `--list`,
-`set`) — `--client` without `--environment` is the only combination that's ever an error (there's
-no client-only layer):
+All three are optional, uniformly across every command (a resolve/dry-run/diff/real-run, `--list`,
+`set`) — `--client` without `--environment` is an error (there's no client-only layer), and
+`--host` without both `--client` and `--environment` is likewise an error (no host-only or
+host-without-client layer):
 
 - Neither given → the base file itself, no layer at all — its own real, meaningful case (e.g.
   `configtransform --resource App.config --dry-run` shows the file completely unpatched), not
   just an internal detail `set` happens to use.
 - `--environment` only → `.configtransform/Environments/<Environment>/configtransform.json`.
-- Both given → `.configtransform/Clients/<Client>/<Environment>/configtransform.json`, which
-  typically (not necessarily) `extends` the matching Environment layer.
+- `--client`+`--environment` → `.configtransform/Clients/<Client>/<Environment>/configtransform.json`,
+  which typically (not necessarily) `extends` the matching Environment layer.
+- `--client`+`--environment`+`--host` →
+  `.configtransform/Clients/<Client>/<Environment>/Hosts/<Host>/configtransform.json`, which
+  typically `extends` the matching Client/Environment layer — a third, optional axis for
+  load-balanced Production servers that need genuinely different config from each other, not just
+  from other clients/environments. See `docs/HOST_LAYER_DESIGN.md` for the full design and why the
+  hyphenated-`Client-Host` naming workaround was rejected. Most repos never need this — a client
+  with identical config across every box for an environment never grows a `Hosts/` folder, and
+  omitting `--host` resolves exactly as it always has.
 
-None of this is discovery or guessing — given `--client`/`--environment`, the path is fully
-determined. A target layer that doesn't exist on disk (or whose `extends` chain hits a layer that
-doesn't exist) is never fatal for a resolve — it just means nothing more is configured from that
-point on, the same tolerance a missing overlay always had (`CONFIG_MANAGEMENT.md` §5.1). One real
-consequence of the new tree, named explicitly in the design doc's "accepted cost" section: a
-Client layer that inherits an Environment layer's content but adds nothing of its own must still
-exist on disk (even with an empty `resources: []`, just declaring `extends`) — a Client layer file
-that's missing *entirely* does not implicitly fall through to the Environment layer the way a
-missing overlay *file* did under the old fixed rule.
+None of this is discovery or guessing — given `--client`/`--environment`/`--host`, the path is
+fully determined. A target layer that doesn't exist on disk (or whose `extends` chain hits a layer
+that doesn't exist) is never fatal for a resolve — it just means nothing more is configured from
+that point on, the same tolerance a missing overlay always had (`CONFIG_MANAGEMENT.md` §5.1). One
+real consequence of the new tree, named explicitly in the design doc's "accepted cost" section: a
+Client (or Host) layer that inherits its parent layer's content but adds nothing of its own must
+still exist on disk (even with an empty `resources: []`, just declaring `extends`) — a layer file
+that's missing *entirely* does not implicitly fall through to its parent the way a missing overlay
+*file* did under the old fixed rule.
 
 ## Single resource vs. every resource
 
@@ -141,13 +153,13 @@ nothing would be worse than failing loudly.
 
 Two modes:
 
-- **Given `--client`/`--environment`** (client optional, environment required): shows that
-  layer's own `extends` and every resource it touches, as its full chain in real application
-  order — `base` first, then every layer outermost-first, each one either `patched in: <path>` or
-  `not patched in`, connected by `↓`. This is the exact same rendering the single-resource
-  resolution report (`--dry-run`/`--diff`/a real run, below) prints for one resource — `--list`
-  just does it for every resource a layer touches, so the two never show the chain two different
-  ways:
+- **Given `--client`/`--environment`[/`--host`]** (client optional, environment required, host
+  optional and requires both): shows that layer's own `extends` and every resource it touches, as
+  its full chain in real application order — `base` first, then every layer outermost-first, each
+  one either `patched in: <path>` or `not patched in`, connected by `↓`. This is the exact same
+  rendering the single-resource resolution report (`--dry-run`/`--diff`/a real run, below) prints
+  for one resource — `--list` just does it for every resource a layer touches, so the two never
+  show the chain two different ways:
   ```
     OrderProcessor.Framework/App.config
       base
@@ -159,9 +171,13 @@ Two modes:
       .configtransform/Clients/Acme/Production/configtransform.json
         patched in: .configtransform/Clients/Acme/Production/patch-OrderProcessor.Framework-App.config.xml
   ```
-- **Given `--resource` instead** (no `--client`/`--environment`): a tree-wide reverse lookup —
-  every `configtransform.json` anywhere under `.configtransform/` that patches this one resource,
-  each with its own patch file and `extends` (if any). This closes a real ergonomic gap the new
+  Adding `--host <H>` to the same call extends the chain one more `↓` hop, through
+  `.configtransform/Clients/Acme/Production/Hosts/<H>/configtransform.json` — see
+  `docs/HOST_LAYER_DESIGN.md`.
+- **Given `--resource` instead** (no `--client`/`--environment`/`--host`): a tree-wide reverse
+  lookup — every `configtransform.json` anywhere under `.configtransform/` that patches this one
+  resource, each with its own patch file and `extends` (if any), regardless of how deep it sits
+  (a `Hosts/` layer is picked up the same as any other). This closes a real ergonomic gap the new
   tree creates: under the old fixed layout, "every overlay for App.config" was one directory
   listing; under this design the same question means searching every `configtransform.json` in
   the tree, which is exactly what this mode does for you.
@@ -206,7 +222,14 @@ dotnet run --project src/ConfigTransform.Cli -- \
 dotnet run --project src/ConfigTransform.Cli -- \
   --list --resource OrderProcessor.Framework/App.config
 
-# Short flags, for typing out by hand
+# One specific load-balanced server, when .configtransform/Clients/Acme/Production/Hosts/<H>/
+# exists -- everything else about the call is unchanged
+dotnet run --project src/ConfigTransform.Cli -- \
+  --resource OrderProcessor.Framework/App.config \
+  --client Acme --environment Production --host 192.168.10.10 --dry-run
+
+# Short flags, for typing out by hand (-H is the --host short form, capital -- see decision log #2
+# in docs/HOST_LAYER_DESIGN.md for why)
 dotnet run --project src/ConfigTransform.Cli -- -r BillingApi.Core/appsettings.json -c Acme -e Production --diff
 ```
 
@@ -232,6 +255,7 @@ like `set` — `configtransform init ...`, not a flag on the resolve/list comman
 ```
 init --environment, -e <EnvName>           repeatable — every environment to create
      --client, -c <ClientName>             repeatable — every client to create (requires --environment)
+     --host, -H <HostName>                 repeatable — every host to create, cross-multiplied with every client x environment pair above (requires --client and --environment)
      --resource, -r <path>                 repeatable — explicit resources; skips scanning entirely if given
      --scan-root <dir>                     where to scan for candidate resources (default: repo root)
      --yes                                 accept every scanned candidate without asking
@@ -245,7 +269,9 @@ init --environment, -e <EnvName>           repeatable — every environment to c
 - **Interactive** — no `init`-specific flag given at all, and stdin is a real terminal. A plain
   sequential form (`Console.ReadLine()`, no TUI): scans for candidate resources and asks which to
   manage (by index, `all`, or `none`), then which environments (required, comma-separated), then
-  which clients (optional, comma-separated) — then echoes the exact file list and writes it.
+  which clients (optional, comma-separated), then — only if at least one client was given — which
+  hosts (optional, comma-separated, cross-multiplied with every client x environment pair) — then
+  echoes the exact file list and writes it.
 - **Quiet** — any `init`-specific flag given, or stdin isn't a terminal (CI-safe by default: it
   never blocks on a prompt it can't get an answer to). `--environment` becomes required in this
   mode (there's no one left to ask); everything else comes from flags. If no `--resource` was
@@ -283,6 +309,12 @@ dotnet run --project src/ConfigTransform.Cli -- \
 
 # Preview without writing
 dotnet run --project src/ConfigTransform.Cli -- init --template --dry-run
+
+# Scaffold a per-host layer for a specific load-balanced server -- requires --client and
+# --environment, same rule --host follows everywhere else
+dotnet run --project src/ConfigTransform.Cli -- \
+  init --environment Production --client Acme --host 192.168.10.10 \
+  --resource OrderProcessor.Framework/App.config
 ```
 
 ## `set` — author an overlay field
@@ -296,20 +328,24 @@ engine by `--resource`'s own extension, the same way every other command dispatc
 set --resource, -r <repo-root-relative path>   required — names the project directly
     --client, -c <ClientName>                  optional — with --environment, writes the Client layer
     --environment, -e <EnvName>                optional — writes the Environment layer (no --client), or required alongside --client
+    --host, -H <HostName>                      optional — with --client and --environment, writes that Host layer instead
     --match <attr>=<value>                     repeatable — identifies the target; bare <value> (no "=") defaults to key=<value>
     --set <attr>=<value>                       repeatable — the field(s) to write; bare <value> defaults to value=<value>
     --dry-run                                  print what would be written; nothing written to disk
 ```
 
-No `--client`/`--environment` at all writes the base file directly (a change meant for everyone);
-`--client` requires `--environment` (there's no client-only layer). A real write auto-prints the
-effective `--diff` afterward — the same trust-check `--diff` gives elsewhere, without it being a
-separate step to remember.
+No `--client`/`--environment`/`--host` at all writes the base file directly (a change meant for
+everyone); `--client` requires `--environment` (there's no client-only layer), and `--host`
+requires both `--client` and `--environment` (no host-only or host-without-client layer). A real
+write auto-prints the effective `--diff` afterward — the same trust-check `--diff` gives
+elsewhere, without it being a separate step to remember.
 
 **When the target layer's `configtransform.json` doesn't exist yet, `set` creates it** — for a
 Client-layer write, defaulting its `extends` to the matching Environment layer's path even if that
 file doesn't exist on disk yet either (a missing `extends` target is "nothing to inherit," not an
-error). **When the resource isn't listed there yet**, `set` appends a `resources` entry pointing
+error); for a Host-layer write, defaulting `extends` to the matching Client/Environment layer's
+path instead, one level deeper. **When the resource isn't listed there yet**, `set` appends a
+`resources` entry pointing
 at a newly-authored patch file, named `patch-<resource path, "/" replaced with "-">.<xml|json|env|yaml>`
 (the patch extension always reflects the *transform's own* format — `.xml` for an XDT transform
 regardless of the base resource's own extension, `.json` for JSON, `.env` for `.env`, `.yaml` for

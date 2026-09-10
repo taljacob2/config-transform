@@ -255,6 +255,18 @@ for the full design. Versioned as `0.17.0-alpha`. A further real-user report has
 shared `LayerChain.PrintChain` (also used by the report), so both commands render the exact same
 chain the exact same way; a deliberate side effect is `--list` now also throws when a layer
 declares a `patch` that doesn't exist on disk, matching every other mode's existing behavior for a
-broken patch reference. Versioned as `0.18.0-alpha`. See `docs/ROADMAP.md`'s "Next up" for what's
-actionable now versus what needs either a solution repo that doesn't exist yet or an owner
-decision — YAML's own array-of-objects matching is the one remaining `set` gap.
+broken patch reference. Versioned as `0.18.0-alpha`. A third, optional layer axis has since landed:
+`--host`/`-H` (`docs/HOST_LAYER_DESIGN.md`), one more `extends` hop under Client/Environment
+(`.configtransform/Clients/<C>/<E>/Hosts/<H>/configtransform.json`) for load-balanced Production
+servers that need genuinely different config from each other — rejects a hyphenated
+`Client-Host`-naming workaround a real user was using in favor of reusing the self-describing-
+layers chaining as-is (`LayerChain`, `--list --resource`'s reverse lookup, and every format
+engine's `Merge` needed zero changes, verified against the real code). Applies uniformly
+everywhere `--client`/`--environment` already do — a plain resolve, `--dry-run`/`--diff`,
+`--list`, `set` (defaulting a new Host layer's `extends` to its Client/Environment layer), and
+`init` (a repeatable `--host` flag/prompt, cross-multiplied with every client × environment pair
+the same way clients already cross-multiply with environments). Versioned as `0.19.0-alpha`.
+`init --template`'s own `--host`-aware variant is a deliberately separate, deferred follow-up —
+see `docs/ROADMAP.md`'s "Next up" for what's actionable now versus what needs either a solution
+repo that doesn't exist yet or an owner decision — YAML's own array-of-objects matching is the
+other remaining `set` gap.
