@@ -271,7 +271,14 @@ decision log #7): `--template` becomes a value-taking flag — a bare `--templat
 default` still builds the existing hello-world tree byte-for-byte, `--template hosts` additionally
 scaffolds one worked `Hosts/Host-1/` example under the template's Client-A/Production layer.
 Versioned as `0.20.0-alpha`. `config-transform-pilot` now has a real multi-host scenario too
-(two `Hosts/` layers under `Clients/Acme/Production`, verified via real CI dispatch). See
-`docs/ROADMAP.md`'s "Next up" for what's actionable now versus what needs either a solution repo
-that doesn't exist yet or an owner decision — YAML's own array-of-objects matching is the
-remaining `set` gap.
+(two `Hosts/` layers under `Clients/Acme/Production`, verified via real CI dispatch). A further
+real-user report has since landed: `Microsoft.Web.Xdt`'s own `Insert` transform gave freshly-
+inserted elements none of the surrounding document's whitespace — a single new element glued onto
+its parent's closing tag, a whole new multi-level subtree losing all internal whitespace and
+collapsing to one line (verified empirically, not assumed) — never a correctness bug, but reads as
+broken in a diff. `XmlLayerMerger` now runs a new `InsertWhitespaceFormatter` once per patch (see
+`docs/FIELD_AUTHORING_DESIGN.md`'s "Merge-time whitespace, not a `set`-time concern"), using
+before/after element-reference-identity diffing to reformat exactly the nodes one `Insert` added.
+Versioned as `0.21.0-alpha`. See `docs/ROADMAP.md`'s "Next up" for what's actionable now versus
+what needs either a solution repo that doesn't exist yet or an owner decision — YAML's own
+array-of-objects matching is the remaining `set` gap.

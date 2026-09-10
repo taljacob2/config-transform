@@ -601,6 +601,23 @@ a distinct cache-node address, verified via real CI dispatch both with and witho
 that repo's `FINDINGS.md`), re-pinned to `0.19.0-alpha` when it was added; re-pinning it again to
 `0.20.0-alpha` is a trivial follow-up, not tracked as its own item here.
 
+A further real-user report against the published tool has since landed: XDT `Insert` transforms
+produced squashed, hard-to-read merged output — `Microsoft.Web.Xdt`'s own `Insert` appends the new
+element as its parent's last child with no whitespace of its own, so a single inserted element
+lands glued onto the parent's closing tag, and a whole freshly-inserted multi-level subtree (`set`'s
+`--match parent=` case) loses *all* internal whitespace, collapsing to one line regardless of how
+the patch file itself was formatted — confirmed empirically against the real library, not assumed.
+Never a correctness bug (`XmlDocument.Load` never throws on the output), but reads as broken to a
+human scanning a `--diff`. `XmlLayerMerger` now runs a new `InsertWhitespaceFormatter`
+(`docs/FIELD_AUTHORING_DESIGN.md`'s "Merge-time whitespace, not a `set`-time concern") once per
+patch, right after `XmlTransformation.Apply`: before/after element-reference-identity diffing finds
+exactly the nodes one specific `Insert` added, reattaches the new subtree's root using a real
+sibling's own indentation when one exists, and reformats everything below it by nesting depth since
+none of that is real, pre-existing whitespace to preserve. Versioned as `0.21.0-alpha`;
+`config-transform-pilot`'s own `Insert`-based `authorization` override (`Acme`/`Production`'s
+`allow` element) is exactly the scenario that surfaced this, so re-pinning it is worth doing
+alongside the `0.20.0-alpha` re-pin above, not a separate item.
+
 ## Next up
 
 One item below is now actionable purely within this repo (see the first bullet); every other

@@ -40,9 +40,13 @@ public static class XmlLayerMerger
 
     private static void Apply(XmlTransformableDocument document, string transformPath)
     {
+        var before = InsertWhitespaceFormatter.SnapshotElements(document);
+
         using var transformation = new XmlTransformation(transformPath);
         if (!transformation.Apply(document))
             throw new InvalidOperationException($"XDT transform failed to apply: '{transformPath}'.");
+
+        InsertWhitespaceFormatter.Fix(document, before);
     }
 
     private sealed class Utf8StringWriter : StringWriter
