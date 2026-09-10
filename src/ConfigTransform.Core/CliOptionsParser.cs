@@ -32,8 +32,8 @@ namespace ConfigTransform.Core;
 public static class CliOptionsParser
 {
     private static readonly CliOptions HelpOptions = new(
-        null, null, null, null, null, DryRun: false, Diff: false, List: false, Set: false, Help: true, [], [],
-        Init: false, [], [], [], [], null, Yes: false, NoScan: false, Template: null);
+        null, null, null, null, null, DryRun: false, Diff: false, DiffLayers: false, List: false, Set: false,
+        Help: true, [], [], Init: false, [], [], [], [], null, Yes: false, NoScan: false, Template: null);
 
     private static readonly string[] TemplateVariants = ["default", "hosts"];
 
@@ -44,7 +44,7 @@ public static class CliOptionsParser
     private static readonly string[] KnownFlags =
     [
         "--help", "-h", "help", "--resource", "-r", "--client", "-c", "--environment", "-e",
-        "--host", "-H", "--output", "-o", "--dry-run", "--diff", "--list", "--match", "--set",
+        "--host", "-H", "--output", "-o", "--dry-run", "--diff", "--diff-layers", "--list", "--match", "--set",
         "--scan-root", "--yes", "--no-scan", "--template"
     ];
 
@@ -66,6 +66,7 @@ public static class CliOptionsParser
         string? output = null;
         var dryRun = false;
         var diff = false;
+        var diffLayers = false;
         var list = false;
         var match = new List<string>();
         var setFields = new List<string>();
@@ -123,6 +124,9 @@ public static class CliOptionsParser
                     break;
                 case "--diff":
                     diff = true;
+                    break;
+                case "--diff-layers":
+                    diffLayers = true;
                     break;
                 case "--list":
                     list = true;
@@ -182,6 +186,8 @@ public static class CliOptionsParser
         {
             if (diff)
                 throw new ArgumentException("--diff is not valid with 'init'.\nTry: drop --diff; 'init' scaffolds new layers, it doesn't merge or preview one.");
+            if (diffLayers)
+                throw new ArgumentException("--diff-layers is not valid with 'init'.\nTry: drop --diff-layers; 'init' scaffolds new layers, it doesn't merge or preview one.");
             if (list)
                 throw new ArgumentException("--list is not valid with 'init'.\nTry: drop --list; run configtransform --list separately once the tree exists.");
             if (output is not null)
@@ -226,13 +232,15 @@ public static class CliOptionsParser
                 throw new ArgumentException("--client requires --environment (there is no client-only layer).\nTry: add --environment <E>, e.g. --client Acme --environment Production.");
             if (host is not null && (client is null || environment is null))
                 throw new ArgumentException("--host requires --client and --environment.\nTry: add --client <C> --environment <E>, e.g. --host <H> --client Acme --environment Production.");
-            if (output is null && !dryRun && !diff)
-                throw new ArgumentException("--output is required for a real run (omit only with --dry-run or --diff).\nTry: add --output <path>, or pass --dry-run/--diff to preview instead of writing.");
+            if (diff && diffLayers)
+                throw new ArgumentException("--diff and --diff-layers are mutually exclusive.\nTry: use one or the other -- --diff for a single before/after diff, --diff-layers to see it broken out per layer.");
+            if (output is null && !dryRun && !diff && !diffLayers)
+                throw new ArgumentException("--output is required for a real run (omit only with --dry-run, --diff, or --diff-layers).\nTry: add --output <path>, or pass --dry-run/--diff/--diff-layers to preview instead of writing.");
         }
 
         return new CliOptions(
-            resource, client, environment, host, output, dryRun, diff, list, set, Help: false, match, setFields,
-            init, initEnvironments, initClients, initResources, initHosts, scanRoot, yes, noScan, template);
+            resource, client, environment, host, output, dryRun, diff, diffLayers, list, set, Help: false, match,
+            setFields, init, initEnvironments, initClients, initResources, initHosts, scanRoot, yes, noScan, template);
     }
 
     private static string RequireValue(string[] args, ref int i, string flag)

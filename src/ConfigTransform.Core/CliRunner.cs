@@ -84,6 +84,14 @@ public static class CliRunner
 
         var merged = engine.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
+        if (options.DiffLayers)
+        {
+            var sections = LayerDiffAttribution.Compute(resolved, engine.Merge);
+            stdout.WriteLine();
+            stdout.WriteLine(sections.Count == 0 ? "(no changes)" : string.Join("\n\n", sections.Select(s => s.Diff)));
+            return;
+        }
+
         if (options.Diff)
         {
             var baseOnly = engine.Merge(resolved.BasePath, []);
@@ -172,7 +180,7 @@ public static class CliRunner
             return;
         }
 
-        if (!options.DryRun && !options.Diff)
+        if (!options.DryRun && !options.Diff && !options.DiffLayers)
         {
             var outputRoot = options.Output
                 ?? throw new InvalidOperationException("--output was not set for a real run.");
@@ -212,7 +220,12 @@ public static class CliRunner
 
             stdout.WriteLine($"=== {resourcePath} ===");
 
-            if (options.Diff)
+            if (options.DiffLayers)
+            {
+                var sections = LayerDiffAttribution.Compute(resolved, engine.Merge);
+                stdout.WriteLine(sections.Count == 0 ? "(no changes)" : string.Join("\n\n", sections.Select(s => s.Diff)));
+            }
+            else if (options.Diff)
             {
                 var baseOnly = engine.Merge(resolved.BasePath, []);
                 var diff = GitDiff.Render(baseOnly, merged);

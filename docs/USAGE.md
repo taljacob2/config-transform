@@ -19,9 +19,10 @@ supports differs by format for reasons that come from the format itself, not an 
 --client, -c <ClientName>                  optional everywhere — requires --environment (no client-only layer); see "Resolving" below
 --environment, -e <EnvironmentName>        optional everywhere — see "Resolving" below
 --host, -H <HostName>                      optional everywhere — requires --client and --environment; a third layer axis for per-server config (see "Resolving" below and docs/HOST_LAYER_DESIGN.md)
---output, -o <path>                        required for a real run (omit only with --dry-run/--diff) — a file with --resource, a directory without it
+--output, -o <path>                        required for a real run (omit only with --dry-run/--diff/--diff-layers) — a file with --resource, a directory without it
 --dry-run                                  print the fully merged result to stdout; nothing written to disk
 --diff                                     print a unified diff (unpatched vs. merged) via `git diff --no-index`; nothing written to disk
+--diff-layers                              like --diff, but one diff per layer that actually changes the resource, tagged with which earlier layer it overrides (docs/DIFF_LAYERS_DESIGN.md); mutually exclusive with --diff
 --list                                     show a layer's resources (--client/--environment[/--host]), or a tree-wide reverse lookup (--resource) — see below
 help, --help, -h                           print the help page (see "Getting help" below) — also the default with no arguments at all
 init                                       scaffold a .configtransform/ tree — a different verb, see "init" below
@@ -63,8 +64,8 @@ example for that specific mistake, rather than pointing you at the full help pag
 `--output` on a real run prints:
 
 ```
-Error: --output is required for a real run (omit only with --dry-run or --diff).
-Try: add --output <path>, or pass --dry-run/--diff to preview instead of writing.
+Error: --output is required for a real run (omit only with --dry-run, --diff, or --diff-layers).
+Try: add --output <path>, or pass --dry-run/--diff/--diff-layers to preview instead of writing.
 ```
 
 An unrecognized flag gets the same treatment, but as a spelling suggestion when one fits: a typo
@@ -121,7 +122,7 @@ repo-root-relative path its `configtransform.json` entries use everywhere else. 
 processes **every resource the resolved layer's chain touches, across every registered format**,
 in one invocation:
 
-- `--dry-run`/`--diff` print each resource's own result, labeled `=== <path> ===`.
+- `--dry-run`/`--diff`/`--diff-layers` print each resource's own result, labeled `=== <path> ===`.
 - A real run requires `--output <directory>` (not a file) and writes one file per resource, each
   resource's own repo-root-relative path mirrored under that directory. If `--output` already
   exists as a plain file — most naturally when the layer has only one resource and it happens to
@@ -228,6 +229,11 @@ dotnet run --project src/ConfigTransform.Cli -- \
   --resource OrderProcessor.Framework/App.config \
   --client Acme --environment Production --host 192.168.10.10 --dry-run
 
+# --diff-layers -- see which layer changed which line, on a chain more than one hop deep
+dotnet run --project src/ConfigTransform.Cli -- \
+  --resource OrderProcessor.Framework/App.config \
+  --client Acme --environment Production --host 192.168.10.10 --diff-layers
+
 # Short flags, for typing out by hand (-H is the --host short form, capital -- see decision log #2
 # in docs/HOST_LAYER_DESIGN.md for why)
 dotnet run --project src/ConfigTransform.Cli -- -r BillingApi.Core/appsettings.json -c Acme -e Production --diff
@@ -244,6 +250,17 @@ base file is.
 disk — verified directly by `ConfigTransform.Cli.Tests`' `CliRunnerTests`, not just by code
 inspection. `--diff` prints `(no changes)` rather than an empty diff when the resolved chain has
 nothing to apply.
+
+`--diff-layers` (`docs/DIFF_LAYERS_DESIGN.md`) is `--diff`'s per-layer sibling — instead of one
+diff comparing the base file straight to the final merged result, it prints one diff per layer
+that actually changes the resource, computed by re-running the same merge with one more patch
+applied each time (no format-engine changes needed for this — every merge engine already accepts
+an arbitrary prefix of the patch list). Each section is tagged `[<layer>]`, or
+`[<layer> overrides <earlier layer>]` when every line it changes was last touched by that one
+earlier layer; a hunk that re-touches lines with *different* prior owners gets a plain `[<layer>]`
+tag instead, with a `(overrides <layer>)` note on each individual changed line that has one. Like
+`--diff`, nothing is written to disk, and it prints `(no changes)` when there's nothing to show.
+Mutually exclusive with `--diff` — use one or the other.
 
 ## `init` — scaffold a tree
 
