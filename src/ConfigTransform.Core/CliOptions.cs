@@ -12,7 +12,10 @@ namespace ConfigTransform.Core;
 /// both together target the matching Client layer; <see cref="Client"/> without
 /// <see cref="Environment"/> is always an error (there is no client-only layer). This is uniform
 /// across a resolve/dry-run/diff/real-run, <c>--list</c>, and <c>set</c> — no mode requires more
-/// than the layer it actually needs.
+/// than the layer it actually needs. <see cref="Host"/> (docs/HOST_LAYER_DESIGN.md) is a further
+/// optional third axis under an already-given Client/Environment pair — set without both of those
+/// is always an error, the same "requires the level above it" rule <see cref="Client"/> already
+/// follows for <see cref="Environment"/>; not valid with <c>--list --resource</c>'s reverse lookup.
 /// <see cref="Set"/> is the "set" verb (docs/FIELD_AUTHORING_DESIGN.md) — a different mode from
 /// the resolve/list flow the other flags govern; <see cref="Match"/>/<see cref="SetFields"/> carry
 /// the raw, not-yet-parsed --match/--set argument strings (see <see cref="MatchSpec"/>).
@@ -21,20 +24,30 @@ namespace ConfigTransform.Core;
 /// validation runs), and is the default when the tool is invoked with nothing else to go on.
 /// <see cref="Init"/> is the "init" verb (docs/INIT_COMMAND_DESIGN.md) — scaffolds a tree instead
 /// of resolving one; <see cref="InitEnvironments"/>/<see cref="InitClients"/>/
-/// <see cref="InitResources"/> are its own repeatable environment/client/resource lists, distinct
-/// from <see cref="Client"/>/<see cref="Environment"/>/<see cref="Resource"/> (which target one
-/// existing layer, not declare several new ones) even though they're parsed from the same
-/// <c>--environment</c>/<c>--client</c>/<c>--resource</c> flags. <see cref="Template"/> selects
-/// the one canned starter tree instead of scanning/prompting/flags, mutually exclusive with every
-/// other init-specific flag.
+/// <see cref="InitResources"/>/<see cref="InitHosts"/> are its own repeatable environment/client/
+/// resource/host lists, distinct from <see cref="Client"/>/<see cref="Environment"/>/
+/// <see cref="Resource"/>/<see cref="Host"/> (which target one existing layer, not declare several
+/// new ones) even though they're parsed from the same <c>--environment</c>/<c>--client</c>/
+/// <c>--resource</c>/<c>--host</c> flags. <see cref="InitHosts"/> cross-multiplies with every
+/// declared client × environment pair, same as <see cref="InitClients"/> already cross-multiplies
+/// with <see cref="InitEnvironments"/> (docs/HOST_LAYER_DESIGN.md). <see cref="Template"/> selects
+/// one of the canned starter trees instead of scanning/prompting/flags, mutually exclusive with
+/// every other init-specific flag — <c>null</c> means <c>--template</c> wasn't given, a non-null
+/// value is the variant name (<c>"default"</c> for a bare <c>--template</c>, or <c>"hosts"</c> for
+/// <c>--template hosts</c>, docs/HOST_LAYER_DESIGN.md decision log #7). <see cref="DiffLayers"/>
+/// (docs/DIFF_LAYERS_DESIGN.md) is <c>--diff</c>'s per-layer sibling: instead of one base-vs-merged
+/// diff, one diff per layer that actually changes the resource, tagged with which earlier layer it
+/// overrides when relevant — mutually exclusive with <see cref="Diff"/>, not valid with `init`.
 /// </summary>
 public sealed record CliOptions(
     string? Resource,
     string? Client,
     string? Environment,
+    string? Host,
     string? Output,
     bool DryRun,
     bool Diff,
+    bool DiffLayers,
     bool List,
     bool Set,
     bool Help,
@@ -44,7 +57,8 @@ public sealed record CliOptions(
     IReadOnlyList<string> InitEnvironments,
     IReadOnlyList<string> InitClients,
     IReadOnlyList<string> InitResources,
+    IReadOnlyList<string> InitHosts,
     string? ScanRoot,
     bool Yes,
     bool NoScan,
-    bool Template);
+    string? Template);

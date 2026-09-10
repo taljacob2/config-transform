@@ -19,6 +19,16 @@ the published tool and fixed properly in a follow-up change — `--client` now r
 `--environment` (no client-only layer) but neither is otherwise required, uniformly across every
 mode. The demo below is the original, correct design; no correction needed anymore.
 
+**`init` gained a fourth, optional axis: `--host`/`-H`** (`docs/HOST_LAYER_DESIGN.md`) — repeatable,
+cross-multiplied with every declared client × environment pair, the same way clients already
+cross-multiply with environments; requires both `--client` and `--environment`, same "requires the
+level above it" rule `--client` itself already follows. The interactive form gained one more
+prompt, asked only once at least one client was given (mirroring how the clients prompt is only
+meaningful once environments exist). A new Host layer's `extends` defaults to its matching
+Client/Environment layer — the same convention every other layer's default already follows, one
+level deeper. See "Manifest shape" and "Related fix to `SetTargetResolver`" below for how this
+threads through the rest of the design; nothing else in this document changed.
+
 ## Why this exists, and why now
 
 `docs/ROADMAP.md`'s "Later / not yet scheduled" and `docs/GETTING_STARTED.md`'s "Should there be
@@ -221,12 +231,20 @@ configtransform --client Client-A --environment Production --resource configtran
   real patch at every layer instead of the patch-less Environment default — not in the underlying
   mechanics of how the tree gets built.
 
-**`--template` is a bare switch, not a named flag.** There is exactly one template (referred to in
-this document as "the hello-world template" purely for readability — it isn't a name the CLI
-itself ever takes as input), and it's meant to stay the basic/default starter regardless of
-whether a second one is ever added — see the decision log for why this is a deliberate reversal
-of this document's original name-based-flag proposal, and "Open items" for the accepted cost if a
-second template does eventually show up.
+**`--template` was a bare switch, not a named flag, until a second template actually showed up.**
+There was exactly one template (referred to in this document as "the hello-world template" purely
+for readability — it isn't a name the CLI itself ever takes as input) — see the decision log for
+why that was a deliberate reversal of this document's original name-based-flag proposal. "Open
+items" below already predicted the accepted cost once a second template arrived: `--template`
+would grow a value, defaulting to today's tree so every existing invocation keeps working
+unchanged. That's now happened (`docs/HOST_LAYER_DESIGN.md` decision log #7): a bare `--template`
+(or the explicit `--template default`) still builds exactly the hello-world tree above,
+byte-for-byte; `--template hosts` additionally scaffolds one worked
+`Hosts/Host-1/configtransform.json` example (`docs/HOST_LAYER_DESIGN.md`) under the template's
+existing Client-A/Production layer, via `InitTemplate.BuildHostsPlan`, reusing every file
+`BuildPlan` already produces rather than duplicating the tree. `CliOptionsParser` peeks the token
+after `--template`: a value that isn't itself a recognized flag (or the `help` verb) is consumed
+as the variant name; anything else defaults to `"default"`.
 
 ### Related fix to `SetTargetResolver`
 
@@ -383,12 +401,10 @@ rather than a one-shot, destructive bootstrap.
   today the only escape hatch is hand-editing the generated `configtransform.json` afterward
   (same escape hatch `set` already relies on for anything outside its own scope). Worth a second
   pass once real trees show this actually matters, rather than designed speculatively now.
-- **A second template** — nothing beyond the one bare `--template` is defined, and `--template`
-  is deliberately a bare switch, not a named flag (see decision log). If a second template is
-  ever actually needed, `--template` would have to grow a value (`--template <name>`, defaulting
-  to the existing one for compatibility) — a real, if small, breaking flag-shape change, accepted
-  now on the belief that this stays the only template for the foreseeable future. Not designed
-  speculatively here.
+- ~~**A second template**~~ — closed: `--template hosts` (`docs/HOST_LAYER_DESIGN.md` decision
+  log #7) is exactly the value-taking-flag shape this item predicted, `default` kept as the
+  existing tree for compatibility. Left here, struck through, as the historical record of the
+  call this item was watching for.
 - **Whether the `SetTargetResolver` patch-naming fix ships in the same change as `init`, or
   separately** — this document assumes the same change (see "Related fix to `SetTargetResolver`"
   under "Template mode"), since shipping `init` with a naming rule `set` doesn't share would be a

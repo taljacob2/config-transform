@@ -575,6 +575,70 @@ when a layer declares a `patch` that doesn't exist on disk, instead of silently 
 but-missing patch is always an error, the same way a missing base file is. Versioned as
 `0.18.0-alpha`.
 
+**A third, optional `--host` layer axis is implemented** (`docs/HOST_LAYER_DESIGN.md`, design
+finalized then built directly from it, no design changes needed along the way) — raised by the
+repo owner from a real deployment shape: a load-balanced Production environment where individual
+servers need genuinely different config from each other, not just from other clients/environments.
+Rejects the hyphenated-`Client-Host` workaround (breaks the `Client` concept, combinatorial, no
+natural inheritance from the real client) in favor of one more optional `extends` hop
+(`Clients/<C>/<E>/Hosts/<H>/configtransform.json`) — reuses the self-describing-layers chaining
+as-is: `LayerChain`'s `extends`-walk, `--list --resource`'s reverse lookup, and every format
+engine's `Merge` method needed zero changes (verified by reading the actual code, not assumed).
+`LayerPathResolver.Resolve` gains an optional `host` parameter; `SetTargetResolver` gains two
+small, real changes (threading `host` through, and a third `defaultExtends` case defaulting a new
+Host layer to its Client/Environment layer); `InitPlanner`/`InitRunner` gain `--host` scaffolding,
+cross-multiplied with every client × environment pair the same way clients already cross-multiply
+with environments. `--host`/`-H` (capital, a deliberate, documented tradeoff since lowercase `-h`
+is already `--help`) is the flag everywhere `--client`/`--environment` already apply. 31 new tests.
+Versioned as `0.19.0-alpha`. `init --template`'s own `--host`-aware variant has since landed too
+(`docs/HOST_LAYER_DESIGN.md` decision log #7): `CliOptions.Template` changes from `bool` to
+`string?`, and `--template` becomes a value-taking flag — a bare `--template`/`--template default`
+still builds the existing tree byte-for-byte, `--template hosts` additionally scaffolds one worked
+`Hosts/Host-1/` example under the template's Client-A/Production layer
+(`InitTemplate.BuildHostsPlan`). Versioned as `0.20.0-alpha`. `config-transform-pilot` also has a
+real multi-host scenario now (two `Hosts/` layers under `Clients/Acme/Production`, each overriding
+a distinct cache-node address, verified via real CI dispatch both with and without `--host` — see
+that repo's `FINDINGS.md`), re-pinned to `0.19.0-alpha` when it was added; re-pinning it again to
+`0.20.0-alpha` is a trivial follow-up, not tracked as its own item here.
+
+A further real-user report against the published tool has since landed: XDT `Insert` transforms
+produced squashed, hard-to-read merged output — `Microsoft.Web.Xdt`'s own `Insert` appends the new
+element as its parent's last child with no whitespace of its own, so a single inserted element
+lands glued onto the parent's closing tag, and a whole freshly-inserted multi-level subtree (`set`'s
+`--match parent=` case) loses *all* internal whitespace, collapsing to one line regardless of how
+the patch file itself was formatted — confirmed empirically against the real library, not assumed.
+Never a correctness bug (`XmlDocument.Load` never throws on the output), but reads as broken to a
+human scanning a `--diff`. `XmlLayerMerger` now runs a new `InsertWhitespaceFormatter`
+(`docs/FIELD_AUTHORING_DESIGN.md`'s "Merge-time whitespace, not a `set`-time concern") once per
+patch, right after `XmlTransformation.Apply`: before/after element-reference-identity diffing finds
+exactly the nodes one specific `Insert` added, reattaches the new subtree's root using a real
+sibling's own indentation when one exists, and reformats everything below it by nesting depth since
+none of that is real, pre-existing whitespace to preserve. Versioned as `0.21.0-alpha`;
+`config-transform-pilot`'s own `Insert`-based `authorization` override (`Acme`/`Production`'s
+`allow` element) is exactly the scenario that surfaced this, so re-pinning it is worth doing
+alongside the `0.20.0-alpha` re-pin above, not a separate item.
+
+Raised by the repo owner while reading a real multi-hop `--diff`: there was no way to tell which
+layer (Environment, Client, or one specific Host) produced a given changed line without separately
+running `--list` and reasoning it out by hand. `docs/DIFF_LAYERS_DESIGN.md` (`0.22.0-alpha`) adds
+an opt-in `--diff-layers` flag: instead of one diff comparing the base file straight to the final
+merged result, it prints one diff per layer that actually changes the resource, tagged
+`[<layer>]`, or `[<layer> overrides <earlier layer>]` when every line it changes shares one prior
+owner (a hunk with *different* prior owners on different lines gets a plain `[<layer>]` tag with a
+per-line `(overrides <layer>)` note instead — docs/DIFF_LAYERS_DESIGN.md's "Mixed-owner hunks").
+Confirms the design doc's central claim: no change was needed to any of the four merge engines,
+since `LayerMerge` already accepts an arbitrary prefix of the patch list, so the per-layer content
+needed for incremental diffs is just one more `Merge` call per patched layer
+(`LayerDiffAttribution`, a new, self-contained type in Core reusing `GitDiff.Render`'s own
+unified-diff hunk headers for line-position bookkeeping rather than a second diff engine). One real
+bug did surface during implementation, caught only by a manual smoke test against a real multi-
+layer XML chain (not the unit suite, which used a fake merge delegate that never opened a real
+path): the algorithm must read the real, absolute patch paths from
+`ResolvedResource.PatchPathsInOrder`, not `ChainStep.PatchPath` (the repo-relative path `--list`
+displays) — fixed before merging, see the design doc's status line for the full note.
+`config-transform-pilot`'s own multi-host scenario is a natural place to exercise this against
+something more real than a synthetic fixture, a follow-up alongside its other pending re-pins.
+
 ## Next up
 
 One item below is now actionable purely within this repo (see the first bullet); every other

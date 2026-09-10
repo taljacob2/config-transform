@@ -6,6 +6,90 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.22.0-alpha] - 2026-09-10
+
+### Added
+
+- **`--diff-layers`: `--diff`'s per-layer sibling.** Raised by the repo owner while reading a real
+  multi-hop `--diff`: there was no way to tell which layer (Environment, Client, or one specific
+  Host) produced a given changed line without separately running `--list` and reasoning it out by
+  hand. `--diff-layers` prints one diff per layer that actually changes the resource instead of one
+  diff comparing the base file straight to the final merged result — computed by re-running the
+  same merge with one more patch applied each time, needing zero changes to any of the four format
+  engines since `LayerMerge` already accepts an arbitrary prefix of the ordered patch list. Each
+  section is tagged `[<layer>]`, or `[<layer> overrides <earlier layer>]` when every line it
+  changes was last touched by that one earlier layer; a hunk that re-touches lines with *different*
+  prior owners gets a plain `[<layer>]` tag instead, with a `(overrides <layer>)` note on each
+  individual changed line that has one (`LayerDiffAttribution`, reusing `GitDiff.Render`'s own
+  unified-diff hunk headers for line-position bookkeeping rather than a second diff engine).
+  Mutually exclusive with `--diff`. See `docs/DIFF_LAYERS_DESIGN.md` for the full design and status.
+
+## [0.21.0-alpha] - 2026-09-10
+
+### Fixed
+
+- **XDT `Insert` transforms no longer produce squashed, hard-to-read whitespace.** Reported by a
+  real user against the published tool: `Microsoft.Web.Xdt`'s own `Insert` transform appends the
+  new element as its parent's last child with no whitespace of its own — a single new element
+  lands glued onto the parent's closing tag (e.g. `<allow users="acme-admin" /></authorization>`
+  on one line, `allow` at `authorization`'s own indent instead of lining up under a `<deny>`
+  sibling), and a whole freshly-inserted multi-level subtree (`set`'s `--match parent=` case) loses
+  *all* internal whitespace, collapsing to one line regardless of how the patch file itself was
+  formatted — confirmed empirically, not assumed. Still well-formed XML either way
+  (`XmlDocument.Load` never throws on it), so this was never a correctness bug, but it reads as
+  broken to a human scanning a `--diff`. `XmlLayerMerger` now runs a new
+  `InsertWhitespaceFormatter` once per patch, right after `XmlTransformation.Apply`: it diffs
+  element references present before/after that one transform to find exactly the nodes that
+  specific `Insert` added (reference identity, not name/attribute matching — no risk of touching
+  whitespace the patch didn't add), reattaches the new subtree's root using a real sibling's own
+  indentation when one exists, and reformats every level below it by nesting depth (a fixed
+  two-space step) since none of that is real, pre-existing whitespace to preserve.
+
+## [0.20.0-alpha] - 2026-09-10
+
+### Added
+
+- **`init --template` gains a `hosts` variant** (`docs/HOST_LAYER_DESIGN.md` decision log #7) —
+  `CliOptions.Template` changes from `bool` to `string?` (`null` = not given; the parsed variant
+  name otherwise), and `--template` becomes value-taking: a bare `--template` (or the explicit
+  `--template default`) still builds exactly the existing hello-world tree, byte-for-byte, while
+  `--template hosts` additionally scaffolds one worked
+  `Hosts/Host-1/configtransform.json` example under the template's existing Client-A/Production
+  layer (`InitTemplate.BuildHostsPlan`), reusing every file the default variant already produces.
+  `CliOptionsParser` peeks the token after `--template`: a value that isn't itself a recognized
+  flag (or the `help` verb, so `init --template help` still shows help) is consumed as the
+  variant; anything else defaults to `"default"`. An unrecognized variant name is a validation
+  error with a `Try:` hint naming both real variants.
+
+## [0.19.0-alpha] - 2026-09-10
+
+### Added
+
+- **A third, optional layer axis: `--host`/`-H`** (`docs/HOST_LAYER_DESIGN.md`) — raised by the
+  repo owner from a real deployment shape: a load-balanced Production environment where
+  individual servers need genuinely different config from each other, not just from other
+  clients/environments. Rejects the hyphenated `Client-Host` naming workaround (e.g.
+  `Acme-192.168.10.10`) in favor of one more optional `extends` hop,
+  `.configtransform/Clients/<C>/<E>/Hosts/<H>/configtransform.json`, reusing the
+  self-describing-layers chaining as-is. `LayerPathResolver.Resolve` gains an optional `host`
+  parameter (requires `client`+`environment`, mirroring the existing `client`-requires-
+  `environment` rule one level up); applies uniformly to a plain resolve, `--dry-run`/`--diff`,
+  `--list` (both modes), and `set`. `set` into a new Host layer defaults its `extends` to the
+  matching Client/Environment layer, the same convention every other layer's default already
+  follows, one level deeper (`SetTargetResolver`). `init` gains a repeatable `--host` flag
+  (quiet mode) and one more interactive prompt (asked only once a client was given), cross-
+  multiplying with every declared client × environment pair the same way clients already
+  cross-multiply with environments (`InitPlanner`), plus a matching case-insensitive-collision
+  check. `-H` (capital) is the short alias — `-h` stays `--help`, a deliberate, documented
+  tradeoff (`docs/HOST_LAYER_DESIGN.md`'s decision log #2). Verified to need zero changes, by
+  reading the actual code rather than assuming: `LayerChain`'s `extends`-chain walk and
+  `--list --resource`'s reverse lookup already treat directory depth as arbitrary, and every
+  format engine's `Merge` method only ever sees an ordered patch-path list, never a layer's
+  position in the tree. 31 new tests across `ConfigTransform.Core.Tests`/
+  `ConfigTransform.Cli.Tests`. `init --template`'s own `--host`-aware variant
+  (`docs/HOST_LAYER_DESIGN.md` decision log #7) is deliberately deferred to a separate PR — the
+  fixed canned tree stays the minimal, no-decisions starter it's always been.
+
 ## [0.18.0-alpha] - 2026-09-08
 
 ### Fixed

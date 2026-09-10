@@ -20,11 +20,11 @@ public static class HelpPrinter
             now: {{engines.SupportedExtensions}}.
 
             USAGE
-              configtransform [--resource <path>] [--client <C>] [--environment <E>] [--dry-run | --diff | --output <path>]
-              configtransform --list [--client <C> --environment <E> | --resource <path>]
-              configtransform set --resource <path> [--client <C> --environment <E>] --match <k>=<v> [--match ...] --set <k>=<v> [--set ...]
-              configtransform init [--environment <E> ...] [--client <C> ...] [--resource <path> ...] [--yes] [--dry-run]
-              configtransform init --template [--dry-run]
+              configtransform [--resource <path>] [--client <C>] [--environment <E>] [--host <H>] [--dry-run | --diff | --diff-layers | --output <path>]
+              configtransform --list [--client <C> --environment <E> [--host <H>] | --resource <path>]
+              configtransform set --resource <path> [--client <C> --environment <E> [--host <H>]] --match <k>=<v> [--match ...] --set <k>=<v> [--set ...]
+              configtransform init [--environment <E> ...] [--client <C> ...] [--host <H> ...] [--resource <path> ...] [--yes] [--dry-run]
+              configtransform init --template [hosts] [--dry-run]
               configtransform | help | --help | -h            this page (also shown for no arguments at all)
 
             COMMON COMMANDS
@@ -32,6 +32,7 @@ public static class HelpPrinter
               See what changed                  configtransform -r <path> -c <Client> -e <Environment> --diff
               Write the merged file             configtransform -r <path> -c <Client> -e <Environment> -o <outFile>
               Resolve everything in one call    configtransform -c <Client> -e <Environment> -o <outDir>
+              Target one load-balanced server   configtransform -c <Client> -e <Environment> -H <Host> --dry-run
               Inspect a layer                   configtransform --list -c <Client> -e <Environment>
               Find every layer patching a file  configtransform --list -r <path>
               Author an override                configtransform set -r <path> -c <Client> -e <Environment> --match <field>=<value> --set <field>=<value>
@@ -42,11 +43,19 @@ public static class HelpPrinter
               easy:  configtransform -r OrderProcessor.Framework/App.config -c Acme -e Production --dry-run
               tldr:  configtransform -c Acme -e Production --dry-run
                      (omit --resource: every resource this layer touches, any format, one call)
+                     add -H <Host>/--host <Host> for one specific load-balanced server, when
+                     .configtransform/Clients/<C>/<E>/Hosts/<H>/ exists
 
             --diff — print a unified diff of unpatched vs. merged; nothing written to disk
               easy:  configtransform -r BillingApi.Core/appsettings.json -c Acme -e Production --diff
               tldr:  configtransform -c Acme -e Production --diff
                      (whole layer's diff, mixed XML/JSON, one call)
+
+            --diff-layers — like --diff, but one diff per layer that actually changes the resource
+              easy:  configtransform -r BillingApi.Core/appsettings.json -c Acme -e Production --diff-layers
+              tldr:  configtransform -c Acme -e Production -H 10.0.1.11 --diff-layers
+                     (each layer's own diff, tagged with which earlier layer it overrides when a
+                     later layer re-touches a line -- see docs/DIFF_LAYERS_DESIGN.md)
 
             --output, -o — write the merged result to disk
               easy:  configtransform -r OrderProcessor.Framework/App.config -c Acme -e Production -o publish/App.config
@@ -73,6 +82,8 @@ public static class HelpPrinter
                      (quiet/CI-safe: scans the repo for more .config/.xml/.json candidates too,
                      unless --resource is given; with no flags at all in a real terminal, asks
                      interactively instead)
+                     configtransform init --template hosts adds one worked Hosts/Host-1/ layer
+                     under Client-A/Production to the same starter tree
 
             Full reference — every flag, --list's two modes in full, and exactly what set supports
             per format (and why) — is docs/USAGE.md in the config-transform repo.

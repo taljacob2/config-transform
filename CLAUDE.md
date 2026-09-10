@@ -255,6 +255,41 @@ for the full design. Versioned as `0.17.0-alpha`. A further real-user report has
 shared `LayerChain.PrintChain` (also used by the report), so both commands render the exact same
 chain the exact same way; a deliberate side effect is `--list` now also throws when a layer
 declares a `patch` that doesn't exist on disk, matching every other mode's existing behavior for a
-broken patch reference. Versioned as `0.18.0-alpha`. See `docs/ROADMAP.md`'s "Next up" for what's
-actionable now versus what needs either a solution repo that doesn't exist yet or an owner
-decision — YAML's own array-of-objects matching is the one remaining `set` gap.
+broken patch reference. Versioned as `0.18.0-alpha`. A third, optional layer axis has since landed:
+`--host`/`-H` (`docs/HOST_LAYER_DESIGN.md`), one more `extends` hop under Client/Environment
+(`.configtransform/Clients/<C>/<E>/Hosts/<H>/configtransform.json`) for load-balanced Production
+servers that need genuinely different config from each other — rejects a hyphenated
+`Client-Host`-naming workaround a real user was using in favor of reusing the self-describing-
+layers chaining as-is (`LayerChain`, `--list --resource`'s reverse lookup, and every format
+engine's `Merge` needed zero changes, verified against the real code). Applies uniformly
+everywhere `--client`/`--environment` already do — a plain resolve, `--dry-run`/`--diff`,
+`--list`, `set` (defaulting a new Host layer's `extends` to its Client/Environment layer), and
+`init` (a repeatable `--host` flag/prompt, cross-multiplied with every client × environment pair
+the same way clients already cross-multiply with environments). Versioned as `0.19.0-alpha`.
+`init --template`'s own `--host`-aware variant has since landed too (`docs/HOST_LAYER_DESIGN.md`
+decision log #7): `--template` becomes a value-taking flag — a bare `--template`/`--template
+default` still builds the existing hello-world tree byte-for-byte, `--template hosts` additionally
+scaffolds one worked `Hosts/Host-1/` example under the template's Client-A/Production layer.
+Versioned as `0.20.0-alpha`. `config-transform-pilot` now has a real multi-host scenario too
+(two `Hosts/` layers under `Clients/Acme/Production`, verified via real CI dispatch). A further
+real-user report has since landed: `Microsoft.Web.Xdt`'s own `Insert` transform gave freshly-
+inserted elements none of the surrounding document's whitespace — a single new element glued onto
+its parent's closing tag, a whole new multi-level subtree losing all internal whitespace and
+collapsing to one line (verified empirically, not assumed) — never a correctness bug, but reads as
+broken in a diff. `XmlLayerMerger` now runs a new `InsertWhitespaceFormatter` once per patch (see
+`docs/FIELD_AUTHORING_DESIGN.md`'s "Merge-time whitespace, not a `set`-time concern"), using
+before/after element-reference-identity diffing to reformat exactly the nodes one `Insert` added.
+Versioned as `0.21.0-alpha`. A further real-user report has since landed and been implemented:
+`--diff-layers` (`docs/DIFF_LAYERS_DESIGN.md`), `--diff`'s per-layer sibling — instead of one diff
+comparing the base file straight to the final merged result, it prints one diff per layer that
+actually changes the resource, tagged `[<layer>]` or `[<layer> overrides <earlier layer>]` when
+relevant, with per-line `(overrides <layer>)` notes for the rarer case of a hunk mixing lines with
+different prior owners. Confirms the design's central claim: zero changes needed to any of the
+four format engines, since `LayerMerge` already accepts an arbitrary patch-list prefix
+(`LayerDiffAttribution`, reusing `GitDiff.Render`'s own hunk headers rather than a second diff
+engine). One real bug surfaced only by a manual smoke test against a real multi-layer chain, not
+the unit suite: the algorithm must read `ResolvedResource.PatchPathsInOrder` (the real, absolute
+patch paths), not `ChainStep.PatchPath` (the repo-relative path `--list` displays) — fixed before
+merging. Versioned as `0.22.0-alpha`. See `docs/ROADMAP.md`'s "Next up" for what's actionable now
+versus what needs either a solution repo that doesn't exist yet or an owner decision — YAML's own
+array-of-objects matching is the remaining `set` gap.

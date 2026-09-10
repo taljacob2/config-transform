@@ -207,6 +207,16 @@ chain — `patched in` with no path, and no `File.Exists` check on the declared 
 inconsistency a user noticed and reported; reusing `LayerChain.ResolveResource` for `--list` too
 closed both gaps at once (see `docs/CHANGELOG.md`'s entry for the exact fix).
 
+**A layer's directory depth is never fixed.** `--host` (`docs/HOST_LAYER_DESIGN.md`) adds an
+optional third axis, one more `extends` hop under Client/Environment
+(`.configtransform/Clients/<C>/<E>/Hosts/<H>/configtransform.json`), for a load-balanced
+Production environment where individual servers need genuinely different config from each other.
+It follows every rule above unchanged — a `Hosts/` layer that doesn't exist on disk is "nothing
+configured from here on," not an error; a declared-but-missing `patch` is still always an error;
+omitting `--host` resolves exactly as it always did. Nothing in `LayerChain`'s merge-order walk,
+or `--list`'s reverse lookup, assumes a fixed two-level depth — a repo that never declares a
+`Hosts/` layer is completely unaffected by this axis existing.
+
 ### 5.2 XML (.NET Framework)
 
 Uses `Microsoft.Web.Xdt`'s `XmlTransformation`/`XmlTransformableDocument`, applied once per patch

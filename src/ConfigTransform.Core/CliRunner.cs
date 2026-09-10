@@ -50,11 +50,11 @@ public static class CliRunner
                 if (options.Resource is not null)
                     LayerLister.ListReverseLookup(root, options.Resource, stdout);
                 else
-                    LayerLister.ListLayer(root, LayerPathResolver.Resolve(root, options.Client, options.Environment)!, stdout);
+                    LayerLister.ListLayer(root, LayerPathResolver.Resolve(root, options.Client, options.Environment, options.Host)!, stdout);
                 return 0;
             }
 
-            var targetLayerPath = LayerPathResolver.Resolve(root, options.Client, options.Environment);
+            var targetLayerPath = LayerPathResolver.Resolve(root, options.Client, options.Environment, options.Host);
             var chain = LayerChain.Build(root, targetLayerPath);
 
             if (options.Resource is not null)
@@ -83,6 +83,14 @@ public static class CliRunner
         PrintResolutionReport(stdout, options.Resource!, resolved);
 
         var merged = engine.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
+
+        if (options.DiffLayers)
+        {
+            var sections = LayerDiffAttribution.Compute(resolved, engine.Merge);
+            stdout.WriteLine();
+            stdout.WriteLine(sections.Count == 0 ? "(no changes)" : string.Join("\n\n", sections.Select(s => s.Diff)));
+            return;
+        }
 
         if (options.Diff)
         {
@@ -158,6 +166,8 @@ public static class CliRunner
                 var target = options.Client is not null
                     ? $"--client '{options.Client}' --environment '{options.Environment}'"
                     : $"--environment '{options.Environment}'";
+                if (options.Host is not null)
+                    target += $" --host '{options.Host}'";
                 stdout.WriteLine(
                     $"(no configtransform.json found for {target} -- expected at '{expected}'.\n" +
                     "Try: check the spelling, or run 'configtransform init' to scaffold it.)");
@@ -170,7 +180,7 @@ public static class CliRunner
             return;
         }
 
-        if (!options.DryRun && !options.Diff)
+        if (!options.DryRun && !options.Diff && !options.DiffLayers)
         {
             var outputRoot = options.Output
                 ?? throw new InvalidOperationException("--output was not set for a real run.");
@@ -210,7 +220,12 @@ public static class CliRunner
 
             stdout.WriteLine($"=== {resourcePath} ===");
 
-            if (options.Diff)
+            if (options.DiffLayers)
+            {
+                var sections = LayerDiffAttribution.Compute(resolved, engine.Merge);
+                stdout.WriteLine(sections.Count == 0 ? "(no changes)" : string.Join("\n\n", sections.Select(s => s.Diff)));
+            }
+            else if (options.Diff)
             {
                 var baseOnly = engine.Merge(resolved.BasePath, []);
                 var diff = GitDiff.Render(baseOnly, merged);

@@ -18,29 +18,31 @@ public static class InitRunner
         CliOptions options, string root, FormatEngineRegistry engines,
         TextWriter stdout, TextReader stdin, bool interactiveAllowed)
     {
-        if (options.Template)
+        if (options.Template is not null)
         {
-            RunTemplate(root, options.DryRun, stdout);
+            RunTemplate(root, options.Template, options.DryRun, stdout);
             return;
         }
 
         var flagsGiven = options.InitEnvironments.Count > 0 || options.InitClients.Count > 0 ||
-            options.InitResources.Count > 0 || options.Yes || options.NoScan;
+            options.InitResources.Count > 0 || options.InitHosts.Count > 0 || options.Yes || options.NoScan;
         var interactive = !flagsGiven && interactiveAllowed;
 
         IReadOnlyList<string> resources;
         IReadOnlyList<string> environments;
         IReadOnlyList<string> clients;
+        IReadOnlyList<string> hosts;
 
         if (interactive)
         {
-            (resources, environments, clients) = RunInteractive(options, root, engines, stdout, stdin);
+            (resources, environments, clients, hosts) = RunInteractive(options, root, engines, stdout, stdin);
         }
         else
         {
             resources = ResolveQuietResources(options, root, engines, interactiveAllowed, stdin, stdout);
             environments = options.InitEnvironments;
             clients = options.InitClients;
+            hosts = options.InitHosts;
 
             if (environments.Count == 0)
             {
@@ -49,14 +51,14 @@ public static class InitRunner
             }
         }
 
-        ValidateNoCaseCollision(root, environments, clients);
+        ValidateNoCaseCollision(root, environments, clients, hosts);
         ValidateResourcesExist(root, resources);
 
-        var files = InitPlanner.BuildPlan(root, resources, environments, clients);
+        var files = InitPlanner.BuildPlan(root, resources, environments, clients, hosts);
         WriteFiles(files, options.DryRun, stdout);
     }
 
-    private static void RunTemplate(string root, bool dryRun, TextWriter stdout)
+    private static void RunTemplate(string root, string variant, bool dryRun, TextWriter stdout)
     {
         var resourceFullPath = Path.Combine(root, InitTemplate.ResourcePath);
         if (File.Exists(resourceFullPath))
@@ -70,10 +72,11 @@ public static class InitRunner
             }
         }
 
-        WriteFiles(InitTemplate.BuildPlan(root), dryRun, stdout);
+        var files = variant == "hosts" ? InitTemplate.BuildHostsPlan(root) : InitTemplate.BuildPlan(root);
+        WriteFiles(files, dryRun, stdout);
     }
 
-    private static (IReadOnlyList<string> Resources, IReadOnlyList<string> Environments, IReadOnlyList<string> Clients)
+    private static (IReadOnlyList<string> Resources, IReadOnlyList<string> Environments, IReadOnlyList<string> Clients, IReadOnlyList<string> Hosts)
         RunInteractive(CliOptions options, string root, FormatEngineRegistry engines, TextWriter stdout, TextReader stdin)
     {
         var candidates = ScanCandidates(options, root, engines);
@@ -93,7 +96,17 @@ public static class InitRunner
         stdout.WriteLine("Clients (comma-separated, or blank for none yet):");
         var clients = SplitCsv(ReadLineOrFail(stdin, "Clients", "--client"));
 
-        return (resources, environments, clients);
+        // Hosts (docs/HOST_LAYER_DESIGN.md) are only meaningful once at least one client exists --
+        // cross-multiplied with every client x environment pair above, mirroring how clients
+        // themselves cross-multiply with environments.
+        IReadOnlyList<string> hosts = [];
+        if (clients.Count > 0)
+        {
+            stdout.WriteLine("Hosts, per client/environment (comma-separated, or blank for none):");
+            hosts = SplitCsv(ReadLineOrFail(stdin, "Hosts", "--host"));
+        }
+
+        return (resources, environments, clients, hosts);
     }
 
     private static IReadOnlyList<string> ResolveQuietResources(
@@ -200,11 +213,22 @@ public static class InitRunner
     /// Case-insensitive collision hazard already named for resource files by
     /// <see cref="FileResolver"/>/CLAUDE.md — a directory name is exactly as exposed to it (CI
     /// runners are typically Linux/case-sensitive, local dev typically Windows/case-insensitive).
+    /// Hosts (docs/HOST_LAYER_DESIGN.md) are checked once per client x environment pair being
+    /// scaffolded, since a `Hosts/` directory lives three levels deep, not flat like
+    /// Environments/Clients.
     /// </summary>
-    private static void ValidateNoCaseCollision(string root, IReadOnlyList<string> environments, IReadOnlyList<string> clients)
+    private static void ValidateNoCaseCollision(
+        string root, IReadOnlyList<string> environments, IReadOnlyList<string> clients, IReadOnlyList<string> hosts)
     {
         CheckCollisions(Path.Combine(root, ".configtransform", "Environments"), environments, "environment");
         CheckCollisions(Path.Combine(root, ".configtransform", "Clients"), clients, "client");
+
+        if (hosts.Count == 0)
+            return;
+
+        foreach (var environment in environments)
+            foreach (var client in clients)
+                CheckCollisions(Path.Combine(root, ".configtransform", "Clients", client, environment, "Hosts"), hosts, "host");
     }
 
     private static void CheckCollisions(string parentDir, IReadOnlyList<string> names, string kind)

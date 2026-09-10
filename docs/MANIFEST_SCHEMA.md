@@ -5,7 +5,11 @@ file this tool reads (`docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md` has the full des
 this document is the schema reference, kept in sync with it). One per **layer directory** under
 `.configtransform/` (the `.configtransform/` root name is itself configurable per repo; see
 [`CONFIG_MANAGEMENT.md`](CONFIG_MANAGEMENT.md) §10.5) — `.configtransform/Environments/<Env>/
-configtransform.json` and `.configtransform/Clients/<Client>/<Env>/configtransform.json`.
+configtransform.json` and `.configtransform/Clients/<Client>/<Env>/configtransform.json`, and
+optionally one level deeper still, `.configtransform/Clients/<Client>/<Env>/Hosts/<Host>/
+configtransform.json` (`docs/HOST_LAYER_DESIGN.md`) for per-server config within one
+client/environment. The schema below is identical at every depth — nothing about a
+`configtransform.json` file's own fields says which directory it lives in or why.
 
 This filename predates the design it now describes — `manifest.json` (one per project, a
 `directory` + `files[]` declaration) has been fully replaced, not kept alongside; there's nothing

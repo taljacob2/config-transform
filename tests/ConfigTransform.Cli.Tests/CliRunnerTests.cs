@@ -190,6 +190,72 @@ public class CliRunnerTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
+    public void DiffLayers_splits_the_diff_by_layer_and_tags_the_override(bool xml)
+    {
+        // TempCliWorkspace's ApiUrl goes dev.example.com (base) -> prod.example.com (Environment)
+        // -> clienta.example.com (Client) -- the same key at every layer, so the Client layer's
+        // own section should be tagged as overriding the Environment layer's.
+        using var workspace = new TempCliWorkspace();
+        var resource = xml ? workspace.XmlResourcePath : workspace.JsonResourcePath;
+
+        var stdout = new StringWriter();
+        var stderr = new StringWriter();
+
+        var exitCode = CliRunner.Run(new[]
+        {
+            "--resource", resource,
+            "--client", "ClientA", "--environment", "Production", "--diff-layers"
+        }, stdout, stderr, FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(0, exitCode);
+        var output = stdout.ToString();
+
+        Assert.Contains("[.configtransform/Environments/Production/configtransform.json]", output);
+        Assert.Contains(
+            "[.configtransform/Clients/ClientA/Production/configtransform.json overrides " +
+            ".configtransform/Environments/Production/configtransform.json]",
+            output);
+        Assert.Contains("dev.example.com", output);
+        Assert.Contains("prod.example.com", output);
+        Assert.Contains("clienta.example.com", output);
+        Assert.Empty(stderr.ToString());
+    }
+
+    [Fact]
+    public void DiffLayers_reports_no_changes_for_a_layer_that_does_not_exist_on_disk()
+    {
+        using var workspace = new TempCliWorkspace();
+
+        var stdout = new StringWriter();
+        var exitCode = CliRunner.Run(new[]
+        {
+            "--resource", workspace.XmlResourcePath,
+            "--client", "ClientB", "--environment", "Staging", "--diff-layers"
+        }, stdout, new StringWriter(), FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("(no changes)", stdout.ToString());
+    }
+
+    [Fact]
+    public void Diff_and_diff_layers_together_is_rejected_before_touching_the_workspace()
+    {
+        using var workspace = new TempCliWorkspace();
+
+        var stderr = new StringWriter();
+        var exitCode = CliRunner.Run(new[]
+        {
+            "--resource", workspace.XmlResourcePath,
+            "--client", "ClientA", "--environment", "Production", "--diff", "--diff-layers"
+        }, new StringWriter(), stderr, FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("--diff and --diff-layers are mutually exclusive", stderr.ToString());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
     public void Real_run_writes_only_to_the_explicit_output_path_and_leaves_the_base_file_untouched(bool xml)
     {
         using var workspace = new TempCliWorkspace();
@@ -329,6 +395,84 @@ public class CliRunnerTests
     }
 
     [Fact]
+    public void Host_layer_overrides_the_client_layers_value_when_targeted()
+    {
+        using var workspace = new TempCliWorkspace();
+        var hostDir = Path.Combine(workspace.RootPath, ".configtransform", "Clients", "ClientA", "Production", "Hosts", "192.168.10.10");
+        Directory.CreateDirectory(hostDir);
+        File.WriteAllText(Path.Combine(hostDir, "patch-Project-App.config.xml"), """
+            <?xml version="1.0" encoding="utf-8"?>
+            <configuration xmlns:xdt="http://schemas.microsoft.com/XML-Document-Transform">
+              <appSettings>
+                <add key="ApiUrl" value="https://host-a.example.com" xdt:Transform="SetAttributes" xdt:Locator="Match(key)" />
+              </appSettings>
+            </configuration>
+            """);
+        File.WriteAllText(Path.Combine(hostDir, "configtransform.json"), """
+            {
+              "extends": ".configtransform/Clients/ClientA/Production/configtransform.json",
+              "resources": [
+                { "path": "Project/App.config", "patch": ".configtransform/Clients/ClientA/Production/Hosts/192.168.10.10/patch-Project-App.config.xml" }
+              ]
+            }
+            """);
+
+        var stdout = new StringWriter();
+        var exitCode = CliRunner.Run(new[]
+        {
+            "--resource", workspace.XmlResourcePath,
+            "--client", "ClientA", "--environment", "Production", "--host", "192.168.10.10", "--dry-run"
+        }, stdout, new StringWriter(), FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("https://host-a.example.com", stdout.ToString());
+    }
+
+    [Fact]
+    public void Omitting_host_still_resolves_at_the_client_layer_unaffected_by_an_unrelated_hosts_folder()
+    {
+        using var workspace = new TempCliWorkspace();
+        var hostDir = Path.Combine(workspace.RootPath, ".configtransform", "Clients", "ClientA", "Production", "Hosts", "192.168.10.10");
+        Directory.CreateDirectory(hostDir);
+        File.WriteAllText(Path.Combine(hostDir, "configtransform.json"), """
+            {
+              "extends": ".configtransform/Clients/ClientA/Production/configtransform.json",
+              "resources": []
+            }
+            """);
+
+        var stdout = new StringWriter();
+        var exitCode = CliRunner.Run(new[]
+        {
+            "--resource", workspace.XmlResourcePath,
+            "--client", "ClientA", "--environment", "Production", "--dry-run"
+        }, stdout, new StringWriter(), FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("https://clienta.example.com", stdout.ToString());
+    }
+
+    [Fact]
+    public void Omitting_resource_names_the_missing_host_when_no_configtransform_json_exists_for_it()
+    {
+        using var workspace = new TempCliWorkspace();
+
+        var stdout = new StringWriter();
+        var stderr = new StringWriter();
+
+        var exitCode = CliRunner.Run(new[]
+        {
+            "--client", "ClientA", "--environment", "Production", "--host", "192.168.10.99", "--dry-run"
+        }, stdout, stderr, FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(0, exitCode);
+        var output = stdout.ToString();
+        Assert.Contains("no configtransform.json found for --client 'ClientA' --environment 'Production' --host '192.168.10.99'", output);
+        Assert.Contains(".configtransform/Clients/ClientA/Production/Hosts/192.168.10.99/configtransform.json", output);
+        Assert.Empty(stderr.ToString());
+    }
+
+    [Fact]
     public void Omitting_resource_diff_covers_both_formats_in_one_call()
     {
         using var workspace = new TempCliWorkspace();
@@ -396,6 +540,32 @@ public class CliRunnerTests
         Assert.True(baseIndex >= 0 && environmentIndex >= 0 && clientIndex >= 0);
         Assert.True(baseIndex < environmentIndex);
         Assert.True(environmentIndex < clientIndex);
+    }
+
+    [Fact]
+    public void List_with_host_shows_the_chain_through_the_Hosts_layer()
+    {
+        using var workspace = new TempCliWorkspace();
+        var hostDir = Path.Combine(workspace.RootPath, ".configtransform", "Clients", "ClientA", "Production", "Hosts", "192.168.10.10");
+        Directory.CreateDirectory(hostDir);
+        File.WriteAllText(Path.Combine(hostDir, "configtransform.json"), """
+            {
+              "extends": ".configtransform/Clients/ClientA/Production/configtransform.json",
+              "resources": []
+            }
+            """);
+
+        var stdout = new StringWriter();
+
+        var exitCode = CliRunner.Run(new[]
+        {
+            "--list", "--client", "ClientA", "--environment", "Production", "--host", "192.168.10.10"
+        }, stdout, new StringWriter(), FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(0, exitCode);
+        var output = stdout.ToString();
+        Assert.Contains("Clients/ClientA/Production/Hosts/192.168.10.10/configtransform.json", output);
+        Assert.Contains("Clients/ClientA/Production/configtransform.json", output);
     }
 
     [Fact]

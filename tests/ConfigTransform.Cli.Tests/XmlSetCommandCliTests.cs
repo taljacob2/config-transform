@@ -183,6 +183,72 @@ public class XmlSetCommandCliTests
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(layerPath), "\"path\""));
     }
 
+    [Fact]
+    public void Set_creates_a_new_host_layer_defaulting_extends_to_the_client_environment_layer()
+    {
+        using var workspace = new TempCliWorkspace();
+        var stdout = new StringWriter();
+        var stderr = new StringWriter();
+
+        var exitCode = CliRunner.Run(new[]
+        {
+            "set", "--resource", workspace.XmlResourcePath,
+            "--client", "ClientA", "--environment", "Production", "--host", "192.168.10.10",
+            "--match", "ApiUrl", "--set", "https://host-a.example.com"
+        }, stdout, stderr, FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(0, exitCode);
+        Assert.Empty(stderr.ToString());
+
+        var layerPath = Path.Combine(
+            workspace.RootPath, ".configtransform", "Clients", "ClientA", "Production", "Hosts", "192.168.10.10", "configtransform.json");
+        Assert.True(File.Exists(layerPath));
+        var layer = LayerManifestLoader.Load(layerPath);
+        // Not the Environment layer a Client-layer target would default to -- the Client/
+        // Environment layer one level up, per docs/HOST_LAYER_DESIGN.md.
+        Assert.Equal(".configtransform/Clients/ClientA/Production/configtransform.json", layer.Extends);
+        Assert.Equal(workspace.XmlResourcePath, layer.Resources.Single().Path);
+
+        var patchPath = Path.Combine(
+            workspace.RootPath, ".configtransform", "Clients", "ClientA", "Production", "Hosts", "192.168.10.10", "patch-Project-App.config.xml");
+        Assert.True(File.Exists(patchPath));
+        Assert.Contains("https://host-a.example.com", File.ReadAllText(patchPath));
+
+        // The auto-diff reflects the full chain (base -> Environment -> Client -> Host), not just
+        // the host's own overlay in isolation.
+        Assert.Contains("dev.example.com", stdout.ToString());
+        Assert.Contains("host-a.example.com", stdout.ToString());
+    }
+
+    [Fact]
+    public void Set_re_running_against_a_host_layer_updates_the_same_overlay_entry_in_place()
+    {
+        using var workspace = new TempCliWorkspace();
+
+        var exitCode1 = CliRunner.Run(new[]
+        {
+            "set", "--resource", workspace.XmlResourcePath,
+            "--client", "ClientA", "--environment", "Production", "--host", "192.168.10.10",
+            "--match", "ApiUrl", "--set", "https://v1.example.com"
+        }, new StringWriter(), new StringWriter(), FormatEngines.All, workspace.RootPath);
+        Assert.Equal(0, exitCode1);
+
+        var exitCode2 = CliRunner.Run(new[]
+        {
+            "set", "--resource", workspace.XmlResourcePath,
+            "--client", "ClientA", "--environment", "Production", "--host", "192.168.10.10",
+            "--match", "ApiUrl", "--set", "https://v2.example.com"
+        }, new StringWriter(), new StringWriter(), FormatEngines.All, workspace.RootPath);
+        Assert.Equal(0, exitCode2);
+
+        var patchPath = Path.Combine(
+            workspace.RootPath, ".configtransform", "Clients", "ClientA", "Production", "Hosts", "192.168.10.10", "patch-Project-App.config.xml");
+        var patchContent = File.ReadAllText(patchPath);
+        Assert.Contains("https://v2.example.com", patchContent);
+        Assert.DoesNotContain("https://v1.example.com", patchContent);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(patchContent, "<add "));
+    }
+
     private static Dictionary<string, DateTime> Snapshot(string root) =>
         Directory.GetFiles(root, "*", SearchOption.AllDirectories)
             .ToDictionary(f => f, File.GetLastWriteTimeUtc);
