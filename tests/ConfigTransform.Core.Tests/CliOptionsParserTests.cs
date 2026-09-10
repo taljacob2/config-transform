@@ -607,11 +607,42 @@ public class CliOptionsParserTests
     }
 
     [Fact]
-    public void Init_verb_parses_a_bare_template_switch()
+    public void Init_verb_parses_a_bare_template_switch_as_the_default_variant()
     {
         var options = CliOptionsParser.Parse(new[] { "init", "--template" });
 
-        Assert.True(options.Template);
+        Assert.Equal("default", options.Template);
+    }
+
+    [Fact]
+    public void Init_verb_parses_an_explicit_template_default_variant()
+    {
+        var options = CliOptionsParser.Parse(new[] { "init", "--template", "default" });
+
+        Assert.Equal("default", options.Template);
+    }
+
+    [Fact]
+    public void Init_verb_parses_the_template_hosts_variant()
+    {
+        var options = CliOptionsParser.Parse(new[] { "init", "--template", "hosts" });
+
+        Assert.Equal("hosts", options.Template);
+    }
+
+    [Fact]
+    public void Init_verb_rejects_an_unrecognized_template_variant()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[] { "init", "--template", "nonsense" }));
+        Assert.Contains("Unrecognized --template variant", ex.Message);
+    }
+
+    [Fact]
+    public void Init_verb_treats_a_trailing_template_followed_by_help_as_help_not_a_variant()
+    {
+        var options = CliOptionsParser.Parse(new[] { "init", "--template", "help" });
+
+        Assert.True(options.Help);
     }
 
     [Theory]

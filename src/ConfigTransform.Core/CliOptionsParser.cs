@@ -33,7 +33,9 @@ public static class CliOptionsParser
 {
     private static readonly CliOptions HelpOptions = new(
         null, null, null, null, null, DryRun: false, Diff: false, List: false, Set: false, Help: true, [], [],
-        Init: false, [], [], [], [], null, Yes: false, NoScan: false, Template: false);
+        Init: false, [], [], [], [], null, Yes: false, NoScan: false, Template: null);
+
+    private static readonly string[] TemplateVariants = ["default", "hosts"];
 
     // Every token the switch below recognizes as a flag (or the bare "help" verb it also
     // accepts) — used only to power the "did you mean" suggestion on an unrecognized argument,
@@ -74,7 +76,7 @@ public static class CliOptionsParser
         string? scanRoot = null;
         var yes = false;
         var noScan = false;
-        var template = false;
+        string? template = null;
 
         for (var i = 0; i < rest.Length; i++)
         {
@@ -141,7 +143,15 @@ public static class CliOptionsParser
                     noScan = true;
                     break;
                 case "--template":
-                    template = true;
+                    // Value-taking: bare --template keeps meaning exactly what it always has
+                    // ("default"); --template hosts selects the --host-aware variant
+                    // (docs/HOST_LAYER_DESIGN.md decision log #7). The next token is consumed as
+                    // the variant only when it isn't itself a recognized flag/verb (KnownFlags
+                    // includes "help", so `init --template help` still shows help rather than
+                    // failing on an unknown variant name).
+                    template = i + 1 < rest.Length && !KnownFlags.Contains(rest[i + 1])
+                        ? rest[++i]
+                        : "default";
                     break;
                 default:
                     var suggestion = FindClosestFlag(rest[i]);
@@ -181,11 +191,13 @@ public static class CliOptionsParser
             if (setFields.Count > 0)
                 throw new ArgumentException("--set is not valid with 'init'.\nTry: drop --set; that's a 'set' flag, not an 'init' one.");
 
-            if (template)
+            if (template is not null)
             {
                 if (scanRoot is not null || initEnvironments.Count > 0 || initClients.Count > 0 ||
                     initResources.Count > 0 || initHosts.Count > 0 || noScan || yes)
                     throw new ArgumentException("--template is mutually exclusive with every other 'init' flag.\nTry: configtransform init --template on its own, or drop --template to scaffold a custom tree.");
+                if (!TemplateVariants.Contains(template))
+                    throw new ArgumentException($"Unrecognized --template variant: '{template}'.\nTry: configtransform init --template (the default tree), or configtransform init --template hosts.");
             }
             else
             {

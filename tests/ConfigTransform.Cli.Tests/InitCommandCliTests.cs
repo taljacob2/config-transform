@@ -310,6 +310,44 @@ public class InitCommandCliTests
     }
 
     [Fact]
+    public void Template_hosts_variant_scaffolds_a_host_layer_resolvable_via_host()
+    {
+        using var workspace = new TempDirectory();
+
+        var initExit = CliRunner.Run(new[] { "init", "--template", "hosts" },
+            new StringWriter(), new StringWriter(), FormatEngines.All, workspace.Path);
+        Assert.Equal(0, initExit);
+
+        var stdout = new StringWriter();
+        var resolveExit = CliRunner.Run(new[]
+        {
+            "--client", "Client-A", "--environment", "Production", "--host", InitTemplate.HostName,
+            "--resource", InitTemplate.ResourcePath, "--dry-run"
+        }, stdout, new StringWriter(), FormatEngines.All, workspace.Path);
+
+        Assert.Equal(0, resolveExit);
+        Assert.Contains($"Hello, world! (from Client-A Production {InitTemplate.HostName} config)", stdout.ToString());
+    }
+
+    [Fact]
+    public void Template_hosts_variant_leaves_every_other_client_environment_unaffected()
+    {
+        using var workspace = new TempDirectory();
+
+        CliRunner.Run(new[] { "init", "--template", "hosts" },
+            new StringWriter(), new StringWriter(), FormatEngines.All, workspace.Path);
+
+        var stdout = new StringWriter();
+        var resolveExit = CliRunner.Run(new[]
+        {
+            "--client", "Client-A", "--environment", "Production", "--resource", InitTemplate.ResourcePath, "--dry-run"
+        }, stdout, new StringWriter(), FormatEngines.All, workspace.Path);
+
+        Assert.Equal(0, resolveExit);
+        Assert.Contains("Hello, world! (from Client-A Production config)", stdout.ToString());
+    }
+
+    [Fact]
     public void Template_mode_refuses_to_overwrite_a_differently_content_resource_file()
     {
         using var workspace = new TempDirectory();

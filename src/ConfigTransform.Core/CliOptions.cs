@@ -31,8 +31,10 @@ namespace ConfigTransform.Core;
 /// <c>--resource</c>/<c>--host</c> flags. <see cref="InitHosts"/> cross-multiplies with every
 /// declared client × environment pair, same as <see cref="InitClients"/> already cross-multiplies
 /// with <see cref="InitEnvironments"/> (docs/HOST_LAYER_DESIGN.md). <see cref="Template"/> selects
-/// the one canned starter tree instead of scanning/prompting/flags, mutually exclusive with every
-/// other init-specific flag.
+/// one of the canned starter trees instead of scanning/prompting/flags, mutually exclusive with
+/// every other init-specific flag — <c>null</c> means <c>--template</c> wasn't given, a non-null
+/// value is the variant name (<c>"default"</c> for a bare <c>--template</c>, or <c>"hosts"</c> for
+/// <c>--template hosts</c>, docs/HOST_LAYER_DESIGN.md decision log #7).
 /// </summary>
 public sealed record CliOptions(
     string? Resource,
@@ -55,4 +57,4 @@ public sealed record CliOptions(
     string? ScanRoot,
     bool Yes,
     bool NoScan,
-    bool Template);
+    string? Template);

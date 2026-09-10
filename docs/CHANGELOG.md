@@ -6,6 +6,22 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.20.0-alpha] - 2026-09-10
+
+### Added
+
+- **`init --template` gains a `hosts` variant** (`docs/HOST_LAYER_DESIGN.md` decision log #7) —
+  `CliOptions.Template` changes from `bool` to `string?` (`null` = not given; the parsed variant
+  name otherwise), and `--template` becomes value-taking: a bare `--template` (or the explicit
+  `--template default`) still builds exactly the existing hello-world tree, byte-for-byte, while
+  `--template hosts` additionally scaffolds one worked
+  `Hosts/Host-1/configtransform.json` example under the template's existing Client-A/Production
+  layer (`InitTemplate.BuildHostsPlan`), reusing every file the default variant already produces.
+  `CliOptionsParser` peeks the token after `--template`: a value that isn't itself a recognized
+  flag (or the `help` verb, so `init --template help` still shows help) is consumed as the
+  variant; anything else defaults to `"default"`. An unrecognized variant name is a validation
+  error with a `Try:` hint naming both real variants.
+
 ## [0.19.0-alpha] - 2026-09-10
 
 ### Added

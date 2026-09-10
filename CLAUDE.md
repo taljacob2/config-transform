@@ -266,7 +266,12 @@ everywhere `--client`/`--environment` already do — a plain resolve, `--dry-run
 `--list`, `set` (defaulting a new Host layer's `extends` to its Client/Environment layer), and
 `init` (a repeatable `--host` flag/prompt, cross-multiplied with every client × environment pair
 the same way clients already cross-multiply with environments). Versioned as `0.19.0-alpha`.
-`init --template`'s own `--host`-aware variant is a deliberately separate, deferred follow-up —
-see `docs/ROADMAP.md`'s "Next up" for what's actionable now versus what needs either a solution
-repo that doesn't exist yet or an owner decision — YAML's own array-of-objects matching is the
-other remaining `set` gap.
+`init --template`'s own `--host`-aware variant has since landed too (`docs/HOST_LAYER_DESIGN.md`
+decision log #7): `--template` becomes a value-taking flag — a bare `--template`/`--template
+default` still builds the existing hello-world tree byte-for-byte, `--template hosts` additionally
+scaffolds one worked `Hosts/Host-1/` example under the template's Client-A/Production layer.
+Versioned as `0.20.0-alpha`. `config-transform-pilot` now has a real multi-host scenario too
+(two `Hosts/` layers under `Clients/Acme/Production`, verified via real CI dispatch). See
+`docs/ROADMAP.md`'s "Next up" for what's actionable now versus what needs either a solution repo
+that doesn't exist yet or an owner decision — YAML's own array-of-objects matching is the
+remaining `set` gap.

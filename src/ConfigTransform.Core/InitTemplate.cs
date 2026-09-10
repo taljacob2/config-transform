@@ -1,18 +1,25 @@
 namespace ConfigTransform.Core;
 
 /// <summary>
-/// The one canned `init --template` starter tree (docs/INIT_COMMAND_DESIGN.md "Template mode"):
+/// The canned `init --template` starter trees (docs/INIT_COMMAND_DESIGN.md "Template mode"):
 /// two Environments (Production, Test), two Clients (Client-A, Client-B), and one JSON resource,
 /// <see cref="ResourcePath"/>, whose "message" field is overridden with a distinct value at every
 /// layer -- naming that layer -- so the tree is immediately runnable as a live demo of the
-/// override chain, not just proof the tree was created. `--template` is a bare switch: there is
-/// exactly one template, meant to stay the basic/default starter either way (see the design doc's
-/// decision log for why a named flag was rejected).
+/// override chain, not just proof the tree was created. `--template` is a value-taking flag with
+/// two variants (docs/HOST_LAYER_DESIGN.md decision log #7): a bare `--template` (or
+/// `--template default`) builds the plain two-axis tree via <see cref="BuildPlan"/>, unchanged
+/// byte-for-byte from before the `hosts` variant existed; `--template hosts` additionally scaffolds
+/// one illustrative <see cref="HostName"/> layer under Client-A/Production via
+/// <see cref="BuildHostsPlan"/>, reusing every file the default variant already produces rather
+/// than duplicating the tree.
 /// </summary>
 public static class InitTemplate
 {
     public const string ResourcePath = "configtransform-template.json";
+    public const string HostName = "Host-1";
     private const string PatchExtension = "json";
+    private const string HostClient = "Client-A";
+    private const string HostEnvironment = "Production";
 
     public static readonly IReadOnlyList<string> Environments = ["Production", "Test"];
     public static readonly IReadOnlyList<string> Clients = ["Client-A", "Client-B"];
@@ -51,6 +58,33 @@ public static class InitTemplate
                 files.Add(new InitFile(clientLayerFullPath, LayerChain.ToRepoRelative(root, clientLayerFullPath), LayerManifestSerializer.Serialize(clientManifest)));
             }
         }
+
+        return files;
+    }
+
+    /// <summary>
+    /// The `hosts` variant: everything <see cref="BuildPlan"/> already produces, plus one worked
+    /// <c>Hosts/&lt;<see cref="HostName"/>&gt;/configtransform.json</c> example under
+    /// Client-A/Production -- the one client/environment pair a `Hosts/` layer can realistically
+    /// exist under in this fixed, illustrative tree. `extends` defaults to that Client/Environment
+    /// layer's own relative path, the same convention <see cref="BuildPlan"/>'s Client layers
+    /// already follow for their Environment layer, one level deeper.
+    /// </summary>
+    public static IReadOnlyList<InitFile> BuildHostsPlan(string root)
+    {
+        var files = BuildPlan(root).ToList();
+
+        var clientLayerFullPath = LayerPathResolver.Resolve(root, HostClient, HostEnvironment)!;
+        var clientLayerRelative = LayerChain.ToRepoRelative(root, clientLayerFullPath);
+
+        var hostLayerFullPath = LayerPathResolver.Resolve(root, HostClient, HostEnvironment, HostName)!;
+        var hostPatchFullPath = PatchPath(hostLayerFullPath);
+        var hostPatchRelative = LayerChain.ToRepoRelative(root, hostPatchFullPath);
+
+        files.Add(new InitFile(hostPatchFullPath, hostPatchRelative, Message($"{HostClient} {HostEnvironment} {HostName} config")));
+
+        var hostManifest = new LayerManifest(clientLayerRelative, [new ResourceEntry(ResourcePath, hostPatchRelative)]);
+        files.Add(new InitFile(hostLayerFullPath, LayerChain.ToRepoRelative(root, hostLayerFullPath), LayerManifestSerializer.Serialize(hostManifest)));
 
         return files;
     }

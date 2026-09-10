@@ -18,9 +18,9 @@ public static class InitRunner
         CliOptions options, string root, FormatEngineRegistry engines,
         TextWriter stdout, TextReader stdin, bool interactiveAllowed)
     {
-        if (options.Template)
+        if (options.Template is not null)
         {
-            RunTemplate(root, options.DryRun, stdout);
+            RunTemplate(root, options.Template, options.DryRun, stdout);
             return;
         }
 
@@ -58,7 +58,7 @@ public static class InitRunner
         WriteFiles(files, options.DryRun, stdout);
     }
 
-    private static void RunTemplate(string root, bool dryRun, TextWriter stdout)
+    private static void RunTemplate(string root, string variant, bool dryRun, TextWriter stdout)
     {
         var resourceFullPath = Path.Combine(root, InitTemplate.ResourcePath);
         if (File.Exists(resourceFullPath))
@@ -72,7 +72,8 @@ public static class InitRunner
             }
         }
 
-        WriteFiles(InitTemplate.BuildPlan(root), dryRun, stdout);
+        var files = variant == "hosts" ? InitTemplate.BuildHostsPlan(root) : InitTemplate.BuildPlan(root);
+        WriteFiles(files, dryRun, stdout);
     }
 
     private static (IReadOnlyList<string> Resources, IReadOnlyList<string> Environments, IReadOnlyList<string> Clients, IReadOnlyList<string> Hosts)
