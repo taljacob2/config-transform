@@ -1,12 +1,13 @@
 # Host layer (`--host`) — design
 
-**Status: PR D (core: resolve/`--dry-run`/`--diff`/`--list`/`set`/`init` scaffolding) is
-implemented — see `docs/CHANGELOG.md`'s `[Unreleased]` entry and `docs/USAGE.md` for the current
-flag reference. PR E (decision log #7, `--template hosts`) is not yet implemented.** Every
-"Changes needed"/"No change needed" claim below was verified against the real code before this
-was written, and PR D's implementation follows this design directly — no changes to the design
-itself were needed along the way, only the two small precision fixes decision log #6/#7 already
-record.
+**Status: both PRs are implemented. PR D (core: resolve/`--dry-run`/`--diff`/`--list`/`set`/`init`
+scaffolding) shipped as `0.19.0-alpha` — see `docs/CHANGELOG.md`'s `[0.19.0-alpha]` entry and
+`docs/USAGE.md` for the current flag reference. PR E (decision log #7, `--template hosts`) is
+implemented too, versioned as `0.20.0-alpha` — see `docs/CHANGELOG.md`'s `[0.20.0-alpha]` entry.**
+Every "Changes needed"/"No change needed" claim below was verified against the real code before
+this was written, and both PRs' implementations follow this design directly — no changes to the
+design itself were needed along the way, only the two small precision fixes decision log #6/#7
+already record.
 
 ## Why this exists, and why now
 

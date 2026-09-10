@@ -260,7 +260,7 @@ init --environment, -e <EnvName>           repeatable — every environment to c
      --scan-root <dir>                     where to scan for candidate resources (default: repo root)
      --yes                                 accept every scanned candidate without asking
      --no-scan                             don't scan — requires at least one --resource
-     --template                            the one canned starter tree — a bare switch, mutually exclusive with every flag above
+     --template [default|hosts]            a canned starter tree — mutually exclusive with every flag above; bare --template (or --template default) is the plain tree, --template hosts adds one worked Hosts/ layer example
      --dry-run                             print what would be written; nothing written to disk
 ```
 
@@ -309,6 +309,13 @@ dotnet run --project src/ConfigTransform.Cli -- \
 
 # Preview without writing
 dotnet run --project src/ConfigTransform.Cli -- init --template --dry-run
+
+# Same starter tree, plus one worked Hosts/Host-1/ layer under Client-A/Production
+dotnet run --project src/ConfigTransform.Cli -- init --template hosts
+
+dotnet run --project src/ConfigTransform.Cli -- \
+  --client Client-A --environment Production --host Host-1 \
+  --resource configtransform-template.json --diff
 
 # Scaffold a per-host layer for a specific load-balanced server -- requires --client and
 # --environment, same rule --host follows everywhere else

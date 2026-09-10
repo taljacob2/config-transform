@@ -590,10 +590,16 @@ Host layer to its Client/Environment layer); `InitPlanner`/`InitRunner` gain `--
 cross-multiplied with every client × environment pair the same way clients already cross-multiply
 with environments. `--host`/`-H` (capital, a deliberate, documented tradeoff since lowercase `-h`
 is already `--help`) is the flag everywhere `--client`/`--environment` already apply. 31 new tests.
-Versioned as `0.19.0-alpha`. `init --template`'s own `--host`-aware variant
-(`docs/HOST_LAYER_DESIGN.md` decision log #7, `--template` becoming a value-taking flag) is
-deliberately a separate, deferred PR — see "Next up" below — and a pilot (`config-transform-pilot`)
-follow-up with a real multi-host scenario hasn't started either.
+Versioned as `0.19.0-alpha`. `init --template`'s own `--host`-aware variant has since landed too
+(`docs/HOST_LAYER_DESIGN.md` decision log #7): `CliOptions.Template` changes from `bool` to
+`string?`, and `--template` becomes a value-taking flag — a bare `--template`/`--template default`
+still builds the existing tree byte-for-byte, `--template hosts` additionally scaffolds one worked
+`Hosts/Host-1/` example under the template's Client-A/Production layer
+(`InitTemplate.BuildHostsPlan`). Versioned as `0.20.0-alpha`. `config-transform-pilot` also has a
+real multi-host scenario now (two `Hosts/` layers under `Clients/Acme/Production`, each overriding
+a distinct cache-node address, verified via real CI dispatch both with and without `--host` — see
+that repo's `FINDINGS.md`), re-pinned to `0.19.0-alpha` when it was added; re-pinning it again to
+`0.20.0-alpha` is a trivial follow-up, not tracked as its own item here.
 
 ## Next up
 
@@ -603,15 +609,6 @@ repo owner can make. Not a "next slice" in the same sense as the ones before thi
 from below (or something new) when ready, rather than assuming the next item in this list is the
 default next step.
 
-- **`init --template`'s `--host`-aware variant** (`docs/HOST_LAYER_DESIGN.md` decision log #7) —
-  `--template` becomes a value-taking flag (`--template`/`--template hosts`) instead of a bare
-  switch; the `hosts` variant adds one worked `Hosts/<H>/` example to the canned tree. The core
-  `--host` axis itself is implemented (see "Current state" above) — this is purely the deferred
-  convenience/demo addition, not a design blocker.
-- **`config-transform-pilot` multi-host scenario** — the pilot has no real load-balanced-Production
-  scenario today; adding one (mirroring the `.env`/YAML pattern of a dedicated pilot addition once
-  a feature ships) is the natural way to validate `--host` against something more real than
-  `docs/HOST_LAYER_DESIGN.md`'s own worked example.
 - **Finish `set`** — XML's "update an existing element" case (including matching an existing
   item among repeated siblings, and now `Insert` for a genuinely brand-new element — all closed,
   see "Current state" above), JSON's single-key-path case and array-of-objects matching
