@@ -95,7 +95,12 @@ public class XmlLayerMergerInsertTests
                 </configuration>
                 """);
 
-            var merged = XmlLayerMerger.Merge(basePath, [patchPath]);
+            // File.WriteAllText writes the raw string literals above verbatim, including
+            // whatever line ending the checked-out source itself has (CRLF on a Windows CI
+            // runner, LF elsewhere -- see CliRunnerTests.cs line 523 for the same root cause);
+            // InsertWhitespaceFormatter correctly reuses that real, on-disk whitespace, so the
+            // assertion normalizes to LF rather than asserting a platform-specific line ending.
+            var merged = XmlLayerMerger.Merge(basePath, [patchPath]).Replace("\r\n", "\n");
 
             Assert.Contains(
                 "      <authorization>\n" +
@@ -137,7 +142,10 @@ public class XmlLayerMergerInsertTests
             var patchPath = Path.Combine(tmp.FullName, "patch.config.xml");
             File.WriteAllText(patchPath, overlay);
 
-            var merged = XmlLayerMerger.Merge(basePath, [patchPath]);
+            // Normalized to LF for the raw-string assertion below, same reasoning as the sibling
+            // test above -- harmless here too even though this scenario's content doesn't come
+            // from a raw string literal (defense in depth, consistent with this file's other test).
+            var merged = XmlLayerMerger.Merge(basePath, [patchPath]).Replace("\r\n", "\n");
             var rule = XDocument.Parse(merged).Root!
                 .Element("system.webServer")!.Element("rewrite")!.Element("rules")!
                 .Element("rule")!;
