@@ -637,6 +637,15 @@ default next step.
      coupled to `System.Text.Json.Nodes` types; porting it to YAML's `Dictionary<string, object>`/
      `List<object>` object graph is real, separable work, not a design blocker. See
      `docs/FIELD_AUTHORING_DESIGN.md`'s "JSON / YAML" section and "Open items".
+- **Per-layer diff attribution (`--diff-layers`)** — `docs/DIFF_LAYERS_DESIGN.md`, design only,
+  not yet implemented. Raised by the repo owner while looking at a real multi-hop `--diff`: split
+  today's single base-vs-merged diff into one diff per layer that actually changes the resource,
+  each hunk tagged with the layer responsible and, when it re-touches a line an earlier layer
+  already changed, which layer it overrides. Actionable now — the whole feature is buildable on
+  top of `LayerMerge`'s existing `Merge(basePath, patchPathsPrefix)` shape with zero changes to
+  any of the four format engines (see the design doc's "How this is computed"); the one open
+  question worth resolving before implementing is the multi-hunk owner-map case, not a design
+  blocker.
 - **`docs/MANIFEST_SCHEMA.md`'s filename vs. its content** — now describes the
   `configtransform.json` schema in full (the self-describing-overlays implementation above), but
   kept its old filename to avoid a large cross-reference rename across `docs/`. Worth revisiting

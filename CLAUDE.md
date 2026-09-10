@@ -279,6 +279,11 @@ collapsing to one line (verified empirically, not assumed) — never a correctne
 broken in a diff. `XmlLayerMerger` now runs a new `InsertWhitespaceFormatter` once per patch (see
 `docs/FIELD_AUTHORING_DESIGN.md`'s "Merge-time whitespace, not a `set`-time concern"), using
 before/after element-reference-identity diffing to reformat exactly the nodes one `Insert` added.
-Versioned as `0.21.0-alpha`. See `docs/ROADMAP.md`'s "Next up" for what's actionable now versus
-what needs either a solution repo that doesn't exist yet or an owner decision — YAML's own
-array-of-objects matching is the remaining `set` gap.
+Versioned as `0.21.0-alpha`. A new design doc, not yet implemented, has since been written:
+`docs/DIFF_LAYERS_DESIGN.md` proposes an opt-in `--diff-layers` flag that splits `--diff`'s
+single base-vs-merged diff into one diff per layer that actually changes a resource, tagging a
+changed line with which earlier layer it overrides when relevant — raised by the repo owner while
+reading a real multi-hop `--diff`, buildable with zero changes to any of the four format engines
+since `LayerMerge` already accepts an arbitrary patch-list prefix. See `docs/ROADMAP.md`'s "Next
+up" for what's actionable now versus what needs either a solution repo that doesn't exist yet or
+an owner decision — YAML's own array-of-objects matching is the remaining `set` gap.
