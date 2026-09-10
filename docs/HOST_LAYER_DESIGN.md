@@ -93,8 +93,20 @@ configtransform --client Acme --environment Production --dry-run
   `--dry-run`/`--diff`, `--list`, and `set`.
 - `HelpPrinter` gains `--host` in the flag reference wherever `--client`/`--environment` are
   already listed.
-- `set`/`init` need to decide how (or whether, for a first version) they scaffold a *new* `Hosts/`
-  layer — see "Open items" below; this is real, separable scope, not a blocker for the read path.
+- `init`'s interactive form gains an optional "does this client/environment need per-host
+  overrides?" prompt, and its flag-driven quiet mode gains a repeatable `--host <name>` flag
+  (paired with a `--client`/`--environment` pair, same shape `InitClients`/`InitEnvironments`/
+  `InitResources` already use), so a user can scaffold a `Hosts/<H>/configtransform.json` without
+  hand-authoring it — defaulting its `extends` to the matching Client/Environment layer, the same
+  default `init`/`set` already apply one level up.
+- `CliOptions.Template` changes shape from `bool` to `string?` (`null` = not using `--template`;
+  `"default"`/`"hosts"` = which variant), so `--template`'s existing bare/no-value form keeps
+  meaning today's minimal canned tree (nothing published about it needs to change) while
+  `--template hosts` selects a variant that additionally scaffolds one worked `Hosts/<H>/`
+  example under the template's existing client/environment — see decision log #7 below for why
+  a value beats a second modifier flag or leaving `--template` untouched.
+- `set` still needs its own decision for authoring/updating a `Hosts/` layer's fields via
+  `--match`/`--set` — deliberately left open below, separable from `init`'s scaffolding.
 
 **No change needed** (verified against the real code, not assumed):
 - `LayerChain.Build`/`ResolveResource`/`PrintChain` — already walk `extends` to arbitrary depth;
@@ -129,15 +141,35 @@ configtransform --client Acme --environment Production --dry-run
 5. **Rejected: hyphenated `Client-Host` naming.** See "Why this exists, and why now" above — kept
    here as the explicitly-considered-and-rejected alternative per this repo's decision-log
    convention (`FIELD_AUTHORING_DESIGN.md`/`INIT_COMMAND_DESIGN.md` both keep one).
+6. **`init`'s interactive/flag-driven scaffolding gets `--host` support; `--template`'s fixed
+   canned tree does not.** `init` (interactive prompts or `--environment`/`--client`/`--resource`
+   flags) is a natural, low-cost place to add an opt-in `--host` — it saves hand-authoring the
+   `Hosts/` layer's `configtransform.json`. `--template`'s whole design point (`INIT_COMMAND_
+   DESIGN.md`) is staying the minimal, immediately-runnable demo with nothing to decide; baking a
+   Host example into the one fixed tree would add shape every `--template` user gets, for a
+   scenario (multi-host Production) that's genuinely niche.
+7. **`--template` becomes a value-taking flag (`--template`/`--template hosts`), not a second
+   modifier flag.** Considered and rejected: a separate boolean alongside `--template` (e.g.
+   `--template --with-hosts`) — works, but doesn't scale if more variants get requested later
+   (each would need its own boolean, each needing its own mutual-exclusivity story against every
+   other `init` flag). A named-variant value scales cleanly instead, and — since `--template`
+   isn't implemented yet — there's no backward-compatibility cost to changing its shape from
+   `bool` to `string?` before it ships. Rejected the option of reusing `--host` as the variant's
+   name for the same reason `--host` itself needed a real design pass: it's already claimed
+   elsewhere (targeting *one specific* host on a resolve/`--list`/`--dry-run`/`--diff` call), and
+   overloading one flag name with two unrelated meanings is exactly the kind of ambiguity this
+   design otherwise avoids.
 
 ## Open items
 
-- **`set`/`init` scaffolding a `Hosts/` layer.** Both commands already default a new Client
-  layer's `extends` to its matching Environment layer on first write — the same default needs a
-  decision for a new Host layer's `extends` (the matching Client/Environment layer). Whether this
-  ships in the same PR as the read-path (`--host` targeting a resolve/`--list`/`--dry-run`/
-  `--diff`) or as a deliberate follow-up (mirroring how YAML's array-of-objects `set` gap was
-  shipped after YAML's first version) is an implementation-time call, not a design blocker.
+- **`set` authoring a `Hosts/` layer's fields.** `init` scaffolding a new `Hosts/` layer is
+  decided (see decision log #6 above); whether `set --match`/`--set` also needs anything Host-
+  specific to update one once it exists is still open — `set` doesn't care about a target layer's
+  position in the tree today (`SetTargetResolver` only ever writes to a path it's given), so this
+  may turn out to need zero changes the same way `LayerChain`/`ReverseLookup` did, but that's
+  unverified. Whether this ships alongside `init`'s scaffolding or as a deliberate follow-up
+  (mirroring how YAML's array-of-objects `set` gap shipped after YAML's first version) is an
+  implementation-time call, not a design blocker.
 - **Pilot validation.** `config-transform-pilot` has no multi-host Production scenario today.
   Adding one (mirroring the `.env`/YAML pattern of adding a dedicated pilot project once a format
   or feature ships) is the natural way to validate this against something more real than this
