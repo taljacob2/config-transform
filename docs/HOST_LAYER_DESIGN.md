@@ -105,8 +105,17 @@ configtransform --client Acme --environment Production --dry-run
   `--template hosts` selects a variant that additionally scaffolds one worked `Hosts/<H>/`
   example under the template's existing client/environment — see decision log #7 below for why
   a value beats a second modifier flag or leaving `--template` untouched.
-- `set` still needs its own decision for authoring/updating a `Hosts/` layer's fields via
-  `--match`/`--set` — deliberately left open below, separable from `init`'s scaffolding.
+- `SetTargetResolver.Resolve` needs two real, small changes to write into a `Hosts/` layer —
+  verified by reading the actual code, not assumed: (1) its own call to
+  `LayerPathResolver.Resolve(root, client, environment)` needs `host` passed through, so
+  `set --client Acme --environment Production --host <H> --match ... --set ...` targets the right
+  `Hosts/<H>/configtransform.json`; (2) the `defaultExtends` logic (currently: a Client layer's
+  default `extends` is computed by calling `LayerPathResolver.Resolve(root, client: null,
+  environment)` — "drop one level") needs a third case for a Host target: drop only the host,
+  keep client+environment (`LayerPathResolver.Resolve(root, client, environment, host: null)`),
+  defaulting a new Host layer to extend its Client/Environment layer. Same *pattern* as today's
+  Client→Environment default, one level deeper — not a design blocker — but it doesn't fall out
+  for free the way `LayerChain`/`ReverseLookup` did; someone has to write that branch.
 
 **No change needed** (verified against the real code, not assumed):
 - `LayerChain.Build`/`ResolveResource`/`PrintChain` — already walk `extends` to arbitrary depth;
@@ -162,12 +171,9 @@ configtransform --client Acme --environment Production --dry-run
 
 ## Open items
 
-- **`set` authoring a `Hosts/` layer's fields.** `init` scaffolding a new `Hosts/` layer is
-  decided (see decision log #6 above); whether `set --match`/`--set` also needs anything Host-
-  specific to update one once it exists is still open — `set` doesn't care about a target layer's
-  position in the tree today (`SetTargetResolver` only ever writes to a path it's given), so this
-  may turn out to need zero changes the same way `LayerChain`/`ReverseLookup` did, but that's
-  unverified. Whether this ships alongside `init`'s scaffolding or as a deliberate follow-up
+- **Sequencing `SetTargetResolver`'s `Hosts/`-layer changes** (see "Changes needed" above for what
+  they are — this is now a known, small, real change, not an unverified "maybe zero changes"
+  guess). Whether it ships in the same PR as `init`'s scaffolding or as a deliberate follow-up
   (mirroring how YAML's array-of-objects `set` gap shipped after YAML's first version) is an
   implementation-time call, not a design blocker.
 - **Pilot validation.** `config-transform-pilot` has no multi-host Production scenario today.
