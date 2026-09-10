@@ -1,10 +1,17 @@
 # Per-layer diff attribution (`--diff-layers`) — design
 
-**Status: design only — not implemented.** Nothing in this document is real code yet; every
-"Changes needed"/"No change needed" claim below was checked against the real code
-(`GitDiff.cs`, `LayerChain.cs`, `CliRunner.cs`, `FormatEngine.cs`) as it stands today, the same
-verify-before-writing-it-down convention `HOST_LAYER_DESIGN.md` and `FIELD_AUTHORING_DESIGN.md`
-both follow.
+**Status: implemented, versioned as `0.22.0-alpha`.** Every "Changes needed"/"No change needed"
+claim below held exactly as written once built — no format engine (`XmlLayerMerger`/
+`JsonLayerMerger`/`EnvLayerMerger`/`YamlLayerMerger`) needed any change, confirming the design's
+central claim. The one thing this design got wrong in its original pass, corrected during
+implementation: the attribution algorithm must use `ResolvedResource.PatchPathsInOrder` (the real,
+absolute patch paths) rather than `ChainStep.PatchPath` (the repo-relative *display* path used for
+`--list`/the resolution report) when calling `Merge` — a real bug caught by a manual smoke test
+against a real multi-layer XML chain, not the unit-test suite alone (the unit tests used a fake
+`LayerMerge` that never opened a real path, so they couldn't have caught it). See
+`LayerDiffAttribution.Compute`'s own doc comment for the fix. Everything else — the incremental-
+`Merge` approach, the hunk-header-based owner tracking, the hunk-level-vs-per-line tag rule — is
+exactly as designed below.
 
 ## Why this exists, and why now
 
@@ -186,15 +193,17 @@ test file" rather than folding this logic into `CliRunner` directly.
 
 ## Open items
 
-- **`--diff-layers` for the whole-layer run (`--resource` omitted)** — presumably the same
-  `=== <path> ===`-wrapped treatment `--diff` already gets in `RunEveryResource`, one N-section
-  block per resource instead of one diff per resource. Not a design blocker, just needs stating
-  explicitly at implementation time.
-- **Multi-hunk verification.** Every worked example in this document is a single-hunk change per
-  layer. The owner-map carry-forward across *multiple* hunks in the same hop (step 2's "shift by
-  cumulative offset" case) needs a real fixture with two separate, non-adjacent changes in one
-  patch before this is implemented with confidence, not just assumed correct from the algorithm
-  description.
-- **Exact flag-exclusivity error wording** for `--diff-layers --diff` together — left for
-  implementation time, following this repo's existing `Try:`-suffixed error convention.
-- **Naming**: `LayerDiffAttribution` is a working name only, not settled.
+None remaining from the original design pass — all four are resolved:
+
+- **`--diff-layers` for the whole-layer run (`--resource` omitted)**: done, the same
+  `=== <path> ===`-wrapped treatment `--diff` already gets in `RunEveryResource`.
+- **Multi-hunk verification**: done —
+  `LayerDiffAttributionTests.Owner_carries_forward_correctly_across_a_multi_hunk_diff` proves the
+  owner map correctly carries ownership across a diff with two separate, non-adjacent hunks in one
+  patch, not just the single-hunk cases.
+- **Flag-exclusivity error wording**: settled — `CliOptionsParser` rejects `--diff` and
+  `--diff-layers` together with `"--diff and --diff-layers are mutually exclusive.\nTry: use one
+  or the other -- --diff for a single before/after diff, --diff-layers to see it broken out per
+  layer."`, following the repo's existing `Try:` convention.
+- **Naming**: `LayerDiffAttribution`/`LayerDiffSection` shipped as named — no better name turned up
+  during implementation.

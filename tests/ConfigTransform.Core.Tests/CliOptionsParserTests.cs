@@ -170,6 +170,40 @@ public class CliOptionsParserTests
     }
 
     [Fact]
+    public void Missing_output_is_allowed_with_diff_layers()
+    {
+        var options = CliOptionsParser.Parse(new[]
+        {
+            "--client", "ClientA", "--environment", "Production", "--diff-layers"
+        });
+
+        Assert.True(options.DiffLayers);
+        Assert.False(options.Diff);
+    }
+
+    [Fact]
+    public void Diff_and_diff_layers_together_is_an_error()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
+        {
+            "--client", "ClientA", "--environment", "Production", "--diff", "--diff-layers"
+        }));
+
+        Assert.Contains("--diff and --diff-layers are mutually exclusive", ex.Message);
+    }
+
+    [Fact]
+    public void Diff_layers_is_not_valid_with_init()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => CliOptionsParser.Parse(new[]
+        {
+            "init", "--diff-layers"
+        }));
+
+        Assert.Contains("--diff-layers is not valid with 'init'", ex.Message);
+    }
+
+    [Fact]
     public void List_accepts_environment_alone()
     {
         var options = CliOptionsParser.Parse(new[] { "--list", "--environment", "Production" });

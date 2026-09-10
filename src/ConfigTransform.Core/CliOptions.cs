@@ -34,7 +34,10 @@ namespace ConfigTransform.Core;
 /// one of the canned starter trees instead of scanning/prompting/flags, mutually exclusive with
 /// every other init-specific flag — <c>null</c> means <c>--template</c> wasn't given, a non-null
 /// value is the variant name (<c>"default"</c> for a bare <c>--template</c>, or <c>"hosts"</c> for
-/// <c>--template hosts</c>, docs/HOST_LAYER_DESIGN.md decision log #7).
+/// <c>--template hosts</c>, docs/HOST_LAYER_DESIGN.md decision log #7). <see cref="DiffLayers"/>
+/// (docs/DIFF_LAYERS_DESIGN.md) is <c>--diff</c>'s per-layer sibling: instead of one base-vs-merged
+/// diff, one diff per layer that actually changes the resource, tagged with which earlier layer it
+/// overrides when relevant — mutually exclusive with <see cref="Diff"/>, not valid with `init`.
 /// </summary>
 public sealed record CliOptions(
     string? Resource,
@@ -44,6 +47,7 @@ public sealed record CliOptions(
     string? Output,
     bool DryRun,
     bool Diff,
+    bool DiffLayers,
     bool List,
     bool Set,
     bool Help,

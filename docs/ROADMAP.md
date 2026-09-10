@@ -618,6 +618,27 @@ none of that is real, pre-existing whitespace to preserve. Versioned as `0.21.0-
 `allow` element) is exactly the scenario that surfaced this, so re-pinning it is worth doing
 alongside the `0.20.0-alpha` re-pin above, not a separate item.
 
+Raised by the repo owner while reading a real multi-hop `--diff`: there was no way to tell which
+layer (Environment, Client, or one specific Host) produced a given changed line without separately
+running `--list` and reasoning it out by hand. `docs/DIFF_LAYERS_DESIGN.md` (`0.22.0-alpha`) adds
+an opt-in `--diff-layers` flag: instead of one diff comparing the base file straight to the final
+merged result, it prints one diff per layer that actually changes the resource, tagged
+`[<layer>]`, or `[<layer> overrides <earlier layer>]` when every line it changes shares one prior
+owner (a hunk with *different* prior owners on different lines gets a plain `[<layer>]` tag with a
+per-line `(overrides <layer>)` note instead — docs/DIFF_LAYERS_DESIGN.md's "Mixed-owner hunks").
+Confirms the design doc's central claim: no change was needed to any of the four merge engines,
+since `LayerMerge` already accepts an arbitrary prefix of the patch list, so the per-layer content
+needed for incremental diffs is just one more `Merge` call per patched layer
+(`LayerDiffAttribution`, a new, self-contained type in Core reusing `GitDiff.Render`'s own
+unified-diff hunk headers for line-position bookkeeping rather than a second diff engine). One real
+bug did surface during implementation, caught only by a manual smoke test against a real multi-
+layer XML chain (not the unit suite, which used a fake merge delegate that never opened a real
+path): the algorithm must read the real, absolute patch paths from
+`ResolvedResource.PatchPathsInOrder`, not `ChainStep.PatchPath` (the repo-relative path `--list`
+displays) — fixed before merging, see the design doc's status line for the full note.
+`config-transform-pilot`'s own multi-host scenario is a natural place to exercise this against
+something more real than a synthetic fixture, a follow-up alongside its other pending re-pins.
+
 ## Next up
 
 One item below is now actionable purely within this repo (see the first bullet); every other
@@ -637,15 +658,6 @@ default next step.
      coupled to `System.Text.Json.Nodes` types; porting it to YAML's `Dictionary<string, object>`/
      `List<object>` object graph is real, separable work, not a design blocker. See
      `docs/FIELD_AUTHORING_DESIGN.md`'s "JSON / YAML" section and "Open items".
-- **Per-layer diff attribution (`--diff-layers`)** — `docs/DIFF_LAYERS_DESIGN.md`, design only,
-  not yet implemented. Raised by the repo owner while looking at a real multi-hop `--diff`: split
-  today's single base-vs-merged diff into one diff per layer that actually changes the resource,
-  each hunk tagged with the layer responsible and, when it re-touches a line an earlier layer
-  already changed, which layer it overrides. Actionable now — the whole feature is buildable on
-  top of `LayerMerge`'s existing `Merge(basePath, patchPathsPrefix)` shape with zero changes to
-  any of the four format engines (see the design doc's "How this is computed"); the one open
-  question worth resolving before implementing is the multi-hunk owner-map case, not a design
-  blocker.
 - **`docs/MANIFEST_SCHEMA.md`'s filename vs. its content** — now describes the
   `configtransform.json` schema in full (the self-describing-overlays implementation above), but
   kept its old filename to avoid a large cross-reference rename across `docs/`. Worth revisiting

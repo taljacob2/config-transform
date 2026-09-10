@@ -279,11 +279,17 @@ collapsing to one line (verified empirically, not assumed) — never a correctne
 broken in a diff. `XmlLayerMerger` now runs a new `InsertWhitespaceFormatter` once per patch (see
 `docs/FIELD_AUTHORING_DESIGN.md`'s "Merge-time whitespace, not a `set`-time concern"), using
 before/after element-reference-identity diffing to reformat exactly the nodes one `Insert` added.
-Versioned as `0.21.0-alpha`. A new design doc, not yet implemented, has since been written:
-`docs/DIFF_LAYERS_DESIGN.md` proposes an opt-in `--diff-layers` flag that splits `--diff`'s
-single base-vs-merged diff into one diff per layer that actually changes a resource, tagging a
-changed line with which earlier layer it overrides when relevant — raised by the repo owner while
-reading a real multi-hop `--diff`, buildable with zero changes to any of the four format engines
-since `LayerMerge` already accepts an arbitrary patch-list prefix. See `docs/ROADMAP.md`'s "Next
-up" for what's actionable now versus what needs either a solution repo that doesn't exist yet or
-an owner decision — YAML's own array-of-objects matching is the remaining `set` gap.
+Versioned as `0.21.0-alpha`. A further real-user report has since landed and been implemented:
+`--diff-layers` (`docs/DIFF_LAYERS_DESIGN.md`), `--diff`'s per-layer sibling — instead of one diff
+comparing the base file straight to the final merged result, it prints one diff per layer that
+actually changes the resource, tagged `[<layer>]` or `[<layer> overrides <earlier layer>]` when
+relevant, with per-line `(overrides <layer>)` notes for the rarer case of a hunk mixing lines with
+different prior owners. Confirms the design's central claim: zero changes needed to any of the
+four format engines, since `LayerMerge` already accepts an arbitrary patch-list prefix
+(`LayerDiffAttribution`, reusing `GitDiff.Render`'s own hunk headers rather than a second diff
+engine). One real bug surfaced only by a manual smoke test against a real multi-layer chain, not
+the unit suite: the algorithm must read `ResolvedResource.PatchPathsInOrder` (the real, absolute
+patch paths), not `ChainStep.PatchPath` (the repo-relative path `--list` displays) — fixed before
+merging. Versioned as `0.22.0-alpha`. See `docs/ROADMAP.md`'s "Next up" for what's actionable now
+versus what needs either a solution repo that doesn't exist yet or an owner decision — YAML's own
+array-of-objects matching is the remaining `set` gap.

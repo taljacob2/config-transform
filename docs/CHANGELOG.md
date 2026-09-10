@@ -6,6 +6,24 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.22.0-alpha] - 2026-09-10
+
+### Added
+
+- **`--diff-layers`: `--diff`'s per-layer sibling.** Raised by the repo owner while reading a real
+  multi-hop `--diff`: there was no way to tell which layer (Environment, Client, or one specific
+  Host) produced a given changed line without separately running `--list` and reasoning it out by
+  hand. `--diff-layers` prints one diff per layer that actually changes the resource instead of one
+  diff comparing the base file straight to the final merged result — computed by re-running the
+  same merge with one more patch applied each time, needing zero changes to any of the four format
+  engines since `LayerMerge` already accepts an arbitrary prefix of the ordered patch list. Each
+  section is tagged `[<layer>]`, or `[<layer> overrides <earlier layer>]` when every line it
+  changes was last touched by that one earlier layer; a hunk that re-touches lines with *different*
+  prior owners gets a plain `[<layer>]` tag instead, with a `(overrides <layer>)` note on each
+  individual changed line that has one (`LayerDiffAttribution`, reusing `GitDiff.Render`'s own
+  unified-diff hunk headers for line-position bookkeeping rather than a second diff engine).
+  Mutually exclusive with `--diff`. See `docs/DIFF_LAYERS_DESIGN.md` for the full design and status.
+
 ## [0.21.0-alpha] - 2026-09-10
 
 ### Fixed

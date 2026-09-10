@@ -23,8 +23,10 @@ public static class GitDiff
 
     // Strips ANSI SGR color codes (from --color=always) so a meta line can be recognized under
     // its coloring without altering the line itself -- git wraps each of the four meta lines
-    // (and every other line) in \x1b[...m...\x1b[m, prefix and all.
-    private static readonly Regex AnsiEscapeSequence = new(@"\x1b\[[0-9;]*m", RegexOptions.Compiled);
+    // (and every other line) in \x1b[...m...\x1b[m, prefix and all. Internal (not private) so
+    // LayerDiffAttribution can classify a Render'd line's leading marker (' '/'-'/'+'/'@') the
+    // same way, without a second copy of the same pattern.
+    internal static readonly Regex AnsiEscapeSequence = new(@"\x1b\[[0-9;]*m", RegexOptions.Compiled);
 
     /// <returns>The diff output (empty when the two contents are identical).</returns>
     public static string Render(string leftContent, string rightContent)
