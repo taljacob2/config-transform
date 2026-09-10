@@ -6,6 +6,27 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.21.0-alpha] - 2026-09-10
+
+### Fixed
+
+- **XDT `Insert` transforms no longer produce squashed, hard-to-read whitespace.** Reported by a
+  real user against the published tool: `Microsoft.Web.Xdt`'s own `Insert` transform appends the
+  new element as its parent's last child with no whitespace of its own — a single new element
+  lands glued onto the parent's closing tag (e.g. `<allow users="acme-admin" /></authorization>`
+  on one line, `allow` at `authorization`'s own indent instead of lining up under a `<deny>`
+  sibling), and a whole freshly-inserted multi-level subtree (`set`'s `--match parent=` case) loses
+  *all* internal whitespace, collapsing to one line regardless of how the patch file itself was
+  formatted — confirmed empirically, not assumed. Still well-formed XML either way
+  (`XmlDocument.Load` never throws on it), so this was never a correctness bug, but it reads as
+  broken to a human scanning a `--diff`. `XmlLayerMerger` now runs a new
+  `InsertWhitespaceFormatter` once per patch, right after `XmlTransformation.Apply`: it diffs
+  element references present before/after that one transform to find exactly the nodes that
+  specific `Insert` added (reference identity, not name/attribute matching — no risk of touching
+  whitespace the patch didn't add), reattaches the new subtree's root using a real sibling's own
+  indentation when one exists, and reformats every level below it by nesting depth (a fixed
+  two-space step) since none of that is real, pre-existing whitespace to preserve.
+
 ## [0.20.0-alpha] - 2026-09-10
 
 ### Added

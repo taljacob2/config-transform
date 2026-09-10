@@ -183,6 +183,19 @@ resolved document in lockstep, and marks exactly one element, the first point wh
 Base-target Insert (no `--client`/`--environment`) needs no `xdt:` markers at all, same as every
 other base-file write — it edits the missing containers into the real document directly.
 
+**Merge-time whitespace, not a `set`-time concern.** A real user report against the published tool
+found that `Microsoft.Web.Xdt`'s own `Insert` transform gives a freshly-inserted element (or, for a
+whole new nested path, every level of it) none of the surrounding document's whitespace — verified
+empirically, not assumed: even a hand-authored, nicely-indented `Insert` patch collapses to one
+line, with the new element landing glued onto the parent's closing tag rather than on its own
+indented line. Still well-formed XML either way (`XmlDocument.Load` never throws on it), but reads
+as broken to a human scanning a diff. This is a `XmlLayerMerger` fix (`InsertWhitespaceFormatter`,
+in `ConfigTransform.Xml`), not a `set`/`XmlFieldAuthor` one — it runs once per patch in the merge
+chain, right after `XmlTransformation.Apply`, using before/after element-reference-identity diffing
+to find exactly the nodes that one specific `Insert` added (no name-based heuristics, no risk of
+touching whitespace the patch didn't add), and reformats them by reusing a real sibling's
+indentation where one exists, falling back to a fixed two-space step by nesting depth otherwise.
+
 ### JSON / YAML
 
 `--match key=...` (renamed from an earlier `path=` working name — see decision log) navigates to
