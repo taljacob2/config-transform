@@ -583,6 +583,18 @@ repo owner can make. Not a "next slice" in the same sense as the ones before thi
 from below (or something new) when ready, rather than assuming the next item in this list is the
 default next step.
 
+- **A third, optional `--host` layer axis** (`docs/HOST_LAYER_DESIGN.md`, design only, not
+  started) — raised by the repo owner from a real deployment shape: a load-balanced Production
+  environment where individual servers need genuinely different config from each other, not just
+  from other clients/environments. Rejects the hyphenated-`Client-Host` workaround (breaks the
+  `Client` concept, combinatorial, no natural inheritance from the real client) in favor of one
+  more optional `extends` hop (`Clients/<C>/<E>/Hosts/<H>/configtransform.json`) — reuses the
+  self-describing-layers chaining as-is, needing zero changes to `LayerChain`, `ReverseLookup`, or
+  any format engine (verified, not assumed — see the design doc's "What changes... and what
+  doesn't"). `--host`/`-H` (capital, a deliberate, documented tradeoff since lowercase `-h` is
+  already `--help`) is the only new CLI surface for the read path (resolve/`--list`/`--dry-run`/
+  `--diff`); `set`/`init` scaffolding a new `Hosts/` layer and a pilot follow-up are named as open
+  items, not yet decided.
 - **Finish `set`** — XML's "update an existing element" case (including matching an existing
   item among repeated siblings, and now `Insert` for a genuinely brand-new element — all closed,
   see "Current state" above), JSON's single-key-path case and array-of-objects matching
