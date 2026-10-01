@@ -1,4 +1,5 @@
 using System.Globalization;
+using ConfigTransform.Core;
 using YamlDotNet.Core;
 using YamlDotNet.Core.Events;
 using YamlDotNet.RepresentationModel;
@@ -32,13 +33,17 @@ namespace ConfigTransform.Yaml;
 /// alphabetically, re-quoted values, and dropped empty containers. What still isn't preserved:
 /// comments (YamlDotNet's representation model doesn't keep them), anchors/aliases (expanded into
 /// copies, as before), and per-level indentation widths (one width is detected from the base file
-/// and used throughout -- see <see cref="DetectLayout"/>). One YAML document per file only.
+/// and used throughout -- see <see cref="DetectLayout"/>). One YAML document per file only. The
+/// output uses the base file's line endings and ends with a newline exactly when the base does
+/// (<see cref="TextLayout"/>).
 /// </summary>
 public static class YamlLayerMerger
 {
     public static string Merge(string basePath, IReadOnlyList<string> patchPathsInOrder)
     {
-        var parsedBase = Load(basePath);
+        var baseText = File.ReadAllText(basePath);
+        var textLayout = TextLayout.Of(baseText);
+        var parsedBase = Load(baseText, basePath);
         var layout = DetectLayout(parsedBase);
         // Merged into in place, so work on a private copy -- see Clone.
         var document = parsedBase is null ? null : Clone(parsedBase);
@@ -51,19 +56,19 @@ public static class YamlLayerMerger
             if (!File.Exists(patchPath))
                 continue;
 
-            var patch = Load(patchPath);
+            var patch = Load(File.ReadAllText(patchPath), patchPath);
             if (patch is not null)
                 document = MergeNode(document, patch, patchPath, "");
         }
 
-        return Save(document, layout);
+        return textLayout.Apply(Save(document, layout));
     }
 
     /// <returns>The file's single document's root, or null for an empty file. Never mutated by the merge (see <see cref="MergeNode"/>).</returns>
-    private static YamlNode? Load(string path)
+    private static YamlNode? Load(string text, string path)
     {
         var stream = new YamlStream();
-        stream.Load(new StringReader(File.ReadAllText(path)));
+        stream.Load(new StringReader(text));
 
         return stream.Documents.Count switch
         {

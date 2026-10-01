@@ -182,6 +182,31 @@ public class JsonLayerMergerGrammarTests
         Assert.Contains("\"Rules:0:Enabled\"", ex.Message);
     }
 
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    public void Output_uses_the_base_files_line_endings_and_ends_with_a_newline_like_it(string newLine)
+    {
+        using var dir = new TempDir();
+        var basePath = dir.WriteFile("base.json", $"{{{newLine}  \"A\": 1{newLine}}}{newLine}");
+        var patchPath = dir.WriteFile("patch.json", "{ \"B\": 2 }");
+
+        var merged = JsonLayerMerger.Merge(basePath, [patchPath]);
+
+        Assert.Equal($"{{{newLine}  \"A\": 1,{newLine}  \"B\": 2{newLine}}}{newLine}", merged);
+    }
+
+    [Fact]
+    public void A_base_file_with_no_final_newline_gets_none_in_the_output()
+    {
+        using var dir = new TempDir();
+        var basePath = dir.WriteFile("base.json", "{\n  \"A\": 1\n}");
+
+        var merged = JsonLayerMerger.Merge(basePath, []);
+
+        Assert.Equal("{\n  \"A\": 1\n}", merged);
+    }
+
     private sealed class TempDir : IDisposable
     {
         private readonly string _path = Directory.CreateTempSubdirectory("configtransform-json-tests-").FullName;

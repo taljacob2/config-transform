@@ -75,6 +75,13 @@ results. Nothing is flattened, so nothing needs to be reconstructed.
 - **YAML layout follows the base file.** The indentation width, and whether block sequences are
   indented under their key, are detected from the base's source positions
   (`YamlLayerMerger.DetectLayout`). Long scalars are never re-wrapped.
+- **Line endings and the final newline follow the base file** (added after `0.23.0-alpha`,
+  `TextLayout` in Core). JSON output used to have no final newline, and both JSON and YAML used the
+  platform's newline (CRLF on Windows) regardless of the source. Found in
+  `config-transform-pilot`'s CI log, where `cat` of merged JSON glued the next log command onto its
+  closing brace. The same rule covers every file `set` rewrites (a base file, an existing overlay,
+  an existing `configtransform.json`), which previously lost its final newline and, on Windows,
+  had LF flipped to CRLF. A file `set` or `init` creates gets LF and a final newline.
 
 ### Key matching is case-sensitive
 

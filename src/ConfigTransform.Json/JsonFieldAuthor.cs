@@ -66,7 +66,7 @@ public static class JsonFieldAuthor
 
             var target = existingTargetJson is null ? new JsonObject() : ParseObject(existingTargetJson, "existing overlay");
             SetAtPath(target, segments, setFields[0].Value);
-            return target.ToJsonString(JsonWriteOptions.Indented);
+            return OutputLayout(existingTargetJson).Apply(target.ToJsonString(JsonWriteOptions.Indented));
         }
 
         foreach (var condition in elementConditions)
@@ -84,15 +84,23 @@ public static class JsonFieldAuthor
         {
             var baseDoc = existingTargetJson is null ? new JsonObject() : ParseObject(existingTargetJson, "existing overlay");
             MutateRealArrayItem(baseDoc, segments, elementConditions, setFields);
-            return baseDoc.ToJsonString(JsonWriteOptions.Indented);
+            return OutputLayout(existingTargetJson).Apply(baseDoc.ToJsonString(JsonWriteOptions.Indented));
         }
 
         JsonElemMatchResolver.Probe(preceding, segments, elementConditions);
 
         var overlay = existingTargetJson is null ? new JsonObject() : ParseObject(existingTargetJson, "existing overlay");
         SetElemMatchAtPath(overlay, segments, elementConditions, setFields);
-        return overlay.ToJsonString(JsonWriteOptions.Indented);
+        return OutputLayout(existingTargetJson).Apply(overlay.ToJsonString(JsonWriteOptions.Indented));
     }
+
+    /// <summary>
+    /// The file being rewritten keeps its own line endings and final newline; a brand-new overlay
+    /// gets <see cref="TextLayout.Default"/>. A base-target write in particular must not strip the
+    /// base file's final newline or flip its line endings -- that's churn in a committed file.
+    /// </summary>
+    private static TextLayout OutputLayout(string? existingTargetJson) =>
+        existingTargetJson is null ? TextLayout.Default : TextLayout.Of(existingTargetJson);
 
     /// <summary>Base-target element-match write: walks to the real array and writes into it
     /// directly -- no <c>$elemMatch</c> syntax, since the base file isn't an overlay.</summary>

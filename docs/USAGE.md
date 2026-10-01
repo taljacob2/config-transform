@@ -574,6 +574,9 @@ own shape:
 - Every value keeps the type and text it was written with — `"007"` stays a string, `1.50` stays
   `1.50`, YAML quoting and block scalars are kept — and `null`, `{}` and `[]` survive. Comments
   are not carried into the output.
+- The output uses the base file's line endings (LF or CRLF) and ends with a newline exactly when
+  the base does — as XML output always has. `set` keeps the same conventions in any file it
+  rewrites; a file it creates gets LF and a final newline.
 - A JSON patch containing a `set`-written (or hand-written) `$elemMatch` array-of-objects patch
   (see the `set` section above) is resolved to a real position first
   (`JsonElemMatchResolver.Rewrite`), against the document as merged through every prior patch

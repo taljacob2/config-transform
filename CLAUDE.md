@@ -301,3 +301,5 @@ YAML quoting all survive — the old merge turned `"007"` into `7` and sorted ev
 `--diff`. Keys now match case-sensitively across layers, and a patch key matching an existing one
 only by case is an error (it would otherwise deploy a file .NET refuses to load).
 `config-transform-pilot` is re-pinned to `0.23.0-alpha` and verified via a real CI dispatch.
+Since then, not yet tagged: JSON/YAML output (and every file `set` rewrites) keeps the base or
+existing file's line endings and final newline (`TextLayout` in Core), as XML always did.

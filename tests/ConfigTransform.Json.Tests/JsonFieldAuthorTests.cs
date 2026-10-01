@@ -384,4 +384,31 @@ public class JsonFieldAuthorTests
 
         Assert.Contains("\"Console\"", result);
     }
+
+    [Fact]
+    public void Rewriting_an_existing_file_keeps_its_line_endings_and_final_newline()
+    {
+        // A base-target write rewrites a committed source file -- it must not strip the final
+        // newline or flip LF to CRLF (which the platform default did on Windows).
+        var existing = "{\n  \"ApiUrl\": \"https://dev.example.com\"\n}\n";
+
+        var result = JsonFieldAuthor.Author(
+            existing, existingTargetJson: existing, isBaseTarget: true,
+            matches: [new MatchSpec("key", "ApiUrl", WasDefaulted: false)],
+            setFields: [new MatchSpec("value", "https://new.example.com", WasDefaulted: false)]);
+
+        Assert.Equal("{\n  \"ApiUrl\": \"https://new.example.com\"\n}\n", result);
+    }
+
+    [Fact]
+    public void A_brand_new_overlay_uses_lf_and_ends_with_a_newline()
+    {
+        var result = JsonFieldAuthor.Author(
+            DotNetCoreBase, existingTargetJson: null, isBaseTarget: false,
+            matches: [new MatchSpec("key", "ApiUrl", WasDefaulted: false)],
+            setFields: [new MatchSpec("value", "https://new.example.com", WasDefaulted: false)]);
+
+        Assert.DoesNotContain("\r", result);
+        Assert.EndsWith("}\n", result);
+    }
 }

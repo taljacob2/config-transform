@@ -687,21 +687,18 @@ this order, each as its own commit on `main`:
 
 `config-transform-pilot` is re-pinned to `0.23.0-alpha` (its `--diff-layers` CI step now passes
 `--color always`) and verified against a real `build-transformed.yml` dispatch, run #32 — see that
-repo's `FINDINGS.md`.
+repo's `FINDINGS.md`. That run's log exposed one more fidelity gap, fixed since but not yet
+released: merged JSON had no final newline, and JSON/YAML used the platform's newline instead of
+the base file's — `set` rewrote committed files that way too. Output and `set`'s rewrites now
+mirror the base/existing file (`TextLayout`; `docs/TREE_MERGE_DESIGN.md`).
 
 ## Next up
 
-Two items below are actionable purely within this repo (the first two bullets); every other
+One item below is actionable purely within this repo (the first bullet); every other
 remaining item still either needs a solution repo that doesn't exist yet, or a decision only the
 repo owner can make. Not a "next slice" in the same sense as the ones before this section; pick
 from below (or something new) when ready, rather than assuming the next item in this list is the
 default next step.
-
-- **Merged JSON output has no trailing newline** — found in `config-transform-pilot`'s run #32
-  log (its `cat` step glues `::endgroup::` onto the closing `}`), present before `0.23.0-alpha`
-  too. A base file almost always ends with one, so writing without it is the same kind of fidelity
-  gap the output-fidelity pass closed. Small: end `JsonLayerMerger`'s output with a newline (YAML
-  output already does), and update the golden-file comparison accordingly.
 
 - **Finish `set`** — XML's "update an existing element" case (including matching an existing
   item among repeated siblings, and now `Insert` for a genuinely brand-new element — all closed,

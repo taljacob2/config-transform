@@ -21,5 +21,10 @@ internal static class LayerManifestSerializer
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    public static string Serialize(LayerManifest manifest) => JsonSerializer.Serialize(manifest, WriteOptions);
+    /// <param name="layout">
+    /// The layout of the file being rewritten, so it keeps its own line endings and final newline;
+    /// <see cref="TextLayout.Default"/> (LF, final newline) for a brand-new file.
+    /// </param>
+    public static string Serialize(LayerManifest manifest, TextLayout? layout = null) =>
+        (layout ?? TextLayout.Default).Apply(JsonSerializer.Serialize(manifest, WriteOptions));
 }

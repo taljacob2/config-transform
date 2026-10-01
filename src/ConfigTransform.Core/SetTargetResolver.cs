@@ -88,9 +88,11 @@ public static class SetTargetResolver
             return;
 
         var targetLayerFullPath = target.TargetLayerPath!;
-        var manifest = File.Exists(targetLayerFullPath)
+        var exists = File.Exists(targetLayerFullPath);
+        var manifest = exists
             ? LayerManifestLoader.Load(targetLayerFullPath)
             : new LayerManifest(target.Extends, []);
+        var layout = exists ? TextLayout.Of(File.ReadAllText(targetLayerFullPath)) : TextLayout.Default;
 
         var patchRelative = LayerChain.ToRepoRelative(root, target.PatchPath!);
         var resources = manifest.Resources.ToList();
@@ -105,6 +107,6 @@ public static class SetTargetResolver
 
         var dir = Path.GetDirectoryName(targetLayerFullPath)!;
         Directory.CreateDirectory(dir);
-        File.WriteAllText(targetLayerFullPath, LayerManifestSerializer.Serialize(updated));
+        File.WriteAllText(targetLayerFullPath, LayerManifestSerializer.Serialize(updated, layout));
     }
 }

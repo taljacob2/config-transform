@@ -195,6 +195,21 @@ public class YamlLayerMergerGrammarTests
         Assert.Contains("Try: spell it \"Schedule\"", ex.Message);
     }
 
+    [Theory]
+    [InlineData("\n", true)]
+    [InlineData("\r\n", true)]
+    [InlineData("\n", false)]
+    public void Output_uses_the_base_files_line_endings_and_final_newline(string newLine, bool finalNewLine)
+    {
+        using var dir = new TempDir();
+        var basePath = dir.WriteFile("base.yaml", $"A: 1{newLine}B:{newLine}  C: 2" + (finalNewLine ? newLine : ""));
+        var patchPath = dir.WriteFile("patch.yaml", "D: 3\n");
+
+        var merged = YamlLayerMerger.Merge(basePath, [patchPath]);
+
+        Assert.Equal($"A: 1{newLine}B:{newLine}  C: 2{newLine}D: 3" + (finalNewLine ? newLine : ""), merged);
+    }
+
     private sealed class TempDir : IDisposable
     {
         private readonly string _path = Directory.CreateTempSubdirectory("configtransform-yaml-tests-").FullName;

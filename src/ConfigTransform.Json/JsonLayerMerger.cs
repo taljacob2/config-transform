@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using ConfigTransform.Core;
 
 namespace ConfigTransform.Json;
 
@@ -29,7 +30,9 @@ namespace ConfigTransform.Json;
 /// <c>1.50</c> stays <c>1.50</c>, <c>null</c>/<c>{}</c>/<c>[]</c> survive. The old
 /// flatten-to-strings-and-guess-the-type round trip turned <c>"007"</c> into <c>7</c>, sorted every
 /// key alphabetically, and dropped empty containers. Comments and trailing commas are accepted on
-/// input, as IConfiguration accepts them; comments are not carried into the output.
+/// input, as IConfiguration accepts them; comments are not carried into the output. The output uses
+/// the base file's line endings and ends with a newline exactly when the base does
+/// (<see cref="TextLayout"/>).
 ///
 /// A patch containing <c>$elemMatch</c>-shaped array-of-objects overlays
 /// (docs/FIELD_AUTHORING_DESIGN.md) is first resolved by <see cref="JsonElemMatchResolver.Rewrite"/>
@@ -46,7 +49,9 @@ public static class JsonLayerMerger
 
     public static string Merge(string basePath, IReadOnlyList<string> patchPathsInOrder)
     {
-        var document = Parse(basePath);
+        var baseText = File.ReadAllText(basePath);
+        var layout = TextLayout.Of(baseText);
+        var document = Parse(baseText);
 
         foreach (var patchPath in patchPathsInOrder)
         {
@@ -56,18 +61,18 @@ public static class JsonLayerMerger
             if (!File.Exists(patchPath))
                 continue;
 
-            var patch = Parse(patchPath);
+            var patch = Parse(File.ReadAllText(patchPath));
             if (JsonElemMatchResolver.ContainsElemMatch(patch))
                 patch = JsonElemMatchResolver.Rewrite(patch, document);
 
             document = MergeNode(document, patch, patchPath, "");
         }
 
-        return document?.ToJsonString(JsonWriteOptions.Indented) ?? "null";
+        return layout.Apply(document?.ToJsonString(JsonWriteOptions.Indented) ?? "null");
     }
 
-    private static JsonNode? Parse(string path) =>
-        JsonNode.Parse(File.ReadAllText(path), documentOptions: ReadOptions);
+    private static JsonNode? Parse(string text) =>
+        JsonNode.Parse(text, documentOptions: ReadOptions);
 
     /// <returns>
     /// The node that now belongs at <paramref name="target"/>'s position: <paramref name="target"/>

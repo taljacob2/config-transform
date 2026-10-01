@@ -311,4 +311,25 @@ public class JsonSetCommandCliTests
         Assert.False(File.Exists(Path.Combine(workspace.RootPath, ".configtransform", "Environments", "Production", "patch-Project-rules.json")));
         Assert.Equal(layerBefore, File.ReadAllText(layerPath));
     }
+
+    [Fact]
+    public void Set_writes_a_new_layer_file_with_lf_line_endings_and_a_final_newline()
+    {
+        using var workspace = new TempCliWorkspace();
+
+        var exitCode = CliRunner.Run(new[]
+        {
+            "set", "--resource", workspace.JsonResourcePath, "--client", "Globex", "--environment", "Production",
+            "--match", "ApiUrl", "--set", "https://globex.example.com"
+        }, new StringWriter(), new StringWriter(), FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(0, exitCode);
+        var layerText = File.ReadAllText(Path.Combine(workspace.RootPath, ".configtransform", "Clients", "Globex", "Production", "configtransform.json"));
+        var patchText = File.ReadAllText(Path.Combine(workspace.RootPath, ".configtransform", "Clients", "Globex", "Production", "patch-Project-appsettings.json"));
+        foreach (var text in new[] { layerText, patchText })
+        {
+            Assert.DoesNotContain("\r", text);
+            Assert.EndsWith("}\n", text);
+        }
+    }
 }

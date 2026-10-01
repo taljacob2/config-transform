@@ -154,4 +154,15 @@ public class YamlFieldAuthorTests
         Assert.Contains("\"ApiUrl\" does", ex.Message);
         Assert.Contains("Try: --match key=ApiUrl", ex.Message);
     }
+
+    [Fact]
+    public void Rewriting_an_existing_overlay_keeps_its_line_endings()
+    {
+        var result = YamlFieldAuthor.Author(
+            DotNetCoreBase, existingTargetYaml: "ApiUrl: https://old.example.com\r\n", isBaseTarget: false,
+            matches: [new MatchSpec("key", "ApiUrl", WasDefaulted: false)],
+            setFields: [new MatchSpec("value", "https://new.example.com", WasDefaulted: false)]);
+
+        Assert.Equal("ApiUrl: https://new.example.com\r\n", result);
+    }
 }

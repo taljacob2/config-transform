@@ -6,6 +6,18 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+### Fixed
+
+- **JSON and YAML output now keeps the base file's line endings and final newline.** Found in
+  `config-transform-pilot`'s CI log: merged JSON had no final newline, so the log's `cat` step glued
+  the next line onto its closing `}`. Both engines also used the platform's newline, so on Windows
+  every JSON/YAML output was CRLF even for an LF source. Worse, `set` rewrote committed files the
+  same way: a base-file `set` on JSON stripped the file's final newline and, on Windows, flipped
+  its line endings. Output now uses the base file's line endings and ends with a newline exactly
+  when the base does, as XML output always has (`TextLayout` in Core). Every file `set` rewrites
+  keeps its own conventions; a file `set`/`init` creates (overlay or `configtransform.json`) gets
+  LF and a final newline. The golden expected-output tests now compare byte for byte.
+
 ## [0.23.0-alpha] - 2026-10-01
 
 ### Added

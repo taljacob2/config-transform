@@ -70,7 +70,10 @@ public static class YamlFieldAuthor
 
         var target = existingTargetYaml is null ? new Dictionary<string, object?>() : ParseMap(existingTargetYaml);
         SetAtPath(target, segments, setFields[0].Value);
-        return Serializer.Serialize(target);
+
+        // The file being rewritten keeps its own line endings and final newline (see TextLayout).
+        var layout = existingTargetYaml is null ? TextLayout.Default : TextLayout.Of(existingTargetYaml);
+        return layout.Apply(Serializer.Serialize(target));
     }
 
     private static IDictionary ParseMap(string yaml) =>
