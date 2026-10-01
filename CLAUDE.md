@@ -194,8 +194,8 @@ lines now. All three are versioned as `0.13.0-alpha` (CHANGELOG moved out of `[U
 tagging this time, per `docs/RELEASING.md` step 1 — the `0.12.0-alpha` empty-release-notes drift
 above is exactly the mistake this avoids), tagged, pushed, and published clean — real, complete
 GitHub Release notes this time, no manual patching needed — and `config-transform-pilot` is
-re-pinned to `0.13.0-alpha`, verified against real CI. A fifth real-user report has since landed,
-not yet tagged: omitting `--resource` against a nonexistent `--environment`/`--client` (a typo,
+re-pinned to `0.13.0-alpha`, verified against real CI. A fifth real-user report has since landed
+(shipped in `0.14.0-alpha`): omitting `--resource` against a nonexistent `--environment`/`--client` (a typo,
 most likely) printed the generic `(no resources with a registered format handler at this layer)`
 — worded as if the layer existed but its resources' formats were unsupported. `RunEveryResource`
 now tells that case apart from a layer that genuinely exists but declares no resources: when the
@@ -305,8 +305,8 @@ only by case is an error (it would otherwise deploy a file .NET refuses to load)
 Then `0.23.1-alpha`: JSON/YAML output (and every file `set` rewrites) keeps the base or
 existing file's line endings and final newline (`TextLayout` in Core), as XML always did;
 `config-transform-pilot` is re-pinned to it and verified via a real CI dispatch. Secrets
-(`docs/SECRETS_DESIGN.md`) are being implemented in three stages; stages 1–2 are done, not yet
-tagged: `{{CFSECRET_NAME}}` placeholders filled from encrypted `*.secret.env` files a layer lists
+(`docs/SECRETS_DESIGN.md`) are being implemented in three stages; stages 1–2 are done and released
+as `0.24.0-alpha`: `{{CFSECRET_NAME}}` placeholders filled from encrypted `*.secret.env` files a layer lists
 under `secrets` (`SecretResolver`/`SecretsStep` in Core, one `*SecretSubstitution` per engine),
 `--reveal-secrets`, a strict layer loader, and whole-file secrets via a resource's `replace`
 (`ReplaceStep` in Core — byte copy, no engine). The git-crypt docs now recommend secrets-only

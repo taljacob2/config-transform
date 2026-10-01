@@ -703,7 +703,7 @@ default next step.
 
 - **Secrets** (`docs/SECRETS_DESIGN.md`, designed 2026-10-01 with the repo owner) — being
   implemented in the three stages the design's "Implementation plan" lays out. **Stages 1–2 are
-  done, unreleased.** Stage 1 (value secrets): `{{CFSECRET_NAME}}` placeholders, `*.secret.env` files under a
+  done, released as `0.24.0-alpha`.** Stage 1 (value secrets): `{{CFSECRET_NAME}}` placeholders, `*.secret.env` files under a
   layer's `secrets`, `--reveal-secrets`, the secrets report, all-or-nothing real runs, and a
   strict loader (unknown fields are errors). Implementation and review surfaced six extra decisions, now
   in the design's decision log (#13–#18) — notably that YAML needs quoted placeholders, and that a
@@ -711,8 +711,7 @@ default next step.
   (whole-file secrets via a resource's `replace`, byte for byte, any format) added decisions
   #19–#22. Stage 3's docs half is done too: `CONFIG_MANAGEMENT.md` §7, `SECRETS_AND_LOCAL_SETUP.md`
   and `ONBOARDING.md` present secrets-only encryption as the recommended scope, with whole-tree
-  still supported and a migration path between them. **Next:** release stages 1–2, then migrate
-  `config-transform-pilot` (one placeholder secret, one whole-file secret, narrowed
+  still supported and a migration path between them. **Next:** migrate `config-transform-pilot` onto `0.24.0-alpha` (one placeholder secret, one whole-file secret, narrowed
   `.gitattributes`, a real CI dispatch) — which makes the pilot's currently encrypted overlays
   plaintext on GitHub, so it waits for the repo owner's go-ahead. Separates secrets from configuration so only
   `.configtransform/**/*.secret.*` needs git-crypt and every other overlay is readable and

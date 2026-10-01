@@ -6,6 +6,8 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.24.0-alpha] - 2026-10-01
+
 ### Added
 
 - **Secrets, stage 1: `{{CFSECRET_NAME}}` placeholders** (`docs/SECRETS_DESIGN.md`). Config files and
