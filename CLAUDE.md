@@ -310,5 +310,6 @@ as `0.24.0-alpha`: `{{CFSECRET_NAME}}` placeholders filled from encrypted `*.sec
 under `secrets` (`SecretResolver`/`SecretsStep` in Core, one `*SecretSubstitution` per engine),
 `--reveal-secrets`, a strict layer loader, and whole-file secrets via a resource's `replace`
 (`ReplaceStep` in Core — byte copy, no engine). The git-crypt docs now recommend secrets-only
-encryption (`.configtransform/**/*.secret.*`); migrating the pilot is what's left. Never let a secret value
+encryption (`.configtransform/**/*.secret.*`), and `config-transform-pilot` is migrated onto it
+(verified via real CI dispatches). Never let a secret value
 reach stdout, stderr or an exception message — two such leaks were found and fixed in stage 1.

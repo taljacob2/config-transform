@@ -1,7 +1,8 @@
 # Secrets — design
 
-**Status: stages 1–2 implemented and released in `0.24.0-alpha`; stage 3's docs done, its pilot
-migration pending (2026-10-01).** Decisions below were settled with the repo owner in conversation. Value secrets
+**Status: implemented — all three stages done (2026-10-01).** Stages 1–2 released in
+`0.24.0-alpha`; stage 3's docs and the `config-transform-pilot` migration are done (that repo's
+`FINDINGS.md`, "Re-pinning to `0.24.0-alpha`"). Decisions below were settled with the repo owner in conversation. Value secrets
 (placeholders, `*.secret.env` files, the `secrets` field, `--reveal-secrets`, the strict loader) and
 file secrets (`replace`) work as described, and `CONFIG_MANAGEMENT.md` §7,
 `SECRETS_AND_LOCAL_SETUP.md` and `ONBOARDING.md` now present secrets-only encryption as the

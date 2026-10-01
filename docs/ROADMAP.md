@@ -693,30 +693,25 @@ the base file's — `set` rewrote committed files that way too. Output and `set`
 mirror the base/existing file (`TextLayout`; `docs/TREE_MERGE_DESIGN.md`). The pilot is re-pinned
 to `0.23.1-alpha` and verified via run #33: the JSON log group now closes on its own line.
 
+**Secrets (2026-10-01, `docs/SECRETS_DESIGN.md`) — done.** Designed with the repo owner, then
+implemented in three stages: value secrets (`{{CFSECRET_NAME}}` placeholders filled from encrypted
+`*.secret.env` files a layer lists under `secrets`, `--reveal-secrets`, a secrets status report,
+all-or-nothing real runs, a strict layer loader), whole-file secrets via a resource's `replace`
+(byte for byte, any format), and docs recommending secrets-only git-crypt
+(`.configtransform/**/*.secret.*`). Released as `0.24.0-alpha`. Implementation and review added
+ten decisions to the design's log (#13–#22), including two places where an error message would have
+printed part of a secret, and an unquoted YAML placeholder that would have deployed silently
+mangled. `config-transform-pilot` is migrated onto it — every connection string and queue URL is a
+secret, one Firebase file is a whole-file secret, and only `*.secret.*` is encrypted — and verified
+via real CI dispatches (runs #34–#36) with no secret value in any log.
+
 ## Next up
 
-Two items below are actionable purely within this repo (the first two bullets); every other
+One item below is actionable purely within this repo (the first bullet); every other
 remaining item still either needs a solution repo that doesn't exist yet, or a decision only the
 repo owner can make. Not a "next slice" in the same sense as the ones before this section; pick
 from below (or something new) when ready, rather than assuming the next item in this list is the
 default next step.
-
-- **Secrets** (`docs/SECRETS_DESIGN.md`, designed 2026-10-01 with the repo owner) — being
-  implemented in the three stages the design's "Implementation plan" lays out. **Stages 1–2 are
-  done, released as `0.24.0-alpha`.** Stage 1 (value secrets): `{{CFSECRET_NAME}}` placeholders, `*.secret.env` files under a
-  layer's `secrets`, `--reveal-secrets`, the secrets report, all-or-nothing real runs, and a
-  strict loader (unknown fields are errors). Implementation and review surfaced six extra decisions, now
-  in the design's decision log (#13–#18) — notably that YAML needs quoted placeholders, and that a
-  secrets file must sit inside `.configtransform/` for git-crypt to cover it. Stage 2
-  (whole-file secrets via a resource's `replace`, byte for byte, any format) added decisions
-  #19–#22. Stage 3's docs half is done too: `CONFIG_MANAGEMENT.md` §7, `SECRETS_AND_LOCAL_SETUP.md`
-  and `ONBOARDING.md` present secrets-only encryption as the recommended scope, with whole-tree
-  still supported and a migration path between them. **Next:** migrate `config-transform-pilot` onto `0.24.0-alpha` (one placeholder secret, one whole-file secret, narrowed
-  `.gitattributes`, a real CI dispatch) — which makes the pilot's currently encrypted overlays
-  plaintext on GitHub, so it waits for the repo owner's go-ahead. Separates secrets from configuration so only
-  `.configtransform/**/*.secret.*` needs git-crypt and every other overlay is readable and
-  reviewable on GitHub. Every behavior question raised so far is settled in the design's decision
-  log; its "Open items" are deliberately deferred, not blockers.
 
 - **Finish `set`** — XML's "update an existing element" case (including matching an existing
   item among repeated siblings, and now `Insert` for a genuinely brand-new element — all closed,
