@@ -300,3 +300,4 @@ patch into the base document's own tree instead of flattening through `IConfigur
 YAML quoting all survive — the old merge turned `"007"` into `7` and sorted every key, invisibly to
 `--diff`. Keys now match case-sensitively across layers, and a patch key matching an existing one
 only by case is an error (it would otherwise deploy a file .NET refuses to load).
+`config-transform-pilot` is re-pinned to `0.23.0-alpha` and verified via a real CI dispatch.
