@@ -4,3 +4,8 @@ endpoints:
     timeoutSeconds: 30
 flags:
   betaEnabled: false
+version: "2.10"
+notes: |
+  first line
+  second line
+owner: ~

@@ -23,8 +23,8 @@ public class YamlLayerMergerTests
     [Fact]
     public void Preserves_yaml_scalar_types_rather_than_flattening_everything_to_strings()
     {
-        // IConfiguration stores every leaf as a plain string internally; a naive round-trip
-        // would turn `RetryCount: 5` into `RetryCount: "5"`. This pins that it doesn't.
+        // Scalars are carried over exactly as written -- a string-flattening merge would turn
+        // `RetryCount: 5` into `RetryCount: "5"`. This pins that it doesn't.
         var resolved = Resolve("ClientA", "Production");
         var merged = YamlLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
@@ -39,9 +39,8 @@ public class YamlLayerMergerTests
     public void An_overlay_array_overrides_by_index_not_wholesale()
     {
         // The environment overlay's AllowedOrigins has one element; the base has two. Same
-        // documented behavior as JsonLayerMerger, for the same underlying reason: both engines
-        // flatten through Microsoft.Extensions.Configuration ("AllowedOrigins:0",
-        // "AllowedOrigins:1", ...), so an overlay array only overrides the indices it specifies.
+        // documented behavior as JsonLayerMerger (both keep Microsoft.Extensions.Configuration's
+        // own layering rules): an overlay array only overrides the indices it specifies.
         var resolved = Resolve("ClientA", "Production");
         var merged = YamlLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 

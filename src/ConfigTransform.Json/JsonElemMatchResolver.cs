@@ -25,12 +25,13 @@ namespace ConfigTransform.Json;
 /// <see cref="Rewrite"/> turns each patch into a real position, expressed as a
 /// <see cref="JsonObject"/> keyed by numeric-string index (<c>{"1": {...}}</c>) rather than a
 /// <see cref="JsonArray"/> literal -- a real array can't say "leave every other index alone,
-/// touch only this one" without emitting placeholder nulls for the skipped indices, and those
-/// nulls would themselves flatten to real <c>IConfiguration</c> keys and clobber the base
-/// layer's actual values there (the same hazard <see cref="JsonLayerMerger"/>'s own doc comment
-/// already warns about for plain arrays). A numeric-string object key has no such constraint,
-/// and is proven (empirically, both via file and via stream input) to flatten to the exact same
-/// <c>IConfiguration</c> path as a real array element at that index.
+/// touch only this one" without placeholder nulls for the skipped indices, and
+/// <see cref="JsonLayerMerger"/> would write those nulls over the real items there. An index-keyed
+/// object is the IConfiguration idiom for addressing single array items, which
+/// <see cref="JsonLayerMerger"/> merges item by item. The one exception: when the array doesn't
+/// exist yet, every patch is an append at 0, 1, 2..., so the result is a real
+/// <see cref="JsonArray"/> -- there is nothing to leave alone, and an index-keyed object landing on
+/// a missing key would just be written as an object.
 /// </summary>
 public static class JsonElemMatchResolver
 {
@@ -160,7 +161,7 @@ public static class JsonElemMatchResolver
         }
     }
 
-    private static JsonObject RewritePatchList(JsonArray patchList, JsonArray? precedingArray, string pathDescription)
+    private static JsonNode RewritePatchList(JsonArray patchList, JsonArray? precedingArray, string pathDescription)
     {
         var result = new JsonObject();
         var usedIndices = new HashSet<int>();
@@ -217,7 +218,17 @@ public static class JsonElemMatchResolver
             result[index.ToString(CultureInfo.InvariantCulture)] = fields;
         }
 
-        return result;
+        if (precedingArray is not null)
+            return result;
+
+        // No array yet: every patch was an append, at 0, 1, 2... in order -- see the class remarks.
+        var created = new JsonArray();
+        foreach (var (_, fields) in result.ToList())
+        {
+            result.Remove(fields!.GetPropertyName());
+            created.Add(fields);
+        }
+        return created;
     }
 
     private static JsonNode? Navigate(JsonNode? node, IReadOnlyList<string> segments)

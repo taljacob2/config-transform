@@ -1,15 +1,18 @@
 {
   "Logging": {
     "LogLevel": {
-      "Default": "Information"
+      "Default": "Warning"
     }
   },
-  "ApiUrl": "https://dev.example.com",
-  "RetryCount": 3,
+  "ApiUrl": "https://clienta.example.com",
+  "RetryCount": 5,
   "Features": {
-    "EnableBeta": false
+    "EnableBeta": true
   },
-  "AllowedOrigins": [ "https://a.example.com", "https://b.example.com" ],
+  "AllowedOrigins": [
+    "https://prod.example.com",
+    "https://b.example.com"
+  ],
   "AllowedHosts": "*",
   "ConnectionStrings": {
     "Main": "Server=devdb;User=app;Password=a+b'c&d<e>"
@@ -18,5 +21,6 @@
   "Threshold": 0.50,
   "ProxyUrl": null,
   "Plugins": {},
-  "BlockedIps": []
+  "BlockedIps": [],
+  "SiteTitle": "שלום café"
 }

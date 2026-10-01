@@ -160,7 +160,8 @@ once when `set` writes the file: `JsonLayerMerger.Merge` gained a pre-processing
 (`JsonElemMatchResolver`, new) that rewrites `$elemMatch` patches into a real position before
 handing a layer to `Microsoft.Extensions.Configuration`, and falls back to the original,
 unmodified merge code path whenever neither overlay layer uses `$elemMatch` at all — every
-previously-shipped merge behavior is unchanged. See `docs/FIELD_AUTHORING_DESIGN.md`'s "JSON /
+previously-shipped merge behavior is unchanged. (Both code paths have since been replaced by a
+single tree merge — see "Output-fidelity pass" below and `docs/TREE_MERGE_DESIGN.md`.) See `docs/FIELD_AUTHORING_DESIGN.md`'s "JSON /
 YAML" section and decision log for the full mechanism and the alternatives it ruled out
 (index/position addressing, a bare-object-only overlay shape), and `docs/USAGE.md`'s `set`
 section for worked examples. 41 new tests: `JsonElemMatchResolverTests` (new, 17), fixture-backed
@@ -489,7 +490,9 @@ with `ConfigTransform.Json`, per this repo's per-format independent-library conv
 semantics (array-override-by-index, empty-container-round-trips-as-absent) are inherited from
 `IConfiguration`'s own flattening, identically to JSON. One real, verified limitation: YAML is
 case-sensitive but `IConfiguration` isn't, so sibling keys differing only in case throw a
-duplicate-key error at parse time — documented, not treated as a bug. `set` (`YamlFieldAuthor`)
+duplicate-key error at parse time — documented, not treated as a bug. (Superseded by the tree
+merge of `docs/TREE_MERGE_DESIGN.md`, which no longer uses `IConfiguration` or NetEscapades:
+case-variant sibling keys are allowed, and empty containers survive.) `set` (`YamlFieldAuthor`)
 covers the plain-field path only — updating an existing key or creating a new one, the same
 `:`-separated nested-path model as JSON's own plain-field case. **Matching an item inside a YAML
 array of objects is not implemented** — refused with a clear "not yet supported" message, the
@@ -660,15 +663,28 @@ merge results. None of them is a merge-correctness bug. Fixed one per PR, in thi
    hunks. **Pilot follow-up when re-pinning:** `config-transform-pilot`'s `build-transformed.yml`
    `--diff-layers` step loses colour in the Actions log under the new default; add
    `--color always` there if it's wanted.
-4. **JSON/YAML output reorders keys alphabetically and normalizes YAML quoting** — inherited from
-   flattening through `IConfiguration`, so `--diff` shows moved lines that aren't real changes.
-   Repo owner's decision: fix it (merge each patch into the base document's own tree so base order
-   survives), not just document it.
+4. **JSON/YAML tree merge — fixed, unreleased.** Flattening through `IConfiguration` sorted keys
+   alphabetically and re-quoted YAML, but on closer inspection also corrupted values: `"007"`
+   became `7`, `"1.10"` became `1.1`, large integers lost precision, `null` became `""`, `{}`/`[]`
+   were dropped, a patch's key spelling replaced the base's, and a JSON patch containing comments
+   crashed the merge. (Correction to the first write-up of this item: `--diff` did *not* show the
+   reordering, because it renders the unpatched side through the same merge — which is exactly why
+   none of this was ever visible in a diff.) Repo owner's decision: fix it, not just document it.
+   `JsonLayerMerger`/`YamlLayerMerger` now merge each patch into the base document's own tree,
+   keeping `IConfiguration`'s merge rules but none of its flattening;
+   `Microsoft.Extensions.Configuration` and `NetEscapades.Configuration.Yaml` are no longer
+   dependencies. See `docs/TREE_MERGE_DESIGN.md`, including its open item on case-sensitive
+   key matching for non-.NET consumers (an owner decision).
 
 ## Next up
 
-- **Output-fidelity pass, item 4** — see the "Output-fidelity pass" paragraph at the end of
-  "Current state" above. Actionable now, no solution repo or further owner decision needed.
+- **Release the output-fidelity pass** — all four items are done but unreleased (`[Unreleased]`
+  in `docs/CHANGELOG.md`); cut a version per `docs/RELEASING.md`, then re-pin
+  `config-transform-pilot` (adding `--color always` to its `--diff-layers` CI step if colour is
+  wanted there). The tree merge changes deployed JSON/YAML output for any file that relied on the
+  old reordering/type-guessing, so the pilot's golden-output comparison is the real check.
+- **Case-sensitive key matching for non-.NET consumers** — open item in
+  `docs/TREE_MERGE_DESIGN.md`; needs the repo owner's decision.
 One item below is now actionable purely within this repo (see the first bullet); every other
 remaining item still either needs a solution repo that doesn't exist yet, or a decision only the
 repo owner can make. Not a "next slice" in the same sense as the ones before this section; pick

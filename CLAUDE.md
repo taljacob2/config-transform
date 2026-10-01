@@ -61,10 +61,11 @@ here is accidental rather than deliberate.
 - **Format-generic by design.** `ConfigTransform.Xml` (via `Microsoft.Web.Xdt`) treats
   App.config, Web.config, NLog.config, or any other XML file identically — there is no
   App.config-specific logic anywhere in it. `ConfigTransform.Json` is the same for JSON via
-  `Microsoft.Extensions.Configuration`, `ConfigTransform.Env` the same for flat `KEY=VALUE`
-  `.env` files with no NuGet dependency at all, and `ConfigTransform.Yaml` the same for YAML via
-  `NetEscapades.Configuration.Yaml`/`YamlDotNet` (same architecture as JSON, no code shared with
-  it — see Repo structure below). This is proven, not just claimed: the `GenericXml`,
+  `System.Text.Json.Nodes`, `ConfigTransform.Env` the same for flat `KEY=VALUE` `.env` files with
+  no NuGet dependency at all, and `ConfigTransform.Yaml` the same for YAML via `YamlDotNet` (same
+  merge rules as JSON, no code shared with it — see Repo structure below). JSON and YAML merge
+  each patch into the base document's own tree, keeping key order and every value exactly as
+  written (`docs/TREE_MERGE_DESIGN.md`) — don't reintroduce a flatten-to-strings step. This is proven, not just claimed: the `GenericXml`,
   `GenericJson`, `GenericEnv`, and `GenericYaml` test fixtures use arbitrary, made-up
   schemas/key-names specifically to catch any accidental special-casing. Don't add logic that
   assumes a specific filename or schema.
@@ -214,13 +215,10 @@ published, and `config-transform-pilot` is re-pinned to it with a new `.env`-bas
 `NotificationWorker` pilot project added and verified via real CI. A fourth format has since
 landed: YAML support (`ConfigTransform.Yaml`, registered as a fourth `FormatEngine` with zero
 orchestration changes needed — the dispatcher generalizing to a fourth engine, not just three) —
-reuses JSON's flatten-and-merge *architecture* (`Microsoft.Extensions.Configuration`) via
-`NetEscapades.Configuration.Yaml`'s `AddYamlFile` (read) and `YamlDotNet`'s `ISerializer` (write,
-needed directly since NetEscapades only reads), sharing no code with `ConfigTransform.Json` per
-this repo's per-format independent-library convention. Merge semantics (array-override-by-index,
-empty-container-round-trips-as-absent) are inherited from `IConfiguration`'s own flattening,
-identically to JSON; one real, documented limitation is that YAML is case-sensitive but
-`IConfiguration` isn't, so sibling keys differing only in case throw at parse time. `set` covers
+originally reused JSON's flatten-and-merge *architecture* (`Microsoft.Extensions.Configuration`,
+via `NetEscapades.Configuration.Yaml`) — since replaced, for both formats, by a tree merge that
+keeps order, types and quoting (see the output-fidelity note at the end of this section), sharing
+no code with `ConfigTransform.Json` per this repo's per-format independent-library convention. `set` covers
 the plain-field path only (update/create a key, same `:`-separated model as JSON's own
 plain-field case) — matching an item inside a YAML array of objects is **not** implemented,
 refused with a "not yet supported" message, the same posture XML's own unimplemented
@@ -296,5 +294,8 @@ array-of-objects matching is the remaining `set` gap. An output-fidelity pass is
 `docs/ROADMAP.md`'s "Output-fidelity pass"): console output is now always UTF-8 (`Utf8Console`,
 in `ConfigTransform.Cli`) and JSON output keeps non-ASCII and `< > & ' +` literal instead of
 `\uXXXX` escapes (`JsonWriteOptions`), and diff colour follows a new `--color auto|always|never`
-flag (default `auto`: terminal only, so redirects get plain text), none tagged yet. Preserving base
-key order in JSON/YAML output is next.
+flag (default `auto`: terminal only, so redirects get plain text). JSON and YAML now merge each
+patch into the base document's own tree instead of flattening through `IConfiguration`
+(`docs/TREE_MERGE_DESIGN.md`): key order, spelling, value types and text, `null`/`{}`/`[]`, and
+YAML quoting all survive — the old merge turned `"007"` into `7` and sorted every key, invisibly to
+`--diff`. None of the four is tagged yet.

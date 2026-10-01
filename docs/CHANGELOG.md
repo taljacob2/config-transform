@@ -15,6 +15,24 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ### Changed
 
+- **JSON and YAML now merge each patch into the base document's own tree, keeping the source's
+  key order, key spelling, and every value exactly as written** (`docs/TREE_MERGE_DESIGN.md`).
+  Both engines used to flatten the base and patches through `Microsoft.Extensions.Configuration`
+  and rebuild a document from string keys. That sorted keys alphabetically, re-quoted YAML, and
+  corrupted values: `"007"` became `7`, `"1.10"` became `1.1`, `"true"` became `true`, a 20-digit
+  integer lost precision, `null` became `""`, `{}`/`[]` were dropped, a patch's key spelling
+  replaced the base's, and a patch scalar landing on a base object was silently dropped. `--diff`
+  hid all of it, since it renders the unpatched side through the same merge. Kept on purpose:
+  `IConfiguration`'s merge rules (key-by-key, case-insensitive key matching across layers, arrays
+  by index, the `{"1": ...}` index-keyed idiom) and `$elemMatch` resolution. Also changed: a later
+  layer now replaces a value of a different kind outright (the old merge always kept the object);
+  keys differing only by case within one file are allowed (YAML used to throw); an index-keyed
+  patch that would leave a gap in an array is an error; a multi-document YAML file is refused;
+  YAML output reuses the base file's indentation and sequence style. Comments are still not carried
+  into the output. **Deployed JSON/YAML files can change** wherever they relied on the old
+  reordering or type-guessing — compare before rolling out. `Microsoft.Extensions.Configuration`,
+  `Microsoft.Extensions.Configuration.Json` and `NetEscapades.Configuration.Yaml` are no longer
+  dependencies. New golden expected-output fixtures (`Fixtures/*/Expected/`) pin the full output.
 - **Diff output is no longer coloured by default when stdout isn't a terminal.** The default,
   `--color auto`, colours only on a terminal with the `NO_COLOR` environment variable unset. A CI
   log that renders ANSI (GitHub Actions does, even though a job's stdout isn't a terminal) now
@@ -24,6 +42,9 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ### Fixed
 
+- **A JSON patch file containing `//` or `/* */` comments no longer crashes the merge.** Comments
+  and trailing commas were accepted in a base file but not in a patch (the `$elemMatch` pre-scan
+  parsed patches strictly). Fixed by the tree merge above, which reads every file the same way.
 - **`--diff-layers` spaces a layer's second and later hunks with a blank line**, the same as
   between two layers' sections. Before, a layer's second `[<layer>]` tag followed the previous
   hunk's last line with no gap. See `docs/DIFF_LAYERS_DESIGN.md` decision log #5.

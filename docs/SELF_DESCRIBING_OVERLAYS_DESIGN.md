@@ -36,7 +36,9 @@ line-count accounting) and is taken at face value here, not re-litigated.
 declaration* — which files exist, how they're addressed, how the tool finds them. It is **not**
 a proposal to change how any individual overlay file is written or merged: XDT's
 `Transform`/`Locator` semantics for XML, `Microsoft.Extensions.Configuration`'s merge behavior
-and the `$elemMatch` mechanism for JSON (`docs/FIELD_AUTHORING_DESIGN.md`) are all unchanged. A
+and the `$elemMatch` mechanism for JSON (`docs/FIELD_AUTHORING_DESIGN.md`) are all unchanged.
+(JSON's merge has since moved off `Microsoft.Extensions.Configuration` onto a tree merge with the
+same rules — `docs/TREE_MERGE_DESIGN.md` — a separate, later change.) A
 "patch" file under this design is byte-for-byte the same kind of file an `Environments/`/
 `Clients/` overlay file is today. This keeps the blast radius contained to
 `ConfigTransform.Core`'s manifest/discovery/layer-resolution layer and each tool's CLI

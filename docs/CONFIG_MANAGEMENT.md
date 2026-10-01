@@ -51,7 +51,7 @@ needs a different mechanism — not an assumption that this design already cover
 
 | Decision | Chosen | Rejected alternative(s) | Why |
 |---|---|---|---|
-| Config variant management | Base file + layered transform/overlay files (XDT for XML, `Microsoft.Extensions.Configuration`-based merge for JSON) | Full flat config file per (client, environment) | Avoids duplicating shared settings across every client; a shared value change is a one-line edit, not an N-file edit. (Flat remains legitimate if a given project's settings are mostly client-specific with little sharing — decide per project, not globally.) |
+| Config variant management | Base file + layered transform/overlay files (XDT for XML, a tree merge with `Microsoft.Extensions.Configuration`'s layering rules for JSON/YAML) | Full flat config file per (client, environment) | Avoids duplicating shared settings across every client; a shared value change is a one-line edit, not an N-file edit. (Flat remains legitimate if a given project's settings are mostly client-specific with little sharing — decide per project, not globally.) |
 | XML transform engine | `Microsoft.Web.Xdt` called directly | SlowCheetah | SlowCheetah is unmaintained tooling glue around the same engine; `Microsoft.Web.Xdt` itself is the actively maintained piece (.NET Foundation). |
 | Encryption mechanism | git-crypt, whole-file encryption | SOPS + age/KMS | SOPS only understands JSON/YAML/etc., not XML, and requires secrets to be split out of App.config first — a refactor the team cannot do right now. git-crypt encrypts whole files regardless of format, requiring zero restructuring of existing mixed App.config files. |
 | git-crypt key model | Single default symmetric key | Per-user GPG keys | GPG gives an auditable grant history but **not** free revocation — revoking access still requires generating a new content key and re-encrypting everything, the same cost as symmetric-key rotation. Given the team's time constraints, the operational overhead of GPG (per-dev keypairs, key exchange/trust, a CI GPG identity) isn't worth it for a benefit (audit trail of grants) that's thin relative to its cost. |
@@ -236,11 +236,14 @@ during the real inventory pass (§11).
 
 ### 5.3 JSON (.NET 6/8)
 
-Uses `Microsoft.Extensions.Configuration`'s own `ConfigurationBuilder` as the merge engine at
-**build time** (`AddJsonFile` for the base file, then each patch in the resolved chain, in
-`extends` order), then flattens the resulting `IConfigurationRoot` back out to a single
-`appsettings.json` written
-into the publish output. This is Option B from our discussion (build-time resolution) chosen
+Merges at **build time**: the base file, then each patch in the resolved chain, in `extends`
+order, merged into the base document's own tree, and the result written into the publish output as
+a single `appsettings.json` (`docs/TREE_MERGE_DESIGN.md`). The merge rules are
+`Microsoft.Extensions.Configuration`'s own layering rules (key-by-key, case-insensitive keys,
+arrays by index), so the file deployed is what the app would have seen layering the same files at
+runtime. Until the output-fidelity pass this literally ran through a `ConfigurationBuilder` and
+rebuilt the document from flattened string keys, which reordered keys, guessed value types back
+(`"007"` became `7`) and dropped `null`/`{}`/`[]`; the tree merge keeps all of them as written. This is Option B from our discussion (build-time resolution) chosen
 over Option A (runtime layering via `AddJsonFile` at app startup, selecting the client via an
 environment variable) — Option A is more "cloud-native idiomatic" (build once, deploy many)
 but would mean every client's secrets potentially ship inside every artifact/image
@@ -294,8 +297,7 @@ registered as a third `FormatEngine` in `ConfigTransform.Cli`'s `FormatEngineReg
 orchestration changes were needed at all, confirming the "register a new engine, nothing else
 changes" claim `CLAUDE.md`/`SELF_DESCRIBING_OVERLAYS_DESIGN.md` make for the dispatcher, for a
 third format and not just two. Needs **no NuGet package at all** — parsing/serializing flat
-`KEY=VALUE` text needs nothing beyond the BCL, unlike JSON's `Microsoft.Extensions.Configuration`
-dependency.
+`KEY=VALUE` text needs nothing beyond the BCL.
 
 Merge semantics mirror JSON's flat key-override, simpler still since there's no nesting or
 arrays to disambiguate: the base file parses into an ordered `KEY→VALUE` map, and each patch in
@@ -305,9 +307,8 @@ deliberately (`EnvFile.cs` carries the authoritative rule list; see
 `docs/FIELD_AUTHORING_DESIGN.md`'s decision log for the reasoning behind each one):
 
 - Blank lines and whole-line `#` comments are dropped on parse and never reappear on
-  serialize — this matches JSON's own existing behavior (`Microsoft.Extensions.Configuration`'s
-  JSON provider already drops comments/formatting on rebuild too), not a new gap this format
-  introduces.
+  serialize — this matches the JSON and YAML engines, which also drop comments on output
+  (`docs/TREE_MERGE_DESIGN.md`), not a new gap this format introduces.
 - An optional leading `export ` is stripped before parsing the key, supporting Bash-sourceable
   files (a common real `.env` convention, e.g. `direnv`/Docker `env_file`).
 - A key must match the real POSIX env-var-name grammar (`[A-Za-z_][A-Za-z0-9_]*`); an invalid key
@@ -334,14 +335,13 @@ one real file, matched by extension the same way as every other format.
 ### 5.6 YAML
 
 Implemented (`ConfigTransform.Yaml`). Structurally the same as JSON — hierarchical, keyed — so it
-reuses the exact same build-time flatten-and-merge *architecture* as `ConfigTransform.Json`
-(§5.3): `Microsoft.Extensions.Configuration`, but with `NetEscapades.Configuration.Yaml`'s
-`AddYamlFile` in place of `AddJsonFile`. Per this repo's own per-format independent-library
-convention (`CLAUDE.md`'s "Repo structure"), `ConfigTransform.Yaml` shares no code with
-`ConfigTransform.Json` — the merge/serialize logic is ported, not reused, and the read side
-(`NetEscapades.Configuration.Yaml`) and write side (`YamlDotNet`'s high-level `ISerializer`,
-needed directly since NetEscapades only reads) are both real NuGet dependencies, unlike `.env`
-(§5.5), which needed none.
+uses the same tree merge and the same merge rules as `ConfigTransform.Json` (§5.3,
+`docs/TREE_MERGE_DESIGN.md`), over YamlDotNet's representation model (`YamlStream`). Per this
+repo's own per-format independent-library convention (`CLAUDE.md`'s "Repo structure"),
+`ConfigTransform.Yaml` shares no code with `ConfigTransform.Json` — the merge is ported, not
+reused. `YamlDotNet` is its one NuGet dependency (the engine originally also used
+`NetEscapades.Configuration.Yaml` to feed `Microsoft.Extensions.Configuration`; the tree merge
+needs neither).
 
 Recognized by `resources[].path`'s own `.yaml`/`.yml` extension — both map to the same engine
 (a two-extension `FormatEngine`, the same pattern XML already uses for `[".config", ".xml"]`).
@@ -349,23 +349,23 @@ Registered as the fourth `FormatEngine` in `ConfigTransform.Cli`'s `FormatEngine
 zero orchestration changes needed — the dispatcher generalizing to a fourth engine (after `.env`
 already proved a third) with no changes outside the new registration and merge engine itself.
 
-Merge semantics: array-override-by-index and empty-map/empty-sequence-round-trips-as-absent
-behavior are inherited from `IConfiguration`'s own flattening, identically to JSON (§5.3) — not
-YAML-specific, and not new gaps this format introduces.
-
-Known, real limitation (verified empirically, not assumed): YAML itself is case-sensitive, but
-`Microsoft.Extensions.Configuration` is not. Two sibling keys differing only in case (e.g. `Foo:`
-and `foo:` at the same level) throw a duplicate-key exception at parse time via
-`NetEscapades.Configuration.Yaml`. Accepted as a known quirk of the underlying library, the same
-way JSON's array-index-override and `.env`'s comment-dropping are documented rather than "fixed."
+Merge semantics are JSON's (§5.3): maps key by key with case-insensitive matching across layers,
+sequences by index, anything else replaced as written. Scalars are never interpreted, only
+carried over, so quoting (`"..."`, `'...'`, plain), block scalars and flow collections come through
+exactly as written, and `{}`/`[]`/`null`/`~` survive. The base file's indentation width and
+sequence style (indented under the key, or flush with it) are detected and reused. Not preserved:
+comments, anchors/aliases (expanded into copies), and per-level indentation widths. A file with
+more than one YAML document (`---`) is refused. Keys differing only by case within one file are
+allowed (YAML is case-sensitive); the original NetEscapades-based engine threw on them.
 
 `set` (`YamlFieldAuthor`) covers the plain-field path only — updating an existing key or creating
 a new one via `--match key=<path>`/`--match literal-key=<path>` (`:`-separated nested paths, same
 model as JSON's own, including the same nested-path-vs-literal-key collision detection). Matching
-an item inside an array of objects (YAML's equivalent of JSON's `$elemMatch`, §7) is **not**
-implemented — a `--match` shape with more than one coordinate is refused with a clear "not yet
-supported" error rather than guessed at, the same posture this tool already takes for XML's own
-unimplemented array-of-objects matching and `Insert`. `JsonElemMatchResolver` (§7) is ~200 lines
+an item inside an array of objects (YAML's equivalent of JSON's `$elemMatch`,
+`docs/FIELD_AUTHORING_DESIGN.md`) is **not** implemented — a `--match` shape with more than one
+coordinate is refused with a clear "not yet supported" error rather than guessed at, the same
+posture this tool took for XML's array-of-objects matching and `Insert` before both were
+implemented. `JsonElemMatchResolver` is ~200 lines
 tightly coupled to `System.Text.Json.Nodes` types; porting it to YAML's own object-graph shape is
 real, separable work, deliberately deferred rather than bundled into YAML's first version — this
 repo's own precedent for JSON itself, where `$elemMatch` landed in a later PR than JSON's first

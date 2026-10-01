@@ -21,7 +21,7 @@ ConfigTransform/                              (repo root)
 │   │   └── ConfigTransform.Core.csproj
 │   ├── ConfigTransform.Xml/                  # merge engine wrapping Microsoft.Web.Xdt — internal library, no CLI
 │   │   └── ConfigTransform.Xml.csproj
-│   ├── ConfigTransform.Json/                 # merge engine wrapping Microsoft.Extensions.Configuration — internal library, no CLI
+│   ├── ConfigTransform.Json/                 # tree merge over System.Text.Json.Nodes — internal library, no CLI
 │   │   └── ConfigTransform.Json.csproj
 │   └── ConfigTransform.Cli/                  # the actual CLI — registers both engines above into Core's dispatcher
 │       ├── Program.cs
@@ -59,8 +59,8 @@ ConfigTransform/                              (repo root)
 
 `configtransform.json` parsing, `extends`-chain resolution, case-insensitive file resolution, and
 found/not-found reporting (spec §4, §5.1, §5.4) are identical regardless of whether the file
-being merged is XML or JSON — only the actual merge engine differs (`Microsoft.Web.Xdt` vs
-`Microsoft.Extensions.Configuration`). Keeping that shared logic in one library tested once,
+being merged is XML or JSON — only the actual merge engine differs (`Microsoft.Web.Xdt` vs a
+tree merge over `System.Text.Json.Nodes`, docs/TREE_MERGE_DESIGN.md). Keeping that shared logic in one library tested once,
 rather than duplicated (and drifting) between `ConfigTransform.Xml` and `ConfigTransform.Json`,
 is the same reuse principle the rest of this design has followed throughout — one layer schema,
 one resolution rule, two thin format-specific engines underneath, dispatched to by one CLI
@@ -145,16 +145,17 @@ asserted in prose.
   "AllowedHosts": "*"
 }
 ```
-Includes one dedicated test for a **JSON array value** — `Microsoft.Extensions.Configuration`
-does not merge arrays element-wise, it flattens them to indexed keys (`Key:0`, `Key:1`, …), so
-an overlay "overriding" an array can produce a surprising result if not understood. This is a
+Includes one dedicated test for a **JSON array value** — arrays merge by index, the rule
+`Microsoft.Extensions.Configuration`'s own layering uses (it flattens them to indexed keys
+`Key:0`, `Key:1`, …), so an overlay "overriding" an array can produce a surprising result if not
+understood. This is a
 known gotcha worth an explicit, documented test asserting the actual (if unintuitive) behavior,
 rather than discovering it by surprise against a real project later.
 
 A separate **`ElemMatch` fixture subtree** (`Fixtures/DotNetCore/ElemMatch/`) covers `set`'s
 array-of-objects matching (`docs/FIELD_AUTHORING_DESIGN.md`'s `$elemMatch` mechanism) — a
 different scenario from the plain array-value gotcha above, since it exercises real merge-time
-resolution rather than the flatten-by-index behavior. Deliberately built as an Environment/Client
+resolution rather than the merge-by-index behavior. Deliberately built as an Environment/Client
 overlay pair where the Client layer's patch targets an item the Environment layer itself just
 created, so the fixture pins the progressive-layering requirement (Client resolves against
 base+Environment-*merged*, not the base alone) rather than just the simple single-layer case; it

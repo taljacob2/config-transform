@@ -5,10 +5,10 @@ result, built around self-describing `configtransform.json` layers
 (`docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`) — one per layer directory under `.configtransform/`,
 addressed by `--client`/`--environment`, spanning every resource (project config file) that layer
 touches, in **any** registered format, in one call. Each resource is dispatched to the right merge
-engine by its own file extension — `.config`/`.xml` via `Microsoft.Web.Xdt`, `.json` via
-`Microsoft.Extensions.Configuration`, `.env` via a dependency-free flat `KEY=VALUE` merge
-(`ConfigTransform.Env`), `.yaml`/`.yml` via `NetEscapades.Configuration.Yaml`/`YamlDotNet`
-(`ConfigTransform.Yaml`) — so a mixed-format layer resolves with no skipping and no separate tool
+engine by its own file extension — `.config`/`.xml` via `Microsoft.Web.Xdt`, `.json` via a tree
+merge over `System.Text.Json.Nodes`, `.env` via a dependency-free flat `KEY=VALUE` merge
+(`ConfigTransform.Env`), `.yaml`/`.yml` via a tree merge over `YamlDotNet` (`ConfigTransform.Yaml`)
+— so a mixed-format layer resolves with no skipping and no separate tool
 invocation per format; a resource whose extension no registered engine handles is reported, not
 silently dropped (see "Single resource vs. every resource" below). The `set` verb
 (below) works the same way, dispatching by the *target* resource's own extension; what it actually
@@ -414,9 +414,9 @@ full reasoning behind each:
   existing key *and* creating a brand-new one, since JSON has no XDT-style Transform/Locator
   distinction to make (any layer can introduce a key; `set` just writes it) — **and matching or
   creating an item inside an array of objects**, via a `$elemMatch`-style overlay (below).
-  `Microsoft.Extensions.Configuration`'s JSON provider merges arrays purely by index, with no
-  native concept of matching a field's value the way XDT's `Locator` does for XML, so this isn't a
-  direct port of XML's mechanism — see `docs/FIELD_AUTHORING_DESIGN.md`'s "JSON / YAML" section
+  JSON arrays merge purely by index (the same rule `Microsoft.Extensions.Configuration`'s own
+  layering uses), with no native concept of matching a field's value the way XDT's `Locator` does
+  for XML, so this isn't a direct port of XML's mechanism — see `docs/FIELD_AUTHORING_DESIGN.md`'s "JSON / YAML" section
   and decision log for the full reasoning.
 - **`.env`** (`.env` resources): the simplest of the four — a `.env` file is always flat, so
   there's no nested-path disambiguation to make (unlike JSON) and no update-vs-insert branch
@@ -557,20 +557,24 @@ registration in `src/ConfigTransform.Cli/FormatEngines.cs`.
 first), applied via `Microsoft.Web.Xdt` to that same document. See
 `src/ConfigTransform.Xml/XmlLayerMerger.cs`.
 
-**JSON**: base + every patch in the resolved chain, in order, loaded as layered sources via
-`Microsoft.Extensions.Configuration`'s own `ConfigurationBuilder`, then flattened back to a
-single JSON document. Two things worth knowing, both inherent to how `IConfiguration` works,
-documented in full in `src/ConfigTransform.Json/JsonLayerMerger.cs`:
+**JSON and YAML**: the base file, then every patch in the resolved chain, in order, merged into
+the base document's own tree (`docs/TREE_MERGE_DESIGN.md`; `src/ConfigTransform.Json/JsonLayerMerger.cs`,
+`src/ConfigTransform.Yaml/YamlLayerMerger.cs`). The merge rules are the ones
+`Microsoft.Extensions.Configuration`'s own layering applies; what's written out is the base file's
+own shape:
+- Objects merge key by key. Keys match case-insensitively across layers; a matched key keeps the
+  base's spelling and position, and a new key is appended at the end of its object.
 - An overlay array does not replace the base array wholesale — it overrides by index, so any
-  base-layer indices beyond what the overlay specifies survive untouched.
-- Types (bool/number/string) are inferred from the flattened value to avoid turning
-  `"enabled": false` into `"enabled": "false"`.
-- A patch containing a `set`-written (or hand-written) `$elemMatch` array-of-objects patch (see
-  the `set` section above) is resolved to a real position and rewritten *before* it reaches
-  `Microsoft.Extensions.Configuration` — a pre-processing pass (`JsonElemMatchResolver.Rewrite`)
-  that only runs when a patch in the chain actually contains one, resolving each patch's
-  `$elemMatch` entries against the *accumulated* merge of every prior patch (not the base alone);
-  every other merge takes the original, unmodified code path.
+  base-layer indices beyond what the overlay specifies survive untouched. An object keyed by
+  index (`{"1": ...}`) updates one item of an existing array.
+- Anything else (a scalar, `null`, or a different kind of value) replaces what was there.
+- Every value keeps the type and text it was written with — `"007"` stays a string, `1.50` stays
+  `1.50`, YAML quoting and block scalars are kept — and `null`, `{}` and `[]` survive. Comments
+  are not carried into the output.
+- A JSON patch containing a `set`-written (or hand-written) `$elemMatch` array-of-objects patch
+  (see the `set` section above) is resolved to a real position first
+  (`JsonElemMatchResolver.Rewrite`), against the document as merged through every prior patch
+  (not the base alone).
 
 **Dispatch, for both the read path and `set`**: `ConfigTransform.Cli/FormatEngines.cs` registers
 one `FormatEngine` per format (extensions owned, merge function, field-author function, patch-file

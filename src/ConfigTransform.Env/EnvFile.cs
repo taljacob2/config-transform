@@ -12,8 +12,8 @@ namespace ConfigTransform.Env;
 /// log for the reasoning behind each one:
 ///
 /// - Blank lines and whole-line `#` comments are dropped on parse and never reappear on
-///   serialize -- this matches JSON's own existing behavior (`Microsoft.Extensions.
-///   Configuration`'s JSON provider already drops comments/formatting on rebuild), not a new gap.
+///   serialize -- this matches the JSON and YAML engines, which also drop comments on output
+///   (docs/TREE_MERGE_DESIGN.md), not a new gap.
 /// - An optional leading `export ` is stripped before parsing the key (Bash-sourceable files are
 ///   a common real `.env` convention, e.g. `direnv`/Docker `env_file`).
 /// - A key must match the real POSIX env-var-name grammar (`[A-Za-z_][A-Za-z0-9_]*`) -- a `.env`

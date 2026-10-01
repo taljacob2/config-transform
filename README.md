@@ -27,12 +27,12 @@ project from scratch and [`docs/USAGE.md`](docs/USAGE.md) for the full CLI refer
   format-engine dispatch).
 - `src/ConfigTransform.Xml` — XDT-based merge engine for App.config/Web.config/other XML config
   files. An internal library, not its own dotnet tool.
-- `src/ConfigTransform.Json` — `Microsoft.Extensions.Configuration`-based merge engine for
-  appsettings.json and other JSON config files. An internal library, not its own dotnet tool.
+- `src/ConfigTransform.Json` — order- and type-preserving merge engine for appsettings.json and
+  other JSON config files (`System.Text.Json.Nodes`). An internal library, not its own dotnet tool.
 - `src/ConfigTransform.Env` — dependency-free flat `KEY=VALUE` merge engine for `.env` config
   files. An internal library, not its own dotnet tool.
-- `src/ConfigTransform.Yaml` — `NetEscapades.Configuration.Yaml`/`YamlDotNet`-based merge engine
-  for YAML config files. An internal library, not its own dotnet tool.
+- `src/ConfigTransform.Yaml` — order- and style-preserving merge engine for YAML config files
+  (`YamlDotNet`). An internal library, not its own dotnet tool.
 - `src/ConfigTransform.Cli` — the unified CLI, distributed as the `configtransform` dotnet tool
   (`ConfigTransform.Cli` package). Dispatches each resource to the right engine above by its own
   file extension, so a mixed XML/JSON/`.env`/YAML layer resolves in one call. Replaces the separate
