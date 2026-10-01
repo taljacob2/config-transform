@@ -13,8 +13,6 @@ namespace ConfigTransform.Json;
 /// </summary>
 public static class JsonFieldAuthor
 {
-    private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true };
-
     /// <param name="precedingJson">
     /// The document that exists immediately before this write's own layer would apply — same
     /// meaning as in <c>XmlFieldAuthor.Author</c> — used to verify a bare/defaulted --match
@@ -67,7 +65,7 @@ public static class JsonFieldAuthor
 
             var target = existingTargetJson is null ? new JsonObject() : ParseObject(existingTargetJson, "existing overlay");
             SetAtPath(target, segments, setFields[0].Value);
-            return target.ToJsonString(Indented);
+            return target.ToJsonString(JsonWriteOptions.Indented);
         }
 
         foreach (var condition in elementConditions)
@@ -85,14 +83,14 @@ public static class JsonFieldAuthor
         {
             var baseDoc = existingTargetJson is null ? new JsonObject() : ParseObject(existingTargetJson, "existing overlay");
             MutateRealArrayItem(baseDoc, segments, elementConditions, setFields);
-            return baseDoc.ToJsonString(Indented);
+            return baseDoc.ToJsonString(JsonWriteOptions.Indented);
         }
 
         JsonElemMatchResolver.Probe(preceding, segments, elementConditions);
 
         var overlay = existingTargetJson is null ? new JsonObject() : ParseObject(existingTargetJson, "existing overlay");
         SetElemMatchAtPath(overlay, segments, elementConditions, setFields);
-        return overlay.ToJsonString(Indented);
+        return overlay.ToJsonString(JsonWriteOptions.Indented);
     }
 
     /// <summary>Base-target element-match write: walks to the real array and writes into it

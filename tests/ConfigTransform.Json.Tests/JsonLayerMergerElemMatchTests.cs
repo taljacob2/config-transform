@@ -293,4 +293,16 @@ public class JsonLayerMergerElemMatchTests
     /// <summary>Adapts fixed-slot (env, client) arguments to JsonLayerMerger's arbitrary-length chain signature.</summary>
     private static string Merge(string basePath, params string?[] patches) =>
         JsonLayerMerger.Merge(basePath, patches.Where(p => p is not null).Select(p => p!).ToList());
+
+    [Fact]
+    public void Elem_match_path_also_writes_non_ascii_and_html_sensitive_characters_literally()
+    {
+        // The $elemMatch path serializes through its own code path (JsonLayerMerger.BuildMerge),
+        // separate from the plain-merge one -- see JsonWriteOptions.
+        var resolved = Resolve("ClientA", "Production");
+        var merged = JsonLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
+
+        Assert.Contains("\"label\": \"מנהל & co+\"", merged);
+        Assert.DoesNotContain(@"\u", merged);
+    }
 }

@@ -92,8 +92,8 @@ public static class JsonElemMatchResolver
 
     private static string AmbiguousMessage(string pathDescription, JsonArray array, IReadOnlyList<int> indices, IReadOnlyList<Condition> conditions)
     {
-        var description = string.Join(", ", conditions.Select(c => $"{c.Field}={c.Value?.ToJsonString() ?? "null"}"));
-        var listing = string.Join("\n", indices.Select(i => "  " + array[i]!.ToJsonString()));
+        var description = string.Join(", ", conditions.Select(c => $"{c.Field}={c.Value?.ToJsonString(JsonWriteOptions.Compact) ?? "null"}"));
+        var listing = string.Join("\n", indices.Select(i => "  " + array[i]!.ToJsonString(JsonWriteOptions.Compact)));
         return $"More than one item in \"{pathDescription}\" matches {description} -- add another --match to narrow it down:\n{listing}";
     }
 

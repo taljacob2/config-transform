@@ -49,6 +49,26 @@ public class JsonSetCommandCliTests
     }
 
     [Fact]
+    public void Set_writes_a_new_layer_file_with_special_characters_in_its_paths_unescaped()
+    {
+        // LayerManifestSerializer's default System.Text.Json encoder used to write `&` as
+        // \u0026 and `+` as \u002B inside `extends`/`patch` -- valid, but unreadable.
+        using var workspace = new TempCliWorkspace();
+        var exitCode = CliRunner.Run(new[]
+        {
+            "set", "--resource", workspace.JsonResourcePath,
+            "--client", "Acme & Co", "--environment", "Prod+1",
+            "--match", "ApiUrl", "--set", "https://acme.example.com"
+        }, new StringWriter(), new StringWriter(), FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(0, exitCode);
+        var layerText = File.ReadAllText(Path.Combine(workspace.RootPath, ".configtransform", "Clients", "Acme & Co", "Prod+1", "configtransform.json"));
+        Assert.Contains("\"extends\": \".configtransform/Environments/Prod+1/configtransform.json\"", layerText);
+        Assert.Contains(".configtransform/Clients/Acme & Co/Prod+1/", layerText);
+        Assert.DoesNotContain(@"\u", layerText);
+    }
+
+    [Fact]
     public void Set_dry_run_prints_the_would_be_overlay_content_and_writes_nothing()
     {
         using var workspace = new TempCliWorkspace();

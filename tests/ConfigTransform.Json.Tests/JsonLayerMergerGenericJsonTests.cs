@@ -48,6 +48,20 @@ public class JsonLayerMergerGenericJsonTests
         Assert.False(doc.RootElement.GetProperty("flags").GetProperty("betaEnabled").GetBoolean()); // untouched base
     }
 
+    [Fact]
+    public void Writes_non_ascii_and_html_sensitive_characters_literally_not_as_escapes()
+    {
+        // System.Text.Json's default encoder writes `+` as \u002B, `&` as \u0026 and every
+        // non-ASCII character as an escape -- valid JSON, but unreadable in a deployed file or a
+        // --diff. See JsonWriteOptions.
+        var resolved = Resolve("ClientA", "Production");
+        var merged = JsonLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
+
+        Assert.Contains("\"greeting\": \"héllo <world> & 'friends' +1\"", merged); // untouched base value
+        Assert.Contains("\"farewell\": \"להתראות & bye+\"", merged); // client layer
+        Assert.DoesNotContain(@"\u", merged);
+    }
+
     private static ResolvedResource Resolve(string client, string environment)
     {
         var chain = LayerChain.Build(FixturesRoot, LayerPathResolver.Resolve(FixturesRoot, client, environment));

@@ -1,5 +1,6 @@
 {
   "ApiUrl": "https://clienta.example.com",
+  "SiteTitle": "שלום café",
   "Features": {
     "EnableBeta": true
   }

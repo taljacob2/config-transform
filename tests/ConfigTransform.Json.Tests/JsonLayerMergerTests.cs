@@ -62,6 +62,20 @@ public class JsonLayerMergerTests
     }
 
     [Fact]
+    public void Writes_non_ascii_and_html_sensitive_characters_literally_not_as_escapes()
+    {
+        // System.Text.Json's default encoder writes `+` as \u002B, `&` as \u0026 and every
+        // non-ASCII character as an escape -- valid JSON, but unreadable in a deployed file or a
+        // --diff. See JsonWriteOptions.
+        var resolved = Resolve("ClientA", "Production");
+        var merged = JsonLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
+
+        Assert.Contains("\"Main\": \"Server=devdb;User=app;Password=a+b'c&d<e>\"", merged); // untouched base value
+        Assert.Contains("\"SiteTitle\": \"שלום café\"", merged); // client layer
+        Assert.DoesNotContain(@"\u", merged);
+    }
+
+    [Fact]
     public void Applies_only_base_when_no_overlays_match()
     {
         var resolved = Resolve("ClientB", "Staging");

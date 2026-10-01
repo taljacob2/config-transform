@@ -95,7 +95,7 @@ public static class JsonLayerMerger
         foreach (var child in configuration.GetChildren())
             root[child.Key] = BuildNode(child);
 
-        return root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+        return root.ToJsonString(JsonWriteOptions.Indented);
     }
 
     private static void AddLayer(IConfigurationBuilder builder, LayerInput layer)
@@ -121,7 +121,7 @@ public static class JsonLayerMerger
         foreach (var child in configuration.GetChildren())
             root[child.Key] = BuildNode(child);
 
-        return root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+        return root.ToJsonString(JsonWriteOptions.Indented);
     }
 
     private static JsonNode? BuildNode(IConfigurationSection section)

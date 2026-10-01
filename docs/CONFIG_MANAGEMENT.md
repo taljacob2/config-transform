@@ -248,6 +248,18 @@ but would mean every client's secrets potentially ship inside every artifact/ima
 decryption. Option B keeps one consistent build-time resolution model across both project
 types and keeps each deployed artifact scoped to exactly the client it's for.
 
+**Characters are written literally, not escaped.** Every JSON the tool writes (merged output,
+`set`'s overlay and base writes, and `configtransform.json` layer files) uses
+`JavaScriptEncoder.UnsafeRelaxedJsonEscaping` (`JsonWriteOptions` in `ConfigTransform.Json`;
+`LayerManifestSerializer` in Core for layer files). System.Text.Json's default encoder escapes every
+non-ASCII character and the HTML-sensitive `< > & ' +`, so a password `a+b` was written as
+`a\u002Bb` and a Hebrew value as a run of `\u05XX` escapes. That's valid JSON, but unreadable in a
+deployed file or a `--diff`. The encoder's "unsafe" only matters when output is embedded in
+HTML/script, which config files never are; it still escapes `"`, `\` and control characters. One
+quirk remains, and it comes from System.Text.Json itself: a character outside the Basic
+Multilingual Plane (an emoji, say) is always written as an escaped surrogate pair, whatever
+encoder is used.
+
 ### 5.4 Case-insensitive file resolution
 
 Some existing files are `App.config`, others `app.config`. Since CI runners are typically

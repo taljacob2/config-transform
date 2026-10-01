@@ -8,6 +8,17 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ### Fixed
 
+- **JSON output keeps non-ASCII and `< > & ' +` as written, instead of `\uXXXX` escapes.**
+  Found during the same read-through as the console fix below. System.Text.Json's default encoder
+  wrote a password `a+b` as `a\u002Bb` and a Hebrew value as a run of `\u05XX` escapes. This
+  affected `--output` deploy files too, not just console output. It was always valid JSON, but
+  unreadable in a deployed file or a `--diff`. Every JSON write site now uses
+  `JavaScriptEncoder.UnsafeRelaxedJsonEscaping`: `JsonLayerMerger` (both the plain and `$elemMatch`
+  paths), `JsonFieldAuthor` (`set`), `JsonElemMatchResolver`'s ambiguous-match error message, and
+  `LayerManifestSerializer` (`configtransform.json` files written by `set`/`init`, where a client
+  named `Acme & Co` used to come out as `Acme \u0026 Co`). New values in the `DotNetCore`,
+  `GenericJson` and `ElemMatch` fixtures cover it. See `docs/CONFIG_MANAGEMENT.md` §5.3, including the
+  one quirk left over from System.Text.Json itself (emoji are always written as escaped surrogate pairs).
 - **Console output is always UTF-8, so redirected output no longer loses characters on
   Windows.** Found while running the tool against `config-transform-pilot` from Git Bash: on a
   console code page like 437 (the Windows default for cmd.exe and Git Bash), .NET encoded

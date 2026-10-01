@@ -1,6 +1,6 @@
 {
   "Rules": [
-    { "$elemMatch": { "role": "Admin" }, "enabled": true },
+    { "$elemMatch": { "role": "Admin" }, "enabled": true, "label": "מנהל & co+" },
     { "$elemMatch": { "role": "Auditor" }, "enabled": false }
   ],
   "AllowedOrigins": [ "https://prod.example.com" ]

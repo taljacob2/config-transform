@@ -31,6 +31,18 @@ public class JsonFieldAuthorTests
     }
 
     [Fact]
+    public void Writes_non_ascii_and_html_sensitive_characters_literally_not_as_escapes()
+    {
+        var result = JsonFieldAuthor.Author(
+            DotNetCoreBase, existingTargetJson: null, isBaseTarget: false,
+            matches: [new MatchSpec("key", "ApiUrl", WasDefaulted: false)],
+            setFields: [new MatchSpec("value", "https://שלום.example.com/?a=1&b=2+3", WasDefaulted: false)]);
+
+        Assert.Contains("\"ApiUrl\": \"https://שלום.example.com/?a=1&b=2+3\"", result);
+        Assert.DoesNotContain(@"\u", result);
+    }
+
+    [Fact]
     public void Updates_an_existing_nested_key_via_colon_separated_path()
     {
         var result = JsonFieldAuthor.Author(

@@ -4,5 +4,8 @@
   },
   "flags": {
     "betaEnabled": false
+  },
+  "labels": {
+    "greeting": "héllo <world> & 'friends' +1"
   }
 }

@@ -648,9 +648,11 @@ merge results. None of them is a merge-correctness bug. Fixed one per PR, in thi
    stdout/stderr were encoded in that code page, so a redirect lost the chain report's `↓` (became
    `0x19`) and any non-ASCII config value in `--dry-run` output (became `?`). `Utf8Console`
    (`ConfigTransform.Cli`) now always emits UTF-8; see `docs/CONFIG_MANAGEMENT.md` §6.
-2. **JSON escapes every non-ASCII character** — `"שלום café"` is written as
-   `"\u05E9\u05DC\u05D5\u05DD caf\u00E9"`, in `--output` files too. Valid JSON, but unreadable.
-   XML/YAML/`.env` are unaffected.
+2. **JSON escaping — fixed, unreleased.** System.Text.Json's default encoder wrote `"שלום café"`
+   as `"\u05E9\u05DC\u05D5\u05DD caf\u00E9"`, and `< > & ' +` as escapes too (a password `a+b`
+   became `a\u002Bb`), in `--output` files and `configtransform.json` layer files as well.
+   Every JSON write site now uses `JavaScriptEncoder.UnsafeRelaxedJsonEscaping`; see
+   `docs/CONFIG_MANAGEMENT.md` §5.3.
 3. **Diff colour** — `GitDiff.Render` always passes `--color=always`, so redirected
    `--diff`/`--diff-layers` output carries ANSI escapes. Repo owner's decision: a
    `--color auto|always|never` flag (default `auto`), the git/ls convention, rather than
@@ -663,7 +665,7 @@ merge results. None of them is a merge-correctness bug. Fixed one per PR, in thi
 
 ## Next up
 
-- **Output-fidelity pass, items 2–4** — see the "Output-fidelity pass" paragraph at the end of
+- **Output-fidelity pass, items 3–4** — see the "Output-fidelity pass" paragraph at the end of
   "Current state" above. Actionable now, no solution repo or further owner decision needed.
 One item below is now actionable purely within this repo (see the first bullet); every other
 remaining item still either needs a solution repo that doesn't exist yet, or a decision only the
