@@ -298,4 +298,6 @@ flag (default `auto`: terminal only, so redirects get plain text). JSON and YAML
 patch into the base document's own tree instead of flattening through `IConfiguration`
 (`docs/TREE_MERGE_DESIGN.md`): key order, spelling, value types and text, `null`/`{}`/`[]`, and
 YAML quoting all survive — the old merge turned `"007"` into `7` and sorted every key, invisibly to
-`--diff`. None of the four is tagged yet.
+`--diff`. Keys now match case-sensitively across layers, and a patch key matching an existing one
+only by case is an error (it would otherwise deploy a file .NET refuses to load). None of these is
+tagged yet.

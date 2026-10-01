@@ -174,6 +174,27 @@ public class YamlLayerMergerGrammarTests
         Assert.Contains("- b", merged); // untouched, survives from the base layer
     }
 
+    [Fact]
+    public void A_patch_key_differing_from_an_existing_key_only_by_case_is_an_error_naming_the_real_spelling()
+    {
+        using var dir = new TempDir();
+        var basePath = dir.WriteFile("base.yaml", """
+            Reporting:
+              Schedule: "0 * * * *"
+            """);
+        var patchPath = dir.WriteFile("patch.yaml", """
+            Reporting:
+              schedule: "*/15 * * * *"
+            """);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => YamlLayerMerger.Merge(basePath, [patchPath]));
+
+        Assert.Contains(patchPath, ex.Message);
+        Assert.Contains("\"Reporting:schedule\"", ex.Message);
+        Assert.Contains("\"Reporting:Schedule\"", ex.Message);
+        Assert.Contains("Try: spell it \"Schedule\"", ex.Message);
+    }
+
     private sealed class TempDir : IDisposable
     {
         private readonly string _path = Directory.CreateTempSubdirectory("configtransform-yaml-tests-").FullName;

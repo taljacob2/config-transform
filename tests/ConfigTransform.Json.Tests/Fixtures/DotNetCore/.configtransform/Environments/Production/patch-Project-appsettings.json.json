@@ -4,6 +4,6 @@
       "Default": "Warning"
     }
   },
-  "retryCount": 5,
+  "RetryCount": 5,
   "AllowedOrigins": [ "https://prod.example.com" ]
 }

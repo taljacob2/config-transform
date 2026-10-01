@@ -673,23 +673,30 @@ merge results. None of them is a merge-correctness bug. Fixed one per PR, in thi
    `JsonLayerMerger`/`YamlLayerMerger` now merge each patch into the base document's own tree,
    keeping `IConfiguration`'s merge rules but none of its flattening;
    `Microsoft.Extensions.Configuration` and `NetEscapades.Configuration.Yaml` are no longer
-   dependencies. See `docs/TREE_MERGE_DESIGN.md`, including its open item on case-sensitive
-   key matching for non-.NET consumers (an owner decision).
+   dependencies. See `docs/TREE_MERGE_DESIGN.md`.
+5. **Case-sensitive key matching — done, unreleased.** Repo owner's decision, as a follow-up to
+   item 4: JSON/YAML keys now match exactly across layers, and a patch key that matches an
+   existing key only by case is an error naming the real spelling (it would otherwise deploy a
+   file .NET refuses to load). `set` checks its key path the same way, and now merges new overlay
+   content before writing it, so a rejected write leaves nothing on disk. `config-transform-pilot`
+   was checked first: no overlay there relies on case-insensitive matching, and all 45 resolved
+   files are byte-identical before and after. See `docs/TREE_MERGE_DESIGN.md`'s "Key matching is
+   case-sensitive".
 
 ## Next up
 
-- **Release the output-fidelity pass** — all four items are done but unreleased (`[Unreleased]`
-  in `docs/CHANGELOG.md`); cut a version per `docs/RELEASING.md`, then re-pin
-  `config-transform-pilot` (adding `--color always` to its `--diff-layers` CI step if colour is
-  wanted there). The tree merge changes deployed JSON/YAML output for any file that relied on the
-  old reordering/type-guessing, so the pilot's golden-output comparison is the real check.
-- **Case-sensitive key matching for non-.NET consumers** — open item in
-  `docs/TREE_MERGE_DESIGN.md`; needs the repo owner's decision.
-One item below is now actionable purely within this repo (see the first bullet); every other
+Two items below are actionable purely within this repo (the first two bullets); every other
 remaining item still either needs a solution repo that doesn't exist yet, or a decision only the
 repo owner can make. Not a "next slice" in the same sense as the ones before this section; pick
 from below (or something new) when ready, rather than assuming the next item in this list is the
 default next step.
+
+- **Release the output-fidelity pass** — all five items are done but unreleased (`[Unreleased]`
+  in `docs/CHANGELOG.md`); cut a version per `docs/RELEASING.md`, then re-pin
+  `config-transform-pilot` (adding `--color always` to its `--diff-layers` CI step if colour is
+  wanted there). Deployed JSON/YAML output changes layout for every file (key order, YAML
+  quoting); the pilot's own outputs were already compared old-vs-new with no value changes, but a
+  real consumer should compare its own before rolling out.
 
 - **Finish `set`** — XML's "update an existing element" case (including matching an existing
   item among repeated siblings, and now `Insert` for a genuinely brand-new element — all closed,

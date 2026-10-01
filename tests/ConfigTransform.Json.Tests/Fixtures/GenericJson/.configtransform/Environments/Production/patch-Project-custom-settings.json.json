@@ -1,5 +1,5 @@
 {
   "endpoints": {
-    "primary": { "TimeoutSeconds": 60 }
+    "primary": { "timeoutSeconds": 60 }
   }
 }

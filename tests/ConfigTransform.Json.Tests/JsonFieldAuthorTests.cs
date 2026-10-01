@@ -361,4 +361,27 @@ public class JsonFieldAuthorTests
 
         Assert.Contains("\"tier\": \"premium\"", result);
     }
+
+    [Fact]
+    public void A_key_path_existing_only_with_different_casing_is_refused_with_the_real_spelling()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => JsonFieldAuthor.Author(
+            DotNetCoreBase, existingTargetJson: null, isBaseTarget: false,
+            matches: [new MatchSpec("key", "logging:LogLevel:Default", WasDefaulted: false)],
+            setFields: [new MatchSpec("value", "Warning", WasDefaulted: false)]));
+
+        Assert.Contains("\"Logging\" does", ex.Message);
+        Assert.Contains("Try: --match key=Logging:LogLevel:Default", ex.Message);
+    }
+
+    [Fact]
+    public void A_brand_new_key_with_no_case_variant_is_still_created()
+    {
+        var result = JsonFieldAuthor.Author(
+            DotNetCoreBase, existingTargetJson: null, isBaseTarget: false,
+            matches: [new MatchSpec("key", "Logging:Console:Enabled", WasDefaulted: false)],
+            setFields: [new MatchSpec("value", "true", WasDefaulted: false)]);
+
+        Assert.Contains("\"Console\"", result);
+    }
 }

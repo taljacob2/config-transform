@@ -239,9 +239,11 @@ during the real inventory pass (§11).
 Merges at **build time**: the base file, then each patch in the resolved chain, in `extends`
 order, merged into the base document's own tree, and the result written into the publish output as
 a single `appsettings.json` (`docs/TREE_MERGE_DESIGN.md`). The merge rules are
-`Microsoft.Extensions.Configuration`'s own layering rules (key-by-key, case-insensitive keys,
-arrays by index), so the file deployed is what the app would have seen layering the same files at
-runtime. Until the output-fidelity pass this literally ran through a `ConfigurationBuilder` and
+`Microsoft.Extensions.Configuration`'s own layering rules (key-by-key, arrays by index), so the
+file deployed is what the app would have seen layering the same files at runtime — with one
+deliberate difference: keys match case-sensitively, and a patch key that matches an existing key
+only by case is an error rather than a silent override (`docs/TREE_MERGE_DESIGN.md`'s "Key matching
+is case-sensitive"). Until the output-fidelity pass this literally ran through a `ConfigurationBuilder` and
 rebuilt the document from flattened string keys, which reordered keys, guessed value types back
 (`"007"` became `7`) and dropped `null`/`{}`/`[]`; the tree merge keeps all of them as written. This is Option B from our discussion (build-time resolution) chosen
 over Option A (runtime layering via `AddJsonFile` at app startup, selecting the client via an
@@ -349,8 +351,8 @@ Registered as the fourth `FormatEngine` in `ConfigTransform.Cli`'s `FormatEngine
 zero orchestration changes needed — the dispatcher generalizing to a fourth engine (after `.env`
 already proved a third) with no changes outside the new registration and merge engine itself.
 
-Merge semantics are JSON's (§5.3): maps key by key with case-insensitive matching across layers,
-sequences by index, anything else replaced as written. Scalars are never interpreted, only
+Merge semantics are JSON's (§5.3): maps key by key with exact (case-sensitive) key matching and
+an error on a case-only mismatch, sequences by index, anything else replaced as written. Scalars are never interpreted, only
 carried over, so quoting (`"..."`, `'...'`, plain), block scalars and flow collections come through
 exactly as written, and `{}`/`[]`/`null`/`~` survive. The base file's indentation width and
 sequence style (indented under the key, or flush with it) are detected and reused. Not preserved:

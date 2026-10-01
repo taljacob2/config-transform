@@ -10,11 +10,13 @@ namespace ConfigTransform.Json;
 /// docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md a chain's length varies with how deep its `extends`
 /// nesting goes. Format-generic by design: no appsettings.json-specific logic here (see CLAUDE.md).
 ///
-/// Merge rules — the same ones Microsoft.Extensions.Configuration's own layering applies, which
-/// this engine used to delegate to, minus the side effects of flattening everything to strings:
-/// - Objects merge key by key, recursively. Keys match case-insensitively (as IConfiguration
-///   does), preferring an exact-case match; a matched key keeps the base's spelling and position,
-///   and a new key is appended after the existing ones, in the patch's order.
+/// Merge rules — the ones Microsoft.Extensions.Configuration's own layering applies, which this
+/// engine used to delegate to, minus the side effects of flattening everything to strings, and
+/// with case-sensitive key matching:
+/// - Objects merge key by key, recursively. Keys match exactly -- JSON is case-sensitive, and so
+///   are most of the ecosystems whose config this tool merges. A matched key keeps its position;
+///   a new key is appended after the existing ones, in the patch's order. A patch key that matches
+///   an existing key <i>only by case</i> is an error, not a new key (see <see cref="CaseOnlyMismatch"/>).
 /// - Arrays merge by index: an overlay array only overrides the indices it specifies, and any
 ///   trailing base items beyond that survive untouched. An object whose keys are all array
 ///   indices (<c>{"1": ...}</c>) addresses individual items of an existing array, the
@@ -58,7 +60,7 @@ public static class JsonLayerMerger
             if (JsonElemMatchResolver.ContainsElemMatch(patch))
                 patch = JsonElemMatchResolver.Rewrite(patch, document);
 
-            document = MergeNode(document, patch);
+            document = MergeNode(document, patch, patchPath, "");
         }
 
         return document?.ToJsonString(JsonWriteOptions.Indented) ?? "null";
@@ -71,16 +73,16 @@ public static class JsonLayerMerger
     /// The node that now belongs at <paramref name="target"/>'s position: <paramref name="target"/>
     /// itself, merged into in place, or a copy of <paramref name="patch"/> that replaces it.
     /// </returns>
-    private static JsonNode? MergeNode(JsonNode? target, JsonNode? patch)
+    private static JsonNode? MergeNode(JsonNode? target, JsonNode? patch, string patchPath, string path)
     {
         switch (target, patch)
         {
             case (JsonObject targetObject, JsonObject patchObject):
-                MergeObject(targetObject, patchObject);
+                MergeObject(targetObject, patchObject, patchPath, path);
                 return targetObject;
             case (JsonArray targetArray, JsonArray patchArray):
                 for (var i = 0; i < patchArray.Count; i++)
-                    MergeArrayItem(targetArray, i, patchArray[i]);
+                    MergeArrayItem(targetArray, i, patchArray[i], patchPath, path);
                 return targetArray;
             case (JsonArray targetArray, JsonObject patchObject) when TryGetIndexKeys(patchObject, out var indexed):
                 foreach (var (index, value) in indexed)
@@ -90,7 +92,7 @@ public static class JsonLayerMerger
                             $"A patch addresses item {index} of an array that has only {targetArray.Count} item(s) -- " +
                             $"an index-keyed patch can update an existing item or append the next one ({targetArray.Count}), " +
                             "not leave a gap.");
-                    MergeArrayItem(targetArray, index, value);
+                    MergeArrayItem(targetArray, index, value, patchPath, path);
                 }
                 return targetArray;
             default:
@@ -98,25 +100,30 @@ public static class JsonLayerMerger
         }
     }
 
-    private static void MergeObject(JsonObject target, JsonObject patch)
+    private static void MergeObject(JsonObject target, JsonObject patch, string patchPath, string path)
     {
         foreach (var (key, patchValue) in patch)
         {
-            var existingKey = FindKey(target, key);
-            if (existingKey is null)
+            var keyPath = path.Length == 0 ? key : $"{path}:{key}";
+            if (!target.ContainsKey(key))
             {
+                var caseVariant = target.Select(kvp => kvp.Key)
+                    .FirstOrDefault(existing => string.Equals(existing, key, StringComparison.OrdinalIgnoreCase));
+                if (caseVariant is not null)
+                    throw CaseOnlyMismatch(patchPath, keyPath, path.Length == 0 ? caseVariant : $"{path}:{caseVariant}", caseVariant);
+
                 target[key] = patchValue?.DeepClone();
                 continue;
             }
 
-            var current = target[existingKey];
-            var merged = MergeNode(current, patchValue);
+            var current = target[key];
+            var merged = MergeNode(current, patchValue, patchPath, keyPath);
             if (!ReferenceEquals(merged, current))
-                target[existingKey] = merged;
+                target[key] = merged;
         }
     }
 
-    private static void MergeArrayItem(JsonArray target, int index, JsonNode? patchValue)
+    private static void MergeArrayItem(JsonArray target, int index, JsonNode? patchValue, string patchPath, string path)
     {
         if (index == target.Count)
         {
@@ -125,25 +132,23 @@ public static class JsonLayerMerger
         }
 
         var current = target[index];
-        var merged = MergeNode(current, patchValue);
+        var merged = MergeNode(current, patchValue, patchPath, $"{path}:{index}");
         if (!ReferenceEquals(merged, current))
             target[index] = merged;
     }
 
-    /// <summary>Exact-case match first, then the first case-insensitive one -- see the class remarks.</summary>
-    private static string? FindKey(JsonObject target, string key)
-    {
-        if (target.ContainsKey(key))
-            return key;
-
-        foreach (var (existingKey, _) in target)
-        {
-            if (string.Equals(existingKey, key, StringComparison.OrdinalIgnoreCase))
-                return existingKey;
-        }
-
-        return null;
-    }
+    /// <summary>
+    /// A patch key that differs from an existing key only by case. Writing it as a second key
+    /// would almost never be what was meant -- and for a .NET consumer it's a deploy-time time
+    /// bomb, since <c>Microsoft.Extensions.Configuration</c> reads keys case-insensitively and
+    /// refuses to load a file with two such keys. Silently overriding the existing key instead (the
+    /// old behavior) is wrong for every case-sensitive consumer. So: stop, and say which spelling
+    /// exists. docs/TREE_MERGE_DESIGN.md's "Key matching is case-sensitive".
+    /// </summary>
+    private static InvalidOperationException CaseOnlyMismatch(string patchPath, string keyPath, string existingPath, string existingKey) =>
+        new($"'{patchPath}' sets \"{keyPath}\", but the existing key is \"{existingPath}\" -- they differ only by case. " +
+            "Keys are case-sensitive, so this would add a second key instead of overriding the existing one " +
+            $"(and .NET's configuration loader rejects keys that differ only by case).\nTry: spell it \"{existingKey}\" in the patch.");
 
     /// <summary>True when every key is a canonical array index ("0", "12" -- not "01" or "-1"); the pairs come back in ascending index order.</summary>
     private static bool TryGetIndexKeys(JsonObject patch, out List<(int Index, JsonNode? Value)> indexed)

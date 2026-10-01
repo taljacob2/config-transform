@@ -13,11 +13,13 @@ namespace ConfigTransform.Yaml;
 /// in this repo is an independent library (see CLAUDE.md's "Repo structure"). Format-generic by
 /// design: no appsettings.yaml-specific logic here (see CLAUDE.md).
 ///
-/// Merge rules -- the same ones Microsoft.Extensions.Configuration's own layering applies, which
-/// this engine used to delegate to, minus the side effects of flattening everything to strings:
-/// - Maps merge key by key, recursively. Keys match case-insensitively (as IConfiguration does),
-///   preferring an exact-case match; a matched key keeps the base's spelling and position, and a
-///   new key is appended after the existing ones, in the patch's order.
+/// Merge rules -- the ones Microsoft.Extensions.Configuration's own layering applies, which this
+/// engine used to delegate to, minus the side effects of flattening everything to strings, and
+/// with case-sensitive key matching:
+/// - Maps merge key by key, recursively. Keys match exactly -- YAML is case-sensitive. A matched
+///   key keeps its position; a new key is appended after the existing ones, in the patch's order.
+///   A patch key that matches an existing key <i>only by case</i> is an error, not a new key (same
+///   reasoning as <c>JsonLayerMerger</c>; docs/TREE_MERGE_DESIGN.md).
 /// - Sequences merge by index: an overlay sequence only overrides the indices it specifies, and
 ///   any trailing base items beyond that survive untouched. A map whose keys are all sequence
 ///   indices (<c>"1": ...</c>) addresses individual items of an existing sequence.
@@ -51,7 +53,7 @@ public static class YamlLayerMerger
 
             var patch = Load(patchPath);
             if (patch is not null)
-                document = MergeNode(document, patch);
+                document = MergeNode(document, patch, patchPath, "");
         }
 
         return Save(document, layout);
@@ -94,16 +96,16 @@ public static class YamlLayerMerger
     /// itself, merged into in place, or a copy of <paramref name="patch"/> that replaces it.
     /// <paramref name="patch"/> itself is never mutated or inserted -- only copies of its nodes.
     /// </returns>
-    private static YamlNode MergeNode(YamlNode? target, YamlNode patch)
+    private static YamlNode MergeNode(YamlNode? target, YamlNode patch, string patchPath, string path)
     {
         switch (target, patch)
         {
             case (YamlMappingNode targetMap, YamlMappingNode patchMap):
-                MergeMap(targetMap, patchMap);
+                MergeMap(targetMap, patchMap, patchPath, path);
                 return targetMap;
             case (YamlSequenceNode targetSequence, YamlSequenceNode patchSequence):
                 for (var i = 0; i < patchSequence.Children.Count; i++)
-                    MergeSequenceItem(targetSequence, i, patchSequence.Children[i]);
+                    MergeSequenceItem(targetSequence, i, patchSequence.Children[i], patchPath, path);
                 return targetSequence;
             case (YamlSequenceNode targetSequence, YamlMappingNode patchMap) when IsIndexMap(patchMap, out var indexed):
                 foreach (var (index, value) in indexed)
@@ -113,7 +115,7 @@ public static class YamlLayerMerger
                             $"A patch addresses item {index} of a sequence that has only {targetSequence.Children.Count} item(s) -- " +
                             $"an index-keyed patch can update an existing item or append the next one ({targetSequence.Children.Count}), " +
                             "not leave a gap.");
-                    MergeSequenceItem(targetSequence, index, value);
+                    MergeSequenceItem(targetSequence, index, value, patchPath, path);
                 }
                 return targetSequence;
             default:
@@ -121,25 +123,29 @@ public static class YamlLayerMerger
         }
     }
 
-    private static void MergeMap(YamlMappingNode target, YamlMappingNode patch)
+    private static void MergeMap(YamlMappingNode target, YamlMappingNode patch, string patchPath, string path)
     {
         foreach (var (patchKey, patchValue) in patch.Children)
         {
-            var existingKey = FindKey(target, patchKey);
+            var keyPath = path.Length == 0 ? patchKey.ToString() : $"{path}:{patchKey}";
+            var existingKey = target.Children.Keys.FirstOrDefault(k => k.Equals(patchKey));
             if (existingKey is null)
             {
+                if (FindCaseVariant(target, patchKey) is { } caseVariant)
+                    throw CaseOnlyMismatch(patchPath, keyPath, path.Length == 0 ? caseVariant : $"{path}:{caseVariant}", caseVariant);
+
                 target.Children.Add(Clone(patchKey), Clone(patchValue));
                 continue;
             }
 
             var current = target.Children[existingKey];
-            var merged = MergeNode(current, patchValue);
+            var merged = MergeNode(current, patchValue, patchPath, keyPath);
             if (!ReferenceEquals(merged, current))
                 target.Children[existingKey] = merged;
         }
     }
 
-    private static void MergeSequenceItem(YamlSequenceNode target, int index, YamlNode patchValue)
+    private static void MergeSequenceItem(YamlSequenceNode target, int index, YamlNode patchValue, string patchPath, string path)
     {
         if (index == target.Children.Count)
         {
@@ -148,24 +154,32 @@ public static class YamlLayerMerger
         }
 
         var current = target.Children[index];
-        var merged = MergeNode(current, patchValue);
+        var merged = MergeNode(current, patchValue, patchPath, $"{path}:{index}");
         if (!ReferenceEquals(merged, current))
             target.Children[index] = merged;
     }
 
-    /// <summary>Exact-case match first, then the first case-insensitive one -- see the class remarks. Non-scalar (complex) keys match only exactly.</summary>
-    private static YamlNode? FindKey(YamlMappingNode target, YamlNode key)
+    /// <summary>An existing scalar key equal to <paramref name="key"/> ignoring case, when there's no exact match -- see <see cref="CaseOnlyMismatch"/>.</summary>
+    private static string? FindCaseVariant(YamlMappingNode target, YamlNode key)
     {
-        if (target.Children.ContainsKey(key))
-            return target.Children.Keys.First(k => k.Equals(key));
-
         if (key is not YamlScalarNode { Value: { } keyText })
             return null;
 
-        return target.Children.Keys.FirstOrDefault(k =>
-            k is YamlScalarNode { Value: { } existingText } &&
-            string.Equals(existingText, keyText, StringComparison.OrdinalIgnoreCase));
+        return target.Children.Keys
+            .OfType<YamlScalarNode>()
+            .Select(k => k.Value)
+            .FirstOrDefault(existing => string.Equals(existing, keyText, StringComparison.OrdinalIgnoreCase));
     }
+
+    /// <summary>
+    /// A patch key that differs from an existing key only by case: stop rather than add a second
+    /// key -- same reasoning as <c>JsonLayerMerger</c>'s own (a .NET consumer reading this through
+    /// <c>Microsoft.Extensions.Configuration</c> would refuse to load it), ported not shared.
+    /// </summary>
+    private static InvalidOperationException CaseOnlyMismatch(string patchPath, string keyPath, string existingPath, string existingKey) =>
+        new($"'{patchPath}' sets \"{keyPath}\", but the existing key is \"{existingPath}\" -- they differ only by case. " +
+            "Keys are case-sensitive, so this would add a second key instead of overriding the existing one " +
+            $"(and .NET's configuration loader rejects keys that differ only by case).\nTry: spell it \"{existingKey}\" in the patch.");
 
     /// <summary>True when every key is a canonical sequence index ("0", "12" -- not "01" or "-1"); the pairs come back in ascending index order.</summary>
     private static bool IsIndexMap(YamlMappingNode map, out List<(int Index, YamlNode Value)> indexed)

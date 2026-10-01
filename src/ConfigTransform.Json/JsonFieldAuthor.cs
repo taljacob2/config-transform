@@ -54,6 +54,7 @@ public static class JsonFieldAuthor
 
         var preceding = ParseObject(precedingJson, "preceding document");
         var segments = ResolveSegments(preceding, locationMatch);
+        RejectCaseOnlyMismatch(preceding, segments);
         var elementConditions = matches.Skip(1).ToList();
 
         if (elementConditions.Count == 0)
@@ -263,6 +264,36 @@ public static class JsonFieldAuthor
         // nested -- there's no evidence to check for a brand-new key either way, and nested is
         // the convention every example in docs/GETTING_STARTED.md already uses.
         return nestedSegments;
+    }
+
+    /// <summary>
+    /// Refuses a key path that exists in the document only with different casing (e.g.
+    /// <c>logging:loglevel</c> when the document has <c>Logging:LogLevel</c>) -- keys are
+    /// case-sensitive, so writing it would add a second key that the merge then rejects
+    /// (<c>JsonLayerMerger</c>'s own case-only-mismatch check). Caught here first so `set` can name
+    /// the real spelling before anything is written.
+    /// </summary>
+    private static void RejectCaseOnlyMismatch(JsonObject preceding, IReadOnlyList<string> segments)
+    {
+        JsonObject? current = preceding;
+        for (var i = 0; i < segments.Count && current is not null; i++)
+        {
+            if (current.TryGetPropertyValue(segments[i], out var next))
+            {
+                current = next as JsonObject;
+                continue;
+            }
+
+            var caseVariant = current.Select(kvp => kvp.Key)
+                .FirstOrDefault(existing => string.Equals(existing, segments[i], StringComparison.OrdinalIgnoreCase));
+            if (caseVariant is null)
+                return; // a genuinely new key from here on
+
+            var suggested = string.Join(":", segments.Take(i).Append(caseVariant).Concat(segments.Skip(i + 1)));
+            throw new InvalidOperationException(
+                $"No key \"{segments[i]}\" exists at that level, but \"{caseVariant}\" does -- keys are case-sensitive.\n" +
+                $"Try: --match key={suggested}");
+        }
     }
 
     private static bool TryNavigate(JsonObject obj, IReadOnlyList<string> segments)

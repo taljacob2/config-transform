@@ -15,6 +15,17 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ### Changed
 
+- **JSON/YAML keys now match case-sensitively across layers, and a patch key that matches an
+  existing key only by case is an error.** Repo owner's decision, following the tree merge below
+  (`docs/TREE_MERGE_DESIGN.md`'s "Key matching is case-sensitive"). Before, a patch's `apiUrl`
+  silently overrode the base's `ApiUrl`. That was wrong for case-sensitive consumers (a Python or
+  Node app sees two different keys), and plain case-sensitivity would instead deploy a file with
+  both keys, which .NET's configuration loader refuses to load. The merge now stops with an error
+  naming the patch file, the key path and the existing spelling. `set` checks its `--match key=`
+  path the same way before writing (`Try: --match key=Logging:LogLevel:Default`), and now merges
+  the new overlay content *before* writing it, so a write the merge would reject leaves nothing on
+  disk. **An existing overlay whose key casing differs from its base now fails to resolve** — fix
+  the spelling the error names.
 - **JSON and YAML now merge each patch into the base document's own tree, keeping the source's
   key order, key spelling, and every value exactly as written** (`docs/TREE_MERGE_DESIGN.md`).
   Both engines used to flatten the base and patches through `Microsoft.Extensions.Configuration`
@@ -23,8 +34,8 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   integer lost precision, `null` became `""`, `{}`/`[]` were dropped, a patch's key spelling
   replaced the base's, and a patch scalar landing on a base object was silently dropped. `--diff`
   hid all of it, since it renders the unpatched side through the same merge. Kept on purpose:
-  `IConfiguration`'s merge rules (key-by-key, case-insensitive key matching across layers, arrays
-  by index, the `{"1": ...}` index-keyed idiom) and `$elemMatch` resolution. Also changed: a later
+  `IConfiguration`'s merge rules (key-by-key, arrays by index, the `{"1": ...}` index-keyed idiom)
+  and `$elemMatch` resolution; key matching became case-sensitive (entry above). Also changed: a later
   layer now replaces a value of a different kind outright (the old merge always kept the object);
   keys differing only by case within one file are allowed (YAML used to throw); an index-keyed
   patch that would leave a gap in an array is an error; a multi-document YAML file is refused;

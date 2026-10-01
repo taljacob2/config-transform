@@ -285,4 +285,30 @@ public class JsonSetCommandCliTests
     private static Dictionary<string, DateTime> Snapshot(string root) =>
         Directory.GetFiles(root, "*", SearchOption.AllDirectories)
             .ToDictionary(f => f, File.GetLastWriteTimeUtc);
+
+    [Fact]
+    public void Set_writes_nothing_when_the_merge_would_reject_the_new_overlay()
+    {
+        // The field name inside an $elemMatch item isn't checked against the array's real items
+        // when the overlay is authored -- only when it's merged. `set` now merges the new overlay
+        // before writing it, so a case-only mismatch there leaves no file behind.
+        using var workspace = new TempCliWorkspace();
+        File.WriteAllText(Path.Combine(workspace.RootPath, "Project", "rules.json"), """
+            { "Rules": [ { "role": "Admin", "enabled": false } ] }
+            """);
+        var layerPath = Path.Combine(workspace.RootPath, ".configtransform", "Environments", "Production", "configtransform.json");
+        var layerBefore = File.ReadAllText(layerPath);
+        var stderr = new StringWriter();
+
+        var exitCode = CliRunner.Run(new[]
+        {
+            "set", "--resource", "Project/rules.json", "--environment", "Production",
+            "--match", "key=Rules", "--match", "role=Admin", "--set", "Enabled=true"
+        }, new StringWriter(), stderr, FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("differ only by case", stderr.ToString());
+        Assert.False(File.Exists(Path.Combine(workspace.RootPath, ".configtransform", "Environments", "Production", "patch-Project-rules.json")));
+        Assert.Equal(layerBefore, File.ReadAllText(layerPath));
+    }
 }

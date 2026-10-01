@@ -42,10 +42,8 @@ results. Nothing is flattened, so nothing needs to be reconstructed.
 
 **Kept from `IConfiguration`'s layering, deliberately** — existing overlays rely on these:
 
-- **Objects/maps merge key by key, recursively.** Keys match **case-insensitively** across
-  layers, preferring an exact-case match. A .NET app reads its config case-insensitively, so a
-  patch's `apiUrl` is meant to override the base's `ApiUrl`. Adding a second key instead would
-  also make .NET's own JSON provider refuse to load the deployed file (duplicate key).
+- **Objects/maps merge key by key, recursively.** (How keys *match* changed — see "Key matching
+  is case-sensitive" below.)
 - **Arrays/sequences merge by index.** An overlay array only overrides the indices it specifies;
   trailing base items survive (`JsonLayerMergerTests.An_overlay_array_overrides_by_index_not_wholesale`).
 - **An object whose keys are all indices (`{"1": ...}`) addresses single items of an existing
@@ -72,9 +70,41 @@ results. Nothing is flattened, so nothing needs to be reconstructed.
   the scalar, whichever layer came last.
 - **Keys differing only by case within one file are allowed.** JSON and YAML are both
   case-sensitive. The YAML engine used to throw on these (a NetEscapades limitation).
+- **Key matching across layers is case-sensitive, and a case-only mismatch is an error.** See
+  the next section.
 - **YAML layout follows the base file.** The indentation width, and whether block sequences are
   indented under their key, are detected from the base's source positions
   (`YamlLayerMerger.DetectLayout`). Long scalars are never re-wrapped.
+
+### Key matching is case-sensitive
+
+Decided by the repo owner, 2026-10-01, as a follow-up to the tree merge (which first kept
+`IConfiguration`'s case-insensitive matching). A patch key overrides an existing key only when it
+is spelled exactly the same. JSON and YAML are case-sensitive formats, and the tool claims no
+coupling to any ecosystem: for a Python or Node consumer (`config-transform-pilot`'s
+`ReportingService`/`NotificationWorker`), `logLevel` and `LogLevel` really are different keys, so
+treating one as an override of the other was wrong for them.
+
+Plain case-sensitivity on its own would hurt .NET consumers in a different way: a patch's `apiUrl`
+against a base `ApiUrl` would be written as a *second* key, and .NET's configuration loader, which
+reads keys case-insensitively, refuses to load a file with two keys that differ only by case. The
+app would fail at startup in production instead of at build time. So a patch key that matches an
+existing key **only by case** stops the merge with an error naming the patch file, the key path
+and the existing spelling (`JsonLayerMerger`/`YamlLayerMerger`'s `CaseOnlyMismatch`). That's right
+for every ecosystem: nobody means to have two keys differing only by case, and the .NET mistake is
+caught in CI.
+
+`set` applies the same rule to its `--match key=` path before writing anything, suggesting the
+real spelling (`Try: --match key=Logging:LogLevel:Default`). A field name inside an `$elemMatch`
+item isn't checked until merge time, so `set` now merges the new overlay content *before* writing
+it (`SetRunner`); a write the merge would reject leaves nothing on disk.
+
+What this refuses: a patch whose casing differs from its base, which used to override quietly
+(now: fix the spelling), and intentionally keeping two keys differing only by case *across
+layers*. Two such keys *within one file* are still allowed, and a patch can address either of
+them by its exact spelling. `.env` was already case-sensitive (`docs/CONFIG_MANAGEMENT.md` §5.5)
+with no case-only check, since `FOO` and `foo` are routinely distinct shell variables. XML was
+always case-sensitive.
 
 No `Microsoft.Extensions.Configuration` or `NetEscapades.Configuration.Yaml` package is needed any
 more. JSON uses `System.Text.Json.Nodes` and YAML uses YamlDotNet's representation model
@@ -101,17 +131,16 @@ more. JSON uses `System.Text.Json.Nodes` and YAML uses YamlDotNet's representati
 3. **A comment-preserving editor** (e.g. a concrete-syntax-tree library). No maintained .NET
    library round-trips JSON and YAML comments through an editable tree. Out of scope; the old
    behavior dropped comments too.
-4. **Case-sensitive key matching across layers** (each format's native rule). This would suit a
-   non-.NET consumer, like `config-transform-pilot`'s Python and Node projects. But it would
-   change the meaning of every existing .NET overlay whose casing differs from its base. Left as
-   an open item below rather than changed alongside everything else.
+4. **Keep case-insensitive matching** (`IConfiguration`'s rule, and this design's first
+   version). Right for .NET, wrong for every case-sensitive consumer. Replaced by case-sensitive
+   matching plus the case-only-mismatch error; see "Key matching is case-sensitive".
+5. **Case-sensitive matching with no case-only check.** It would be format-correct, but a .NET
+   overlay with a casing typo would deploy a file that .NET refuses to load.
+6. **A per-repo or per-resource option for case sensitivity.** More configuration for a choice
+   with one safe answer. The error covers the .NET concern without needing a switch.
 
 ## Open items
 
-- **Case-sensitive matching for non-.NET consumers.** For a Python or Node app, `logLevel` and
-  `LogLevel` are different keys, but the merge treats a patch's `logLevel` as the base's
-  `LogLevel`. This could become a per-resource or per-repo option. It needs the repo owner's
-  decision, not a guess.
 - **`set`'s rewrite of an existing YAML overlay file** still goes through YamlDotNet's high-level
   `Serializer` (`YamlFieldAuthor`). Key order in the overlay file survives, but its quoting style
   doesn't. That's a separate code path from merging, not touched here.

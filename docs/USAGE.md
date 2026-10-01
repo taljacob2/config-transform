@@ -562,8 +562,11 @@ the base document's own tree (`docs/TREE_MERGE_DESIGN.md`; `src/ConfigTransform.
 `src/ConfigTransform.Yaml/YamlLayerMerger.cs`). The merge rules are the ones
 `Microsoft.Extensions.Configuration`'s own layering applies; what's written out is the base file's
 own shape:
-- Objects merge key by key. Keys match case-insensitively across layers; a matched key keeps the
-  base's spelling and position, and a new key is appended at the end of its object.
+- Objects merge key by key. Keys match exactly (case-sensitively); a matched key keeps its
+  position, and a new key is appended at the end of its object. A patch key that matches an
+  existing key only by case (`apiUrl` vs `ApiUrl`) is an error naming the real spelling: it would
+  otherwise add a second key, which .NET's configuration loader refuses to load. `set` checks its
+  `--match key=` path the same way before writing anything.
 - An overlay array does not replace the base array wholesale — it overrides by index, so any
   base-layer indices beyond what the overlay specifies survive untouched. An object keyed by
   index (`{"1": ...}`) updates one item of an existing array.

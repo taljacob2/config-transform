@@ -66,6 +66,7 @@ public static class YamlFieldAuthor
 
         var preceding = ParseMap(precedingYaml);
         var segments = ResolveSegments(preceding, locationMatch);
+        RejectCaseOnlyMismatch(preceding, segments);
 
         var target = existingTargetYaml is null ? new Dictionary<string, object?>() : ParseMap(existingTargetYaml);
         SetAtPath(target, segments, setFields[0].Value);
@@ -106,6 +107,34 @@ public static class YamlFieldAuthor
             return literalPath;
 
         return nestedSegments;
+    }
+
+    /// <summary>
+    /// Refuses a key path that exists in the document only with different casing -- keys are
+    /// case-sensitive, so writing it would add a second key that the merge then rejects
+    /// (<c>YamlLayerMerger</c>'s own case-only-mismatch check). Same as JSON's, ported not shared.
+    /// </summary>
+    private static void RejectCaseOnlyMismatch(IDictionary preceding, IReadOnlyList<string> segments)
+    {
+        IDictionary? current = preceding;
+        for (var i = 0; i < segments.Count && current is not null; i++)
+        {
+            if (current.Contains(segments[i]))
+            {
+                current = current[segments[i]] as IDictionary;
+                continue;
+            }
+
+            var caseVariant = current.Keys.Cast<object>().Select(k => k.ToString())
+                .FirstOrDefault(existing => string.Equals(existing, segments[i], StringComparison.OrdinalIgnoreCase));
+            if (caseVariant is null)
+                return; // a genuinely new key from here on
+
+            var suggested = string.Join(":", segments.Take(i).Append(caseVariant).Concat(segments.Skip(i + 1)));
+            throw new InvalidOperationException(
+                $"No key \"{segments[i]}\" exists at that level, but \"{caseVariant}\" does -- keys are case-sensitive.\n" +
+                $"Try: --match key={suggested}");
+        }
     }
 
     private static bool TryNavigate(IDictionary obj, IReadOnlyList<string> segments)

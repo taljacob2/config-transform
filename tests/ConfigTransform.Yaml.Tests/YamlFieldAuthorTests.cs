@@ -142,4 +142,16 @@ public class YamlFieldAuthorTests
             matches: [new MatchSpec("key", "ApiUrl", WasDefaulted: false)],
             setFields: [new MatchSpec("other", "x", WasDefaulted: false)]));
     }
+
+    [Fact]
+    public void A_key_path_existing_only_with_different_casing_is_refused_with_the_real_spelling()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => YamlFieldAuthor.Author(
+            DotNetCoreBase, existingTargetYaml: null, isBaseTarget: false,
+            matches: [new MatchSpec("key", "apiurl", WasDefaulted: false)],
+            setFields: [new MatchSpec("value", "https://new.example.com", WasDefaulted: false)]));
+
+        Assert.Contains("\"ApiUrl\" does", ex.Message);
+        Assert.Contains("Try: --match key=ApiUrl", ex.Message);
+    }
 }

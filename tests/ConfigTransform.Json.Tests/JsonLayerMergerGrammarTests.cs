@@ -153,6 +153,35 @@ public class JsonLayerMergerGrammarTests
         Assert.True(rules[0].GetProperty("enabled").GetBoolean());
     }
 
+    [Fact]
+    public void A_patch_key_differing_from_an_existing_key_only_by_case_is_an_error_naming_the_real_spelling()
+    {
+        // Keys are case-sensitive, but writing a second key that differs only by case is never
+        // what was meant -- and .NET's configuration loader refuses to load such a file.
+        using var dir = new TempDir();
+        var basePath = dir.WriteFile("base.json", """{ "Billing": { "ApiUrl": "https://dev.example.com" } }""");
+        var patchPath = dir.WriteFile("patch.json", """{ "Billing": { "apiUrl": "https://prod.example.com" } }""");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => JsonLayerMerger.Merge(basePath, [patchPath]));
+
+        Assert.Contains(patchPath, ex.Message);
+        Assert.Contains("\"Billing:apiUrl\"", ex.Message);
+        Assert.Contains("\"Billing:ApiUrl\"", ex.Message);
+        Assert.Contains("Try: spell it \"ApiUrl\"", ex.Message);
+    }
+
+    [Fact]
+    public void A_case_only_mismatch_inside_an_array_item_names_the_item()
+    {
+        using var dir = new TempDir();
+        var basePath = dir.WriteFile("base.json", """{ "Rules": [ { "enabled": false } ] }""");
+        var patchPath = dir.WriteFile("patch.json", """{ "Rules": [ { "Enabled": true } ] }""");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => JsonLayerMerger.Merge(basePath, [patchPath]));
+
+        Assert.Contains("\"Rules:0:Enabled\"", ex.Message);
+    }
+
     private sealed class TempDir : IDisposable
     {
         private readonly string _path = Directory.CreateTempSubdirectory("configtransform-json-tests-").FullName;
