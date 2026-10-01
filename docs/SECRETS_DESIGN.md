@@ -160,11 +160,32 @@ secrets
   can't tell. Detected by git-crypt's own header (NUL + `GITCRYPT` + NUL), which
   `LayerManifestLoader` already recognizes for `configtransform.json`.
 
-**`--reveal-secrets`** opts in to real values in previews: `--dry-run` and `--diff` show substituted
-output. For a key holder debugging locally. It should never appear in a CI step that prints to a
-log.
+**`--reveal-secrets`** opts in to real values in previews: `--dry-run`, `--diff` and
+`--diff-layers` show substituted output, and replaced files in full. For a key holder debugging
+locally. It should never appear in a CI step that prints to a log. It changes nothing else: the
+secrets report still never prints a value, and a real run is the same with or without it.
 
-**`--list`** shows each layer's `secrets` files (paths only) next to its patches.
+**In a revealed diff, every side is resolved with the full chain's secrets.** `--diff` compares the
+base alone with the full result, and `--diff-layers` compares each layer's state with the next.
+Each of those sides gets the same values — those the *whole* chain resolves to. So a diff only ever
+shows real configuration changes, never a placeholder turning into its value (which would put the
+secret on a `+` line for no reason). The catch: a later layer overriding an earlier layer's secret
+*value* doesn't show as a diff line, since the placeholder text is the same on both sides. The
+secrets report says which file each value came from.
+
+**`set`'s automatic diff** after a write never substitutes. `set` has no `--reveal-secrets`.
+
+**`--list`** shows each layer's `secrets` files (paths only) next to its patches, with or without
+`--reveal-secrets`.
+
+**Summary — when a value can appear:**
+
+| | Without `--reveal-secrets` | With `--reveal-secrets` |
+|---|---|---|
+| `--dry-run` | placeholder text; replaced file as a one-line note | real values; replaced file in full |
+| `--diff`, `--diff-layers` | placeholders on both sides; replaced file as a one-line note | real values, every side resolved with the full chain |
+| `--list`, the secrets report, `set`'s auto-diff | never | never |
+| real run (`-o`) | written to the output files, never printed | same |
 
 ### Environment-variable override
 
@@ -252,10 +273,14 @@ simpler schema; see the decision log.
    add a `replace` entry, and commit a harmless file at the real path.
 3. Verify with the key: every combination's `--dry-run` reports every secret `resolved`, and
    `-o` output is byte-identical to before the migration.
-4. **Before narrowing encryption, make sure no secret value is left in any file that is about to
+4. **Check CI for steps that print resolved output** — e.g. a `cat` of a file written by `-o`
+   (`config-transform-pilot`'s "Show resolved config" step does exactly this). The tool never
+   prints a value on its own, but it can't stop a later step from printing a file it wrote. Remove
+   such steps, or mask the values (GitHub Actions' `::add-mask::`).
+5. **Before narrowing encryption, make sure no secret value is left in any file that is about to
    become plaintext.** From the next commit on, those files are readable by anyone with repo read
    access.
-5. With the repo unlocked, narrow `.gitattributes` from `.configtransform/** …` to
+6. With the repo unlocked, narrow `.gitattributes` from `.configtransform/** …` to
    `.configtransform/**/*.secret.* …`, then `git add --renormalize .configtransform` so files that
    were encrypted get committed in plaintext. Earlier history stays encrypted.
 
