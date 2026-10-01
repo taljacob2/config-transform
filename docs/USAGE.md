@@ -23,6 +23,7 @@ supports differs by format for reasons that come from the format itself, not an 
 --dry-run                                  print the fully merged result to stdout; nothing written to disk
 --diff                                     print a unified diff (unpatched vs. merged) via `git diff --no-index`; nothing written to disk
 --diff-layers                              like --diff, but one diff per layer that actually changes the resource, tagged with which earlier layer it overrides (docs/DIFF_LAYERS_DESIGN.md); mutually exclusive with --diff
+--color <auto|always|never>                ANSI colour in diff output (--diff, --diff-layers, set's auto-diff); default auto — colour only on a terminal with NO_COLOR unset. Also accepted as --color=<mode>
 --list                                     show a layer's resources (--client/--environment[/--host]), or a tree-wide reverse lookup (--resource) — see below
 help, --help, -h                           print the help page (see "Getting help" below) — also the default with no arguments at all
 init                                       scaffold a .configtransform/ tree — a different verb, see "init" below
@@ -258,9 +259,19 @@ applied each time (no format-engine changes needed for this — every merge engi
 an arbitrary prefix of the patch list). Each section is tagged `[<layer>]`, or
 `[<layer> overrides <earlier layer>]` when every line it changes was last touched by that one
 earlier layer; a hunk that re-touches lines with *different* prior owners gets a plain `[<layer>]`
-tag instead, with a `(overrides <layer>)` note on each individual changed line that has one. Like
-`--diff`, nothing is written to disk, and it prints `(no changes)` when there's nothing to show.
-Mutually exclusive with `--diff` — use one or the other.
+tag instead, with a `(overrides <layer>)` note on each individual changed line that has one. A
+layer whose changes land in more than one hunk gets one tag per hunk, each set off by a blank
+line, the same spacing as between two layers. Like `--diff`, nothing is written to disk, and it
+prints `(no changes)` when there's nothing to show. Mutually exclusive with `--diff` — use one or
+the other.
+
+`--color auto|always|never` controls ANSI colour in every diff the tool prints (`--diff`,
+`--diff-layers`, and `set`'s automatic diff after a write); it's accepted in every mode and simply
+has no effect where nothing is diffed. The default, `auto`, colours only when stdout is a terminal
+and the `NO_COLOR` environment variable (https://no-color.org) is unset — so `--diff > change.diff`
+or a pipe gets plain text with no escape codes. `always` forces colour anyway, e.g. for a CI log
+viewer that renders ANSI even though the job's stdout isn't a terminal (GitHub Actions does);
+`never` turns it off on a terminal too. An explicit `always`/`never` wins over `NO_COLOR`.
 
 ## `init` — scaffold a tree
 

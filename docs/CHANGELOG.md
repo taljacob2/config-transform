@@ -6,7 +6,27 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+### Added
+
+- **`--color auto|always|never`** (also `--color=<mode>`), for ANSI colour in every diff the tool
+  prints: `--diff`, `--diff-layers`, and `set`'s automatic diff after a write. Accepted in every
+  mode. `GitDiff.Render` always passed `--color=always` before this, so a redirect or pipe
+  (`--diff > change.diff`) captured raw escape codes. See `docs/USAGE.md`.
+
+### Changed
+
+- **Diff output is no longer coloured by default when stdout isn't a terminal.** The default,
+  `--color auto`, colours only on a terminal with the `NO_COLOR` environment variable unset. A CI
+  log that renders ANSI (GitHub Actions does, even though a job's stdout isn't a terminal) now
+  gets plain text unless the step passes `--color always`. `GitDiff.Render` now passes
+  `--color=never` explicitly when colour is off, so a user's own `color.ui = always` git config
+  can't force it back on.
+
 ### Fixed
+
+- **`--diff-layers` spaces a layer's second and later hunks with a blank line**, the same as
+  between two layers' sections. Before, a layer's second `[<layer>]` tag followed the previous
+  hunk's last line with no gap. See `docs/DIFF_LAYERS_DESIGN.md` decision log #5.
 
 - **JSON output keeps non-ASCII and `< > & ' +` as written, instead of `\uXXXX` escapes.**
   Found during the same read-through as the console fix below. System.Text.Json's default encoder

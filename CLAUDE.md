@@ -295,5 +295,6 @@ versus what needs either a solution repo that doesn't exist yet or an owner deci
 array-of-objects matching is the remaining `set` gap. An output-fidelity pass is in progress (see
 `docs/ROADMAP.md`'s "Output-fidelity pass"): console output is now always UTF-8 (`Utf8Console`,
 in `ConfigTransform.Cli`) and JSON output keeps non-ASCII and `< > & ' +` literal instead of
-`\uXXXX` escapes (`JsonWriteOptions`), neither tagged yet. `--color auto|always|never` and
-preserving base key order in JSON/YAML output are next.
+`\uXXXX` escapes (`JsonWriteOptions`), and diff colour follows a new `--color auto|always|never`
+flag (default `auto`: terminal only, so redirects get plain text), none tagged yet. Preserving base
+key order in JSON/YAML output is next.

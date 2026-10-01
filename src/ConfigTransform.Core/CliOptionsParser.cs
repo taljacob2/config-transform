@@ -9,6 +9,9 @@ namespace ConfigTransform.Core;
 /// it's optional for a resolve/dry-run/diff/real-run (omitting it means "every resource this layer
 /// touches") and for --list (omitting it lists the whole target layer instead of a reverse
 /// lookup), but always required for 'set', which can only ever target one resource at a time.
+/// --color auto|always|never (also accepted as --color=&lt;mode&gt;, git's own spelling) controls
+/// ANSI colour in diff output and is valid in every mode, since it's purely presentational — it
+/// changes nothing when the mode prints no diff.
 /// --host/-H is a further optional third axis (docs/HOST_LAYER_DESIGN.md) — always requires both
 /// --client and --environment, the same "requires the level above it" rule --client already
 /// follows for --environment, and is never valid with --list --resource's reverse lookup.
@@ -45,8 +48,10 @@ public static class CliOptionsParser
     [
         "--help", "-h", "help", "--resource", "-r", "--client", "-c", "--environment", "-e",
         "--host", "-H", "--output", "-o", "--dry-run", "--diff", "--diff-layers", "--list", "--match", "--set",
-        "--scan-root", "--yes", "--no-scan", "--template"
+        "--scan-root", "--yes", "--no-scan", "--template", "--color"
     ];
+
+    private const string ColorFlagPrefix = "--color=";
 
     private const int MaxSuggestionDistance = 2;
 
@@ -78,6 +83,7 @@ public static class CliOptionsParser
         var yes = false;
         var noScan = false;
         string? template = null;
+        var color = ColorMode.Auto;
 
         for (var i = 0; i < rest.Length; i++)
         {
@@ -156,6 +162,12 @@ public static class CliOptionsParser
                     template = i + 1 < rest.Length && !KnownFlags.Contains(rest[i + 1])
                         ? rest[++i]
                         : "default";
+                    break;
+                case "--color":
+                    color = ParseColorMode(RequireValue(rest, ref i, rest[i]));
+                    break;
+                case var arg when arg.StartsWith(ColorFlagPrefix, StringComparison.Ordinal):
+                    color = ParseColorMode(arg[ColorFlagPrefix.Length..]);
                     break;
                 default:
                     var suggestion = FindClosestFlag(rest[i]);
@@ -240,8 +252,17 @@ public static class CliOptionsParser
 
         return new CliOptions(
             resource, client, environment, host, output, dryRun, diff, diffLayers, list, set, Help: false, match,
-            setFields, init, initEnvironments, initClients, initResources, initHosts, scanRoot, yes, noScan, template);
+            setFields, init, initEnvironments, initClients, initResources, initHosts, scanRoot, yes, noScan, template, color);
     }
+
+    private static ColorMode ParseColorMode(string value) => value switch
+    {
+        "auto" => ColorMode.Auto,
+        "always" => ColorMode.Always,
+        "never" => ColorMode.Never,
+        _ => throw new ArgumentException(
+            $"Unrecognized --color value: '{value}'.\nTry: --color auto (the default), --color always, or --color never."),
+    };
 
     private static string RequireValue(string[] args, ref int i, string flag)
     {

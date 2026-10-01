@@ -13,13 +13,17 @@ namespace ConfigTransform.Core;
 /// shape every format shares; <paramref name="engines"/> is what the caller (the CLI entry point)
 /// supplies to make it concrete. <paramref name="stdin"/>/<paramref name="interactiveAllowed"/>
 /// exist only for `init`'s interactive form — the real entry point passes <see cref="Console.In"/>
-/// and <c>!Console.IsInputRedirected</c>; every other mode ignores both.
+/// and <c>!Console.IsInputRedirected</c>; every other mode ignores both. <paramref name="autoColor"/>
+/// is what <c>--color auto</c> (the default) resolves to — the entry point passes "stdout is a
+/// terminal and NO_COLOR is unset"; it defaults to false so an in-process caller capturing output
+/// in a StringWriter gets plain text, the same as a redirect would. See <see cref="ColorMode"/>.
 /// </summary>
 public static class CliRunner
 {
     public static int Run(
         string[] args, TextWriter stdout, TextWriter stderr, FormatEngineRegistry engines,
-        string? workingDirectory = null, TextReader? stdin = null, bool interactiveAllowed = false)
+        string? workingDirectory = null, TextReader? stdin = null, bool interactiveAllowed = false,
+        bool autoColor = false)
     {
         try
         {
@@ -32,6 +36,12 @@ public static class CliRunner
             }
 
             var root = workingDirectory ?? Directory.GetCurrentDirectory();
+            var color = options.Color switch
+            {
+                ColorMode.Always => true,
+                ColorMode.Never => false,
+                _ => autoColor,
+            };
 
             if (options.Init)
             {
@@ -41,7 +51,7 @@ public static class CliRunner
 
             if (options.Set)
             {
-                SetRunner.Run(options, root, engines, stdout);
+                SetRunner.Run(options, root, engines, stdout, color);
                 return 0;
             }
 
@@ -59,11 +69,11 @@ public static class CliRunner
 
             if (options.Resource is not null)
             {
-                RunOneResource(options, root, chain, engines, stdout);
+                RunOneResource(options, root, chain, engines, stdout, color);
                 return 0;
             }
 
-            RunEveryResource(options, root, targetLayerPath, chain, engines, stdout, stderr);
+            RunEveryResource(options, root, targetLayerPath, chain, engines, stdout, stderr, color);
             return 0;
         }
         catch (Exception ex)
@@ -75,7 +85,7 @@ public static class CliRunner
 
     private static void RunOneResource(
         CliOptions options, string root, IReadOnlyList<ResolvedLayer> chain,
-        FormatEngineRegistry engines, TextWriter stdout)
+        FormatEngineRegistry engines, TextWriter stdout, bool color)
     {
         var engine = engines.Require(options.Resource!);
 
@@ -86,7 +96,7 @@ public static class CliRunner
 
         if (options.DiffLayers)
         {
-            var sections = LayerDiffAttribution.Compute(resolved, engine.Merge);
+            var sections = LayerDiffAttribution.Compute(resolved, engine.Merge, color);
             stdout.WriteLine();
             stdout.WriteLine(sections.Count == 0 ? "(no changes)" : string.Join("\n\n", sections.Select(s => s.Diff)));
             return;
@@ -95,7 +105,7 @@ public static class CliRunner
         if (options.Diff)
         {
             var baseOnly = engine.Merge(resolved.BasePath, []);
-            var diff = GitDiff.Render(baseOnly, merged);
+            var diff = GitDiff.Render(baseOnly, merged, color);
             stdout.WriteLine();
             stdout.WriteLine(string.IsNullOrWhiteSpace(diff) ? "(no changes)" : diff);
             return;
@@ -135,7 +145,7 @@ public static class CliRunner
     /// </summary>
     private static void RunEveryResource(
         CliOptions options, string root, string? targetLayerPath, IReadOnlyList<ResolvedLayer> chain,
-        FormatEngineRegistry engines, TextWriter stdout, TextWriter stderr)
+        FormatEngineRegistry engines, TextWriter stdout, TextWriter stderr, bool color)
     {
         var allResources = LayerChain.ResolveAllResources(chain);
         var owned = allResources.Where(r => engines.Find(r) is not null).ToList();
@@ -222,13 +232,13 @@ public static class CliRunner
 
             if (options.DiffLayers)
             {
-                var sections = LayerDiffAttribution.Compute(resolved, engine.Merge);
+                var sections = LayerDiffAttribution.Compute(resolved, engine.Merge, color);
                 stdout.WriteLine(sections.Count == 0 ? "(no changes)" : string.Join("\n\n", sections.Select(s => s.Diff)));
             }
             else if (options.Diff)
             {
                 var baseOnly = engine.Merge(resolved.BasePath, []);
-                var diff = GitDiff.Render(baseOnly, merged);
+                var diff = GitDiff.Render(baseOnly, merged, color);
                 stdout.WriteLine(string.IsNullOrWhiteSpace(diff) ? "(no changes)" : diff);
             }
             else

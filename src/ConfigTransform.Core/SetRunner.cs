@@ -11,7 +11,7 @@ namespace ConfigTransform.Core;
 /// </summary>
 public static class SetRunner
 {
-    public static void Run(CliOptions options, string root, FormatEngineRegistry engines, TextWriter stdout)
+    public static void Run(CliOptions options, string root, FormatEngineRegistry engines, TextWriter stdout, bool color = false)
     {
         var engine = engines.Require(options.Resource!);
 
@@ -66,7 +66,7 @@ public static class SetRunner
             : engine.Merge(target.ResourceBasePath, [.. target.PrecedingPatchPathsInOrder, target.PatchPath!]);
 
         var diffBase = target.IsBaseTarget ? preceding : baseOnly;
-        var diff = GitDiff.Render(diffBase, mergedAfterWrite);
+        var diff = GitDiff.Render(diffBase, mergedAfterWrite, color);
         stdout.WriteLine(string.IsNullOrWhiteSpace(diff) ? "(no changes)" : diff);
     }
 }

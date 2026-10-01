@@ -20,7 +20,7 @@ public static class HelpPrinter
             now: {{engines.SupportedExtensions}}.
 
             USAGE
-              configtransform [--resource <path>] [--client <C>] [--environment <E>] [--host <H>] [--dry-run | --diff | --diff-layers | --output <path>]
+              configtransform [--resource <path>] [--client <C>] [--environment <E>] [--host <H>] [--dry-run | --diff | --diff-layers | --output <path>] [--color auto|always|never]
               configtransform --list [--client <C> --environment <E> [--host <H>] | --resource <path>]
               configtransform set --resource <path> [--client <C> --environment <E> [--host <H>]] --match <k>=<v> [--match ...] --set <k>=<v> [--set ...]
               configtransform init [--environment <E> ...] [--client <C> ...] [--host <H> ...] [--resource <path> ...] [--yes] [--dry-run]
@@ -50,6 +50,8 @@ public static class HelpPrinter
               easy:  configtransform -r BillingApi.Core/appsettings.json -c Acme -e Production --diff
               tldr:  configtransform -c Acme -e Production --diff
                      (whole layer's diff, mixed XML/JSON, one call)
+                     colour is on only on a terminal by default; --color always forces it (e.g.
+                     in CI logs), --color never turns it off
 
             --diff-layers — like --diff, but one diff per layer that actually changes the resource
               easy:  configtransform -r BillingApi.Core/appsettings.json -c Acme -e Production --diff-layers

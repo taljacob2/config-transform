@@ -386,6 +386,7 @@ mixed-format layer resolves in a single call:
 --dry-run                              print the fully merged result to stdout; nothing is written to disk
 --diff                                 print a unified diff (unpatched vs. fully merged) using `git diff --no-index`; nothing is written to disk except throwaway temp files, cleaned up immediately
 --diff-layers                          like --diff, but one diff per layer that changes the resource (docs/DIFF_LAYERS_DESIGN.md)
+--color <auto|always|never>            ANSI colour in diff output; default auto — only on a terminal, and never with NO_COLOR set
 ```
 
 `--dry-run` and `--diff` never write to the base file's own location — real runs only ever

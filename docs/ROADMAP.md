@@ -653,11 +653,13 @@ merge results. None of them is a merge-correctness bug. Fixed one per PR, in thi
    became `a\u002Bb`), in `--output` files and `configtransform.json` layer files as well.
    Every JSON write site now uses `JavaScriptEncoder.UnsafeRelaxedJsonEscaping`; see
    `docs/CONFIG_MANAGEMENT.md` §5.3.
-3. **Diff colour** — `GitDiff.Render` always passes `--color=always`, so redirected
-   `--diff`/`--diff-layers` output carries ANSI escapes. Repo owner's decision: a
-   `--color auto|always|never` flag (default `auto`), the git/ls convention, rather than
-   environment-variable detection alone. Also: no blank line between two hunks of the same layer in
-   `--diff-layers`.
+3. **Diff colour — fixed, unreleased.** `GitDiff.Render` always passed `--color=always`, so
+   redirected `--diff`/`--diff-layers` output carried ANSI escapes. Repo owner's decision: a
+   `--color auto|always|never` flag (default `auto`: terminal only, `NO_COLOR` respected), the
+   git/ls convention. `--diff-layers` also now puts a blank line before a layer's second and later
+   hunks. **Pilot follow-up when re-pinning:** `config-transform-pilot`'s `build-transformed.yml`
+   `--diff-layers` step loses colour in the Actions log under the new default; add
+   `--color always` there if it's wanted.
 4. **JSON/YAML output reorders keys alphabetically and normalizes YAML quoting** — inherited from
    flattening through `IConfiguration`, so `--diff` shows moved lines that aren't real changes.
    Repo owner's decision: fix it (merge each patch into the base document's own tree so base order
@@ -665,7 +667,7 @@ merge results. None of them is a merge-correctness bug. Fixed one per PR, in thi
 
 ## Next up
 
-- **Output-fidelity pass, items 3–4** — see the "Output-fidelity pass" paragraph at the end of
+- **Output-fidelity pass, item 4** — see the "Output-fidelity pass" paragraph at the end of
   "Current state" above. Actionable now, no solution repo or further owner decision needed.
 One item below is now actionable purely within this repo (see the first bullet); every other
 remaining item still either needs a solution repo that doesn't exist yet, or a decision only the

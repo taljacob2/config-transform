@@ -190,6 +190,11 @@ test file" rather than folding this logic into `CliRunner` directly.
    line-position bookkeeping the attribution pass needs; writing a second, bespoke line-diff
    implementation just to get structured line mappings would duplicate logic `GitDiff` already
    has for free.
+5. **Every hunk after a layer's first is set off by a blank line** (added 2026-10-01, alongside
+   `--color`). Each hunk already gets its own `[<layer>]` tag, but a layer's second tag used to
+   follow the first hunk's last line with no gap, while two different layers' sections were
+   separated by one blank line. The same one-blank-line spacing now applies to both, so a reader
+   doesn't misread a second tag as part of the hunk above it.
 
 ## Open items
 

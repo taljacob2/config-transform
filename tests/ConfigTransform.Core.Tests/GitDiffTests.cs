@@ -4,6 +4,28 @@ namespace ConfigTransform.Core.Tests;
 
 public class GitDiffTests
 {
+    private const char Esc = (char)27;
+
+    [Fact]
+    public void Render_is_plain_text_by_default()
+    {
+        var diff = GitDiff.Render("line one\nold value\n", "line one\nnew value\n");
+
+        Assert.DoesNotContain(Esc, diff);
+        Assert.Contains("-old value", diff);
+        Assert.Contains("+new value", diff);
+    }
+
+    [Fact]
+    public void Render_keeps_gits_ansi_colour_when_asked()
+    {
+        var diff = GitDiff.Render("line one\nold value\n", "line one\nnew value\n", color: true);
+
+        Assert.Contains(Esc, diff);
+        Assert.Contains("old value", diff);
+        Assert.Contains("new value", diff);
+    }
+
     [Fact]
     public void Render_returns_empty_for_identical_content()
     {
