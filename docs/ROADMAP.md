@@ -702,13 +702,16 @@ from below (or something new) when ready, rather than assuming the next item in 
 default next step.
 
 - **Secrets** (`docs/SECRETS_DESIGN.md`, designed 2026-10-01 with the repo owner) — being
-  implemented in the three stages the design's "Implementation plan" lays out. **Stage 1 (value
-  secrets) is done, unreleased**: `{{CFSECRET_NAME}}` placeholders, `*.secret.env` files under a
+  implemented in the three stages the design's "Implementation plan" lays out. **Stages 1–2 are
+  done, unreleased.** Stage 1 (value secrets): `{{CFSECRET_NAME}}` placeholders, `*.secret.env` files under a
   layer's `secrets`, `--reveal-secrets`, the secrets report, all-or-nothing real runs, and a
   strict loader (unknown fields are errors). Implementation and review surfaced six extra decisions, now
   in the design's decision log (#13–#18) — notably that YAML needs quoted placeholders, and that a
-  secrets file must sit inside `.configtransform/` for git-crypt to cover it. **Next: stage
-  2** (whole-file secrets via `replace`), then stage 3 (docs rewrite and the pilot migration). Separates secrets from configuration so only
+  secrets file must sit inside `.configtransform/` for git-crypt to cover it. Stage 2
+  (whole-file secrets via a resource's `replace`, byte for byte, any format) added decisions
+  #19–#22. **Next: stage 3** — rewrite `CONFIG_MANAGEMENT.md` §7 and `SECRETS_AND_LOCAL_SETUP.md`
+  around the narrowed `.configtransform/**/*.secret.*` rule, and migrate `config-transform-pilot`
+  (one placeholder secret, one whole-file secret, narrowed `.gitattributes`, real CI dispatch). Separates secrets from configuration so only
   `.configtransform/**/*.secret.*` needs git-crypt and every other overlay is readable and
   reviewable on GitHub. Every behavior question raised so far is settled in the design's decision
   log; its "Open items" are deliberately deferred, not blockers.

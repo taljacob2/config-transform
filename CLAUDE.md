@@ -305,9 +305,10 @@ only by case is an error (it would otherwise deploy a file .NET refuses to load)
 Then `0.23.1-alpha`: JSON/YAML output (and every file `set` rewrites) keeps the base or
 existing file's line endings and final newline (`TextLayout` in Core), as XML always did;
 `config-transform-pilot` is re-pinned to it and verified via a real CI dispatch. Secrets
-(`docs/SECRETS_DESIGN.md`) are being implemented in three stages; stage 1 is done, not yet tagged:
-`{{CFSECRET_NAME}}` placeholders filled from encrypted `*.secret.env` files a layer lists under
-`secrets` (`SecretResolver`/`SecretsStep` in Core, one `*SecretSubstitution` per engine),
-`--reveal-secrets`, and a strict layer loader. Stage 2 is whole-file secrets via a resource's
-`replace`; stage 3 rewrites the git-crypt docs and migrates the pilot. Never let a secret value
+(`docs/SECRETS_DESIGN.md`) are being implemented in three stages; stages 1–2 are done, not yet
+tagged: `{{CFSECRET_NAME}}` placeholders filled from encrypted `*.secret.env` files a layer lists
+under `secrets` (`SecretResolver`/`SecretsStep` in Core, one `*SecretSubstitution` per engine),
+`--reveal-secrets`, a strict layer loader, and whole-file secrets via a resource's `replace`
+(`ReplaceStep` in Core — byte copy, no engine). Stage 3 rewrites the git-crypt docs and migrates
+the pilot. Never let a secret value
 reach stdout, stderr or an exception message — two such leaks were found and fixed in stage 1.

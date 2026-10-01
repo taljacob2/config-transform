@@ -77,6 +77,8 @@ public static class HelpPrinter
               tldr:  configtransform -c Acme -e Production --dry-run --reveal-secrets
                      (real values in the preview -- for a key holder, never in a CI log; a real run with
                      -o always substitutes, and writes nothing if any secret is missing or locked)
+                     a resource's "replace" swaps in a whole *.secret.* file (Firebase JSON, a
+                     certificate) byte for byte instead
 
             set — author an overlay field without hand-writing XDT or nested JSON
               easy:  configtransform set -r OrderProcessor.Framework/App.config -c Acme -e Production --match ApiUrl --set https://acme.example.com

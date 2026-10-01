@@ -18,8 +18,15 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   (git-crypt locked); a new `--reveal-secrets` flag shows real values. A real run writes nothing if
   any secret is unresolved. `--list` shows the chain's secrets files. Secrets files must end in
   `.secret.env` and live inside `.configtransform/`, so the git-crypt rule always covers them, and
-  a name defined twice (in one file, or in two files of one layer) is an error. Whole-file secrets
-  (`replace`) are stage 2, not in this release.
+  a name defined twice (in one file, or in two files of one layer) is an error.
+- **Secrets, stage 2: whole-file secrets via a resource's `replace`** (`docs/SECRETS_DESIGN.md`). A
+  resource entry can name an encrypted `*.secret.*` file inside `.configtransform/` that replaces
+  the resource byte for byte — a Firebase service-account JSON, a certificate — with no merging or
+  parsing, so any format works, binary included and with no format engine needed. A later layer's
+  `replace` overrides an earlier one and supersedes earlier patches; a patch at or after the
+  replacing layer is an error, and `set` refuses to patch a replaced resource. Previews print a
+  one-line note unless `--reveal-secrets`; a still-encrypted replace file stops a real run before
+  anything is written.
 
 ### Changed
 

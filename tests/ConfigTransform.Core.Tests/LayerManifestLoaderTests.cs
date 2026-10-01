@@ -116,6 +116,36 @@ public class LayerManifestLoaderTests
     }
 
     [Fact]
+    public void Loads_a_replace_entry()
+    {
+        using var dir = new TempDirectory();
+        var path = Path.Combine(dir.Path, "configtransform.json");
+        File.WriteAllText(path, """
+            { "resources": [ { "path": "app/firebase.json", "replace": ".configtransform/Clients/Acme/Production/firebase.secret.json" } ] }
+            """);
+
+        var manifest = LayerManifestLoader.Load(path);
+
+        Assert.Equal(".configtransform/Clients/Acme/Production/firebase.secret.json", manifest.Resources[0].Replace);
+        Assert.Null(manifest.Resources[0].Patch);
+    }
+
+    [Theory]
+    [InlineData("""{ "path": "app/f.json", "patch": ".configtransform/E/p.json", "replace": ".configtransform/E/f.secret.json" }""", "both a patch and a replace")]
+    [InlineData("""{ "path": "app/f.json", "replace": ".configtransform/E/firebase.json" }""", "doesn't contain '.secret.'")]
+    [InlineData("""{ "path": "app/f.json", "replace": "app/firebase.secret.json" }""", "isn't inside .configtransform/")]
+    public void An_invalid_replace_entry_is_rejected(string resource, string expectedMessage)
+    {
+        using var dir = new TempDirectory();
+        var path = Path.Combine(dir.Path, "configtransform.json");
+        File.WriteAllText(path, $$"""{ "resources": [ {{resource}} ] }""");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => LayerManifestLoader.Load(path));
+
+        Assert.Contains(expectedMessage, ex.Message);
+    }
+
+    [Fact]
     public void An_unknown_field_is_rejected_instead_of_silently_ignored()
     {
         // An older tool used to skip fields it didn't know -- deploying unresolved placeholders

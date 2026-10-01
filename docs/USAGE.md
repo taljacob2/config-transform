@@ -24,7 +24,7 @@ supports differs by format for reasons that come from the format itself, not an 
 --diff                                     print a unified diff (unpatched vs. merged) via `git diff --no-index`; nothing written to disk
 --diff-layers                              like --diff, but one diff per layer that actually changes the resource, tagged with which earlier layer it overrides (docs/DIFF_LAYERS_DESIGN.md); mutually exclusive with --diff
 --color <auto|always|never>                ANSI colour in diff output (--diff, --diff-layers, set's auto-diff); default auto — colour only on a terminal with NO_COLOR unset. Also accepted as --color=<mode>
---reveal-secrets                           previews (--dry-run/--diff/--diff-layers) show real secret values instead of {{CFSECRET_…}} placeholders — see "Secrets" below
+--reveal-secrets                           previews (--dry-run/--diff/--diff-layers) show real secret values instead of {{CFSECRET_…}} placeholders, and replaced files' content — see "Secrets" below
 --list                                     show a layer's resources (--client/--environment[/--host]), or a tree-wide reverse lookup (--resource) — see below
 help, --help, -h                           print the help page (see "Getting help" below) — also the default with no arguments at all
 init                                       scaffold a .configtransform/ tree — a different verb, see "init" below
@@ -320,6 +320,28 @@ CFSECRET_ADMIN_DB_PASSWORD=Pa55+w&rd
   locked, or a placeholder is left outside a value (a key, an XML comment), it fails and **writes
   nothing**.
 - **`--list`** shows the chain's secrets files (paths only).
+
+**Whole-file secrets** — a Firebase service-account JSON, a certificate — use a resource entry's
+`replace` instead of placeholders:
+
+```json
+{ "path": "code/src/firebase.json", "replace": ".configtransform/Clients/Acme/Production/firebase.secret.json" }
+```
+
+- `path` is the real file the app uses, committed with harmless content (empty, `{}`, or dev
+  credentials). `replace` is the real file, encrypted at rest; its name must contain `.secret.` and
+  it must be inside `.configtransform/`.
+- A real run writes the replace file's **exact bytes** — no merging, no parsing — so any format
+  works, binary included, whether or not a format engine handles the extension.
+- A later layer's `replace` overrides an earlier one, and supersedes earlier layers' patches (the
+  chain report marks them). A `patch` for the same resource in the same entry, or in any later
+  layer, is an error, and so is `set` targeting a replaced resource.
+- Previews print a one-line note instead of the content —
+  `(replaced by …/firebase.secret.json, 2310 bytes, not shown -- pass --reveal-secrets to see it)`.
+  With `--reveal-secrets`, `--dry-run` prints the content and `--diff` diffs it against the base (a
+  binary file is described, not printed).
+- A replace file that's still git-crypt encrypted is noted in previews and stops a real run before
+  anything is written.
 
 ```
 $ configtransform -r Web/AdminPortal.Web/Web.config -c Acme -e Production --dry-run

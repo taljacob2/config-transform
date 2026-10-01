@@ -1,10 +1,11 @@
 # Secrets — design
 
-**Status: stage 1 (value secrets) implemented, unreleased; stages 2–3 not started (2026-10-01).**
-Decisions below were settled with the repo owner in conversation. Value secrets — placeholders,
-`*.secret.env` files, the `secrets` field, `--reveal-secrets`, the strict loader — work as described.
-File secrets (`replace`) and the docs/pilot migration don't exist yet. See "Implementation plan",
-and `docs/ROADMAP.md` for where this sits in priority.
+**Status: stages 1–2 implemented, unreleased; stage 3 not started (2026-10-01).** Decisions below
+were settled with the repo owner in conversation. Value secrets (placeholders, `*.secret.env`
+files, the `secrets` field, `--reveal-secrets`, the strict loader) and file secrets (`replace`)
+work as described. The docs rewrite of `CONFIG_MANAGEMENT.md` §7 and the pilot migration (stage 3)
+haven't happened yet. See "Implementation plan", and `docs/ROADMAP.md` for where this sits in
+priority.
 
 ## Why this exists
 
@@ -372,6 +373,21 @@ Found while implementing stage 1, not in the original design:
     guarantee git-crypt coverage: the rule is `.configtransform/**/*.secret.*`, so a correctly named
     `app/db.secret.env` would be committed in plaintext. Entries whose first path segment isn't
     `.configtransform`, or that climb out with `..`, are rejected.
+
+Found while implementing stage 2:
+
+19. **The same location rule applies to `replace` files**, alongside the `.secret.` naming rule, for
+    the same reason as #18. And one resource entry can't have both `patch` and `replace` — the
+    loader rejects it, so the "same layer" case never reaches the chain logic.
+20. **`set` refuses to write a patch for a replaced resource** — when the target layer, or any
+    layer before it, replaces it. The original design said only "`set` is unchanged"; writing a
+    patch there would have produced a layer that then fails to resolve. Targeting a layer *before*
+    the replacing one stays allowed (that patch is simply superseded).
+21. **A revealed binary replace file isn't printed.** `--reveal-secrets` on a file containing a NUL
+    byte prints `(… binary content, N bytes)` instead of dumping raw bytes into the terminal.
+22. **The every-resource mode includes replaced resources even with no format engine** (a `.p12`),
+    rather than reporting them as skipped — whether a resource is replaced is read from the layer
+    files alone, before any engine is asked for.
 
 ## Open items
 

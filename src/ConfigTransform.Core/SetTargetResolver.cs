@@ -60,12 +60,22 @@ public static class SetTargetResolver
             : defaultExtends;
 
         var precedingChain = extends is null ? [] : LayerChain.Build(root, extends);
-        var precedingPatches = LayerChain.ResolveResource(root, precedingChain, canonicalResourcePath).PatchPathsInOrder;
+        var preceding = LayerChain.ResolveResource(root, precedingChain, canonicalResourcePath);
+        var precedingPatches = preceding.PatchPathsInOrder;
 
         var existingEntry = File.Exists(targetLayerFullPath)
             ? LayerManifestLoader.Load(targetLayerFullPath).Resources
                 .FirstOrDefault(r => LayerChain.PathsEqual(root, r.Path, canonicalResourcePath))
             : null;
+
+        // A resource replaced by a whole-file secret at this layer or an earlier one has nothing for
+        // a patch to merge into (docs/SECRETS_DESIGN.md). Refuse before writing anything.
+        var replacedBy = existingEntry?.Replace ?? (preceding.ReplacePath is { } p ? LayerChain.ToRepoRelative(root, p) : null);
+        if (replacedBy is not null)
+            throw new InvalidOperationException(
+                $"'{canonicalResourcePath}' is replaced by the whole-file secret '{replacedBy}' in this chain, so 'set' " +
+                "can't write a patch for it -- there's nothing to merge into (docs/SECRETS_DESIGN.md).\n" +
+                "Try: edit the replace file itself, or target a layer before the one that replaces it.");
 
         var patchPath = existingEntry?.Patch is not null
             ? Path.GetFullPath(existingEntry.Patch, root)

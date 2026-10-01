@@ -57,7 +57,8 @@ public static class LayerLister
         foreach (var entry in found)
         {
             var extendsNote = entry.Extends is null ? "" : $", extends {entry.Extends}";
-            stdout.WriteLine($"  {entry.LayerPath}  ({entry.Patch}{extendsNote})");
+            var what = entry.Replace is not null ? $"replaced by {entry.Replace}" : entry.Patch;
+            stdout.WriteLine($"  {entry.LayerPath}  ({what}{extendsNote})");
         }
     }
 }

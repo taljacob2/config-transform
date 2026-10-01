@@ -25,6 +25,9 @@ public static class LayerManifestLoader
     /// <summary>The suffix every <c>secrets</c> entry must have, so the <c>*.secret.*</c> git-crypt rule always covers it.</summary>
     public const string SecretFileSuffix = ".secret.env";
 
+    /// <summary>What every <c>replace</c> file's name must contain, for the same reason.</summary>
+    public const string SecretFileMarker = ".secret.";
+
     public static LayerManifest Load(string layerManifestPath)
     {
         if (!File.Exists(layerManifestPath))
@@ -68,6 +71,24 @@ public static class LayerManifestLoader
                     "Every secrets file must, so the '.configtransform/**/*.secret.*' git-crypt rule always covers it " +
                     $"(docs/SECRETS_DESIGN.md).\nTry: rename it to end in '{SecretFileSuffix}'.");
             RequireInsideConfigTransform(layerManifestPath, "secrets file", secretsFile);
+        }
+
+        foreach (var resource in manifest.Resources)
+        {
+            if (resource.Replace is null)
+                continue;
+
+            if (resource.Patch is not null)
+                throw new InvalidOperationException(
+                    $"'{layerManifestPath}' gives '{resource.Path}' both a patch and a replace. A replace is the whole " +
+                    "file, so there's nothing for a patch to merge into -- merging onto a secret file is exactly what " +
+                    "replace exists to prevent (docs/SECRETS_DESIGN.md).\nTry: keep one of them.");
+            if (!System.IO.Path.GetFileName(resource.Replace).Contains(SecretFileMarker, StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    $"'{layerManifestPath}' replaces '{resource.Path}' with '{resource.Replace}', whose name doesn't contain " +
+                    $"'{SecretFileMarker}'. A replace file must be named *.secret.* so the '.configtransform/**/*.secret.*' " +
+                    "git-crypt rule covers it (docs/SECRETS_DESIGN.md).\nTry: e.g. firebase.secret.json.");
+            RequireInsideConfigTransform(layerManifestPath, "replace file", resource.Replace);
         }
 
         return manifest;

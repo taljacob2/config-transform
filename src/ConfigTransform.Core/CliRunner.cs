@@ -90,9 +90,17 @@ public static class CliRunner
         CliOptions options, string root, IReadOnlyList<ResolvedLayer> chain, SecretSet secrets,
         FormatEngineRegistry engines, TextWriter stdout, bool color)
     {
-        var engine = engines.Require(options.Resource!);
-
         var resolved = LayerChain.ResolveResource(root, chain, options.Resource!);
+
+        // A whole-file secret needs no format engine at all -- resolved before asking for one, so a
+        // replaced .p12 or .pem works even though no engine handles its extension.
+        if (resolved.ReplacePath is not null)
+        {
+            RunReplacedResource(options, root, resolved, stdout, color);
+            return;
+        }
+
+        var engine = engines.Require(options.Resource!);
         var merged = engine.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
         PrintResolutionReport(stdout, options.Resource!, resolved);
@@ -140,6 +148,29 @@ public static class CliRunner
         stdout.WriteLine($"Wrote merged result to '{outputPath}'.");
     }
 
+    private static void RunReplacedResource(
+        CliOptions options, string root, ResolvedResource resolved, TextWriter stdout, bool color)
+    {
+        PrintResolutionReport(stdout, options.Resource!, resolved);
+
+        if (options.DryRun || options.Diff || options.DiffLayers)
+        {
+            stdout.WriteLine();
+            stdout.WriteLine(ReplaceStep.Preview(root, resolved, options.RevealSecrets, diff: !options.DryRun, color));
+            return;
+        }
+
+        var bytes = ReplaceStep.ForRealRun(root, options.Resource!, resolved);
+        var outputPath = options.Output
+            ?? throw new InvalidOperationException("--output was not set for a real run.");
+        var outputDir = Path.GetDirectoryName(Path.GetFullPath(outputPath));
+        if (!string.IsNullOrEmpty(outputDir))
+            Directory.CreateDirectory(outputDir);
+
+        File.WriteAllBytes(outputPath, bytes);
+        stdout.WriteLine($"Wrote '{outputPath}' (replaced by {LayerChain.ToRepoRelative(root, resolved.ReplacePath!)}).");
+    }
+
     /// <summary>Prints the "Resolving '&lt;path&gt;'" header, then the shared chain rendering — see <see cref="LayerChain.PrintChain"/>.</summary>
     private static void PrintResolutionReport(TextWriter stdout, string resourcePath, ResolvedResource resolved)
     {
@@ -160,7 +191,8 @@ public static class CliRunner
         FormatEngineRegistry engines, TextWriter stdout, TextWriter stderr, bool color)
     {
         var allResources = LayerChain.ResolveAllResources(chain);
-        var owned = allResources.Where(r => engines.Find(r) is not null).ToList();
+        // A resource replaced by a whole-file secret needs no format engine (docs/SECRETS_DESIGN.md).
+        var owned = allResources.Where(r => engines.Find(r) is not null || LayerChain.IsReplaced(root, chain, r)).ToList();
         var skipped = allResources.Count - owned.Count;
 
         if (skipped > 0)
@@ -220,20 +252,26 @@ public static class CliRunner
             // written, so an unresolvable secret in one resource never leaves a half-updated output.
             var finals = owned.Select(resourcePath =>
             {
-                var engine = engines.Require(resourcePath);
                 var resolved = LayerChain.ResolveResource(root, chain, resourcePath);
+                if (resolved.ReplacePath is not null)
+                    return (ResourcePath: resourcePath, Text: (string?)null, Bytes: ReplaceStep.ForRealRun(root, resourcePath, resolved));
+
+                var engine = engines.Require(resourcePath);
                 var merged = engine.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
-                return (ResourcePath: resourcePath, Content: SecretsStep.ForRealRun(engine, resourcePath, merged, secrets));
+                return (ResourcePath: resourcePath, Text: SecretsStep.ForRealRun(engine, resourcePath, merged, secrets), Bytes: (byte[]?)null);
             }).ToList();
 
-            foreach (var (resourcePath, content) in finals)
+            foreach (var (resourcePath, text, bytes) in finals)
             {
                 var outPath = Path.Combine(outputRoot, resourcePath.Replace('/', Path.DirectorySeparatorChar));
                 var outDir = Path.GetDirectoryName(outPath);
                 if (!string.IsNullOrEmpty(outDir))
                     Directory.CreateDirectory(outDir);
 
-                File.WriteAllText(outPath, content);
+                if (bytes is not null)
+                    File.WriteAllBytes(outPath, bytes);
+                else
+                    File.WriteAllText(outPath, text);
                 stdout.WriteLine($"Wrote '{outPath}'.");
             }
 
@@ -242,8 +280,16 @@ public static class CliRunner
 
         foreach (var resourcePath in owned)
         {
-            var engine = engines.Require(resourcePath);
             var resolved = LayerChain.ResolveResource(root, chain, resourcePath);
+            if (resolved.ReplacePath is not null)
+            {
+                stdout.WriteLine($"=== {resourcePath} ===");
+                stdout.WriteLine(ReplaceStep.Preview(root, resolved, options.RevealSecrets, diff: !options.DryRun, color));
+                stdout.WriteLine();
+                continue;
+            }
+
+            var engine = engines.Require(resourcePath);
             var merged = engine.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
             stdout.WriteLine($"=== {resourcePath} ===");
