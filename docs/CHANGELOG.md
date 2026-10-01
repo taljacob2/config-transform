@@ -6,6 +6,8 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.23.0-alpha] - 2026-10-01
+
 ### Added
 
 - **`--color auto|always|never`** (also `--color=<mode>`), for ANSI colour in every diff the tool

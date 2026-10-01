@@ -14,11 +14,12 @@ notes are written once, not twice.
    — see `CONFIG_MANAGEMENT.md` §10.8 for the full versioning policy.
 3. Push the tag: `git push origin <version>`. This triggers `.github/workflows/publish.yml`,
    which:
-   - builds, tests, and packs both tools with `-p:Version=<version>`;
-   - pushes both `.nupkg`s to GitHub Packages;
+   - builds, tests, and packs the `configtransform` tool (`ConfigTransform.Cli`, the only
+     packable project since the CLI was unified) with `-p:Version=<version>`;
+   - pushes the `.nupkg` to GitHub Packages;
    - runs `scripts/smoke-test-published-tool.sh`, which actually installs the just-published
-     packages from the feed (not from the local build) via `dotnet tool install --local` and
-     invokes each one — proving the *published package* works, not just that the source
+     package from the feed (not from the local build) via `dotnet tool install --local` and
+     invokes it — proving the *published package* works, not just that the source
      compiles and its own test suite passes;
    - creates a GitHub Release (marked pre-release automatically when the version contains a
      `-` pre-release identifier) with notes from `scripts/extract-changelog-section.sh`.

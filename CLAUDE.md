@@ -290,8 +290,8 @@ the unit suite: the algorithm must read `ResolvedResource.PatchPathsInOrder` (th
 patch paths), not `ChainStep.PatchPath` (the repo-relative path `--list` displays) — fixed before
 merging. Versioned as `0.22.0-alpha`. See `docs/ROADMAP.md`'s "Next up" for what's actionable now
 versus what needs either a solution repo that doesn't exist yet or an owner decision — YAML's own
-array-of-objects matching is the remaining `set` gap. An output-fidelity pass is in progress (see
-`docs/ROADMAP.md`'s "Output-fidelity pass"): console output is now always UTF-8 (`Utf8Console`,
+array-of-objects matching is the remaining `set` gap. An output-fidelity pass has since landed as
+`0.23.0-alpha` (see `docs/ROADMAP.md`'s "Output-fidelity pass"): console output is now always UTF-8 (`Utf8Console`,
 in `ConfigTransform.Cli`) and JSON output keeps non-ASCII and `< > & ' +` literal instead of
 `\uXXXX` escapes (`JsonWriteOptions`), and diff colour follows a new `--color auto|always|never`
 flag (default `auto`: terminal only, so redirects get plain text). JSON and YAML now merge each
@@ -299,5 +299,4 @@ patch into the base document's own tree instead of flattening through `IConfigur
 (`docs/TREE_MERGE_DESIGN.md`): key order, spelling, value types and text, `null`/`{}`/`[]`, and
 YAML quoting all survive — the old merge turned `"007"` into `7` and sorted every key, invisibly to
 `--diff`. Keys now match case-sensitively across layers, and a patch key matching an existing one
-only by case is an error (it would otherwise deploy a file .NET refuses to load). None of these is
-tagged yet.
+only by case is an error (it would otherwise deploy a file .NET refuses to load).

@@ -1,6 +1,6 @@
 # Order- and type-preserving JSON/YAML merge — design
 
-**Status: implemented, unreleased (2026-10-01).** `JsonLayerMerger` and `YamlLayerMerger` merge
+**Status: implemented, released in `0.23.0-alpha` (2026-10-01).** `JsonLayerMerger` and `YamlLayerMerger` merge
 each patch into the base document's own tree. They no longer flatten everything through
 `Microsoft.Extensions.Configuration` and rebuild it. Item 4 of the output-fidelity pass in
 `docs/ROADMAP.md`.

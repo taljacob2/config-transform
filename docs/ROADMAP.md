@@ -644,26 +644,28 @@ which also covers the `0.20.0-alpha`/`0.21.0-alpha` re-pins mentioned above, and
 `build-transformed.yml` now runs `--diff-layers` against `Web/AdminPortal.Web/Web.config`, a real
 multi-layer chain.
 
-**Output-fidelity pass (started 2026-10-01).** A read-through of the tool against
-`config-transform-pilot` found four ways the tool's *output* misrepresents or garbles correct
-merge results. None of them is a merge-correctness bug. Fixed one per PR, in this order:
-1. **Console output encoding — fixed, unreleased.** On a Windows console code page like 437,
+**Output-fidelity pass (2026-10-01, released as `0.23.0-alpha`).** A read-through of the tool against
+`config-transform-pilot` found four ways the tool's output garbled or misrepresented its results.
+The fourth turned out to be real value corruption, not just presentation (see item 4). A fifth
+item, case-sensitive key matching, followed from the repo owner's decision on the fourth. Fixed in
+this order, each as its own commit on `main`:
+1. **Console output encoding — fixed.** On a Windows console code page like 437,
    stdout/stderr were encoded in that code page, so a redirect lost the chain report's `↓` (became
    `0x19`) and any non-ASCII config value in `--dry-run` output (became `?`). `Utf8Console`
    (`ConfigTransform.Cli`) now always emits UTF-8; see `docs/CONFIG_MANAGEMENT.md` §6.
-2. **JSON escaping — fixed, unreleased.** System.Text.Json's default encoder wrote `"שלום café"`
+2. **JSON escaping — fixed.** System.Text.Json's default encoder wrote `"שלום café"`
    as `"\u05E9\u05DC\u05D5\u05DD caf\u00E9"`, and `< > & ' +` as escapes too (a password `a+b`
    became `a\u002Bb`), in `--output` files and `configtransform.json` layer files as well.
    Every JSON write site now uses `JavaScriptEncoder.UnsafeRelaxedJsonEscaping`; see
    `docs/CONFIG_MANAGEMENT.md` §5.3.
-3. **Diff colour — fixed, unreleased.** `GitDiff.Render` always passed `--color=always`, so
+3. **Diff colour — fixed.** `GitDiff.Render` always passed `--color=always`, so
    redirected `--diff`/`--diff-layers` output carried ANSI escapes. Repo owner's decision: a
    `--color auto|always|never` flag (default `auto`: terminal only, `NO_COLOR` respected), the
    git/ls convention. `--diff-layers` also now puts a blank line before a layer's second and later
    hunks. **Pilot follow-up when re-pinning:** `config-transform-pilot`'s `build-transformed.yml`
    `--diff-layers` step loses colour in the Actions log under the new default; add
    `--color always` there if it's wanted.
-4. **JSON/YAML tree merge — fixed, unreleased.** Flattening through `IConfiguration` sorted keys
+4. **JSON/YAML tree merge — fixed.** Flattening through `IConfiguration` sorted keys
    alphabetically and re-quoted YAML, but on closer inspection also corrupted values: `"007"`
    became `7`, `"1.10"` became `1.1`, large integers lost precision, `null` became `""`, `{}`/`[]`
    were dropped, a patch's key spelling replaced the base's, and a JSON patch containing comments
@@ -674,7 +676,7 @@ merge results. None of them is a merge-correctness bug. Fixed one per PR, in thi
    keeping `IConfiguration`'s merge rules but none of its flattening;
    `Microsoft.Extensions.Configuration` and `NetEscapades.Configuration.Yaml` are no longer
    dependencies. See `docs/TREE_MERGE_DESIGN.md`.
-5. **Case-sensitive key matching — done, unreleased.** Repo owner's decision, as a follow-up to
+5. **Case-sensitive key matching — done.** Repo owner's decision, as a follow-up to
    item 4: JSON/YAML keys now match exactly across layers, and a patch key that matches an
    existing key only by case is an error naming the real spelling (it would otherwise deploy a
    file .NET refuses to load). `set` checks its key path the same way, and now merges new overlay
@@ -691,12 +693,11 @@ repo owner can make. Not a "next slice" in the same sense as the ones before thi
 from below (or something new) when ready, rather than assuming the next item in this list is the
 default next step.
 
-- **Release the output-fidelity pass** — all five items are done but unreleased (`[Unreleased]`
-  in `docs/CHANGELOG.md`); cut a version per `docs/RELEASING.md`, then re-pin
-  `config-transform-pilot` (adding `--color always` to its `--diff-layers` CI step if colour is
-  wanted there). Deployed JSON/YAML output changes layout for every file (key order, YAML
-  quoting); the pilot's own outputs were already compared old-vs-new with no value changes, but a
-  real consumer should compare its own before rolling out.
+- **Re-pin `config-transform-pilot` to `0.23.0-alpha`** (the output-fidelity release), adding
+  `--color always` to its `--diff-layers` CI step so the Actions log keeps colour. Deployed
+  JSON/YAML output changes layout for every file (key order, YAML quoting); the pilot's own
+  outputs were already compared old-vs-new with no value changes, but a real consumer should
+  compare its own before rolling out.
 
 - **Finish `set`** — XML's "update an existing element" case (including matching an existing
   item among repeated siblings, and now `Insert` for a genuinely brand-new element — all closed,
