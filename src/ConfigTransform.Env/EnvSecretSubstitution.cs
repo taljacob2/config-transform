@@ -25,7 +25,8 @@ public static class EnvSecretSubstitution
             return new KeyValuePair<string, string>(pair.Key, substituted);
         }).ToList();
 
-        return EnvFile.Serialize(pairs);
+        // Same as every other engine's substitution: content comes back in its own line-ending layout.
+        return TextLayout.Of(content).Apply(EnvFile.Serialize(pairs));
     }
 
     private static void EnsureRoundTrips(string key, string value)
