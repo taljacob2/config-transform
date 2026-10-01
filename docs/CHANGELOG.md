@@ -6,6 +6,20 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+### Fixed
+
+- **Console output is always UTF-8, so redirected output no longer loses characters on
+  Windows.** Found while running the tool against `config-transform-pilot` from Git Bash: on a
+  console code page like 437 (the Windows default for cmd.exe and Git Bash), .NET encoded
+  stdout/stderr in that code page. The resolution report's `↓` came out as the invisible control
+  byte `0x19`, and a non-ASCII config value printed by `--dry-run` (e.g. Hebrew) became `?`, which
+  is real data loss for `--dry-run > file`. `--output` files were never affected. The new
+  `Utf8Console` (`ConfigTransform.Cli`) writes redirected output as UTF-8 with no BOM. On a real
+  console it switches the code page to UTF-8 for the run and restores the original on exit. See
+  `docs/CONFIG_MANAGEMENT.md` §6. Regression test `Utf8ConsoleTests` runs the real CLI as a child
+  process with redirected stdout; an in-process `CliRunner.Run` test with a `StringWriter` can't
+  reach this code.
+
 ## [0.22.0-alpha] - 2026-09-10
 
 ### Added

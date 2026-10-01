@@ -361,23 +361,37 @@ repo's own precedent for JSON itself, where `$elemMatch` landed in a later PR th
 
 ## 6. Transform tool CLI
 
-One tool, `configtransform` (`ConfigTransform.Cli`), shares the same CLI shape across both
-formats — it dispatches each resource to the right merge engine by its own file extension, so a
+One tool, `configtransform` (`ConfigTransform.Cli`), shares the same CLI shape across every
+format — it dispatches each resource to the right merge engine by its own file extension, so a
 mixed-format layer resolves in a single call:
 
 ```
 --resource <repo-root-relative path>   optional — omit for every resource the layer touches
 --client <ClientName>                  optional — requires --environment (no client-only layer)
 --environment <EnvironmentName>        optional — targets that Environment layer alone; neither given targets the base file directly
+--host <HostName>                      optional — requires --client and --environment; one load-balanced server's layer (docs/HOST_LAYER_DESIGN.md)
 --output <path>                        real runs only — where the merged result is written (CI passes the publish dir path; a directory when --resource is omitted)
 --dry-run                              print the fully merged result to stdout; nothing is written to disk
 --diff                                 print a unified diff (unpatched vs. fully merged) using `git diff --no-index`; nothing is written to disk except throwaway temp files, cleaned up immediately
+--diff-layers                          like --diff, but one diff per layer that changes the resource (docs/DIFF_LAYERS_DESIGN.md)
 ```
 
 `--dry-run` and `--diff` never write to the base file's own location — real runs only ever
 write to an explicitly passed `--output` path, which CI always points at the build/publish
 output directory, never at the source tree. Full flag reference, including `--list` and `set`:
 `docs/USAGE.md`.
+
+**Console output is always UTF-8** (`Utf8Console`, in `ConfigTransform.Cli`), whatever the
+console's own code page. Before this, .NET on Windows encoded stdout/stderr in the console's code
+page (437 by default in cmd.exe and Git Bash), so a pipe or file redirect silently lost every
+character outside it — the resolution report's `↓` came out as the control byte `0x19`, and a
+non-ASCII config value printed by `--dry-run` became `?`. That's real data loss for
+`--dry-run > file`, not just cosmetics (`--output` was never affected — files are always written as
+UTF-8). Redirected output is written as UTF-8 bytes with no BOM, so `--dry-run > out.json` matches
+what `--output` writes byte for byte. On a real console the tool switches the console's output
+code page to UTF-8 for the duration of the run and restores the original on exit, rather than
+leaving the user's shell changed; if the code page can't be changed (no console attached), it
+falls back silently to the default.
 
 Example:
 

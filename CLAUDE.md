@@ -292,4 +292,7 @@ the unit suite: the algorithm must read `ResolvedResource.PatchPathsInOrder` (th
 patch paths), not `ChainStep.PatchPath` (the repo-relative path `--list` displays) — fixed before
 merging. Versioned as `0.22.0-alpha`. See `docs/ROADMAP.md`'s "Next up" for what's actionable now
 versus what needs either a solution repo that doesn't exist yet or an owner decision — YAML's own
-array-of-objects matching is the remaining `set` gap.
+array-of-objects matching is the remaining `set` gap. An output-fidelity pass is in progress (see
+`docs/ROADMAP.md`'s "Output-fidelity pass"): console output is now always UTF-8 (`Utf8Console`,
+in `ConfigTransform.Cli`), not yet tagged. JSON's non-ASCII escaping, `--color auto|always|never`,
+and preserving base key order in JSON/YAML output are next.

@@ -636,11 +636,35 @@ layer XML chain (not the unit suite, which used a fake merge delegate that never
 path): the algorithm must read the real, absolute patch paths from
 `ResolvedResource.PatchPathsInOrder`, not `ChainStep.PatchPath` (the repo-relative path `--list`
 displays) — fixed before merging, see the design doc's status line for the full note.
-`config-transform-pilot`'s own multi-host scenario is a natural place to exercise this against
-something more real than a synthetic fixture, a follow-up alongside its other pending re-pins.
+`config-transform-pilot` has since been re-pinned to `0.22.0-alpha` (`config-transform-pilot#10`),
+which also covers the `0.20.0-alpha`/`0.21.0-alpha` re-pins mentioned above, and its
+`build-transformed.yml` now runs `--diff-layers` against `Web/AdminPortal.Web/Web.config`, a real
+multi-layer chain.
+
+**Output-fidelity pass (started 2026-10-01).** A read-through of the tool against
+`config-transform-pilot` found four ways the tool's *output* misrepresents or garbles correct
+merge results. None of them is a merge-correctness bug. Fixed one per PR, in this order:
+1. **Console output encoding — fixed, unreleased.** On a Windows console code page like 437,
+   stdout/stderr were encoded in that code page, so a redirect lost the chain report's `↓` (became
+   `0x19`) and any non-ASCII config value in `--dry-run` output (became `?`). `Utf8Console`
+   (`ConfigTransform.Cli`) now always emits UTF-8; see `docs/CONFIG_MANAGEMENT.md` §6.
+2. **JSON escapes every non-ASCII character** — `"שלום café"` is written as
+   `"\u05E9\u05DC\u05D5\u05DD caf\u00E9"`, in `--output` files too. Valid JSON, but unreadable.
+   XML/YAML/`.env` are unaffected.
+3. **Diff colour** — `GitDiff.Render` always passes `--color=always`, so redirected
+   `--diff`/`--diff-layers` output carries ANSI escapes. Repo owner's decision: a
+   `--color auto|always|never` flag (default `auto`), the git/ls convention, rather than
+   environment-variable detection alone. Also: no blank line between two hunks of the same layer in
+   `--diff-layers`.
+4. **JSON/YAML output reorders keys alphabetically and normalizes YAML quoting** — inherited from
+   flattening through `IConfiguration`, so `--diff` shows moved lines that aren't real changes.
+   Repo owner's decision: fix it (merge each patch into the base document's own tree so base order
+   survives), not just document it.
 
 ## Next up
 
+- **Output-fidelity pass, items 2–4** — see the "Output-fidelity pass" paragraph at the end of
+  "Current state" above. Actionable now, no solution repo or further owner decision needed.
 One item below is now actionable purely within this repo (see the first bullet); every other
 remaining item still either needs a solution repo that doesn't exist yet, or a decision only the
 repo owner can make. Not a "next slice" in the same sense as the ones before this section; pick
