@@ -23,6 +23,16 @@ public static class LayerLister
         if (target.Manifest.Extends is not null)
             stdout.WriteLine($"  extends: {target.Manifest.Extends}");
 
+        // Every secrets file the chain uses, outermost layer first -- paths only, never values
+        // (docs/SECRETS_DESIGN.md).
+        var secretsFiles = chain.SelectMany(layer => layer.Manifest.Secrets ?? []).ToList();
+        if (secretsFiles.Count > 0)
+        {
+            stdout.WriteLine("  secrets:");
+            foreach (var secretsFile in secretsFiles)
+                stdout.WriteLine($"    {secretsFile}");
+        }
+
         foreach (var resourcePath in LayerChain.ResolveAllResources(chain))
         {
             stdout.WriteLine();

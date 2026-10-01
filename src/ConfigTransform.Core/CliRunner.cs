@@ -17,13 +17,15 @@ namespace ConfigTransform.Core;
 /// is what <c>--color auto</c> (the default) resolves to — the entry point passes "stdout is a
 /// terminal and NO_COLOR is unset"; it defaults to false so an in-process caller capturing output
 /// in a StringWriter gets plain text, the same as a redirect would. See <see cref="ColorMode"/>.
+/// <paramref name="environmentVariables"/> is where <c>CFSECRET_*</c> overrides are read from
+/// (docs/SECRETS_DESIGN.md) — the process environment by default; tests pass their own.
 /// </summary>
 public static class CliRunner
 {
     public static int Run(
         string[] args, TextWriter stdout, TextWriter stderr, FormatEngineRegistry engines,
         string? workingDirectory = null, TextReader? stdin = null, bool interactiveAllowed = false,
-        bool autoColor = false)
+        bool autoColor = false, Func<string, string?>? environmentVariables = null)
     {
         try
         {
@@ -66,14 +68,15 @@ public static class CliRunner
 
             var targetLayerPath = LayerPathResolver.Resolve(root, options.Client, options.Environment, options.Host);
             var chain = LayerChain.Build(root, targetLayerPath);
+            var secrets = SecretResolver.Build(root, chain, environmentVariables ?? Environment.GetEnvironmentVariable);
 
             if (options.Resource is not null)
             {
-                RunOneResource(options, root, chain, engines, stdout, color);
+                RunOneResource(options, root, chain, secrets, engines, stdout, color);
                 return 0;
             }
 
-            RunEveryResource(options, root, targetLayerPath, chain, engines, stdout, stderr, color);
+            RunEveryResource(options, root, targetLayerPath, chain, secrets, engines, stdout, stderr, color);
             return 0;
         }
         catch (Exception ex)
@@ -84,19 +87,26 @@ public static class CliRunner
     }
 
     private static void RunOneResource(
-        CliOptions options, string root, IReadOnlyList<ResolvedLayer> chain,
+        CliOptions options, string root, IReadOnlyList<ResolvedLayer> chain, SecretSet secrets,
         FormatEngineRegistry engines, TextWriter stdout, bool color)
     {
         var engine = engines.Require(options.Resource!);
 
         var resolved = LayerChain.ResolveResource(root, chain, options.Resource!);
-        PrintResolutionReport(stdout, options.Resource!, resolved);
-
         var merged = engine.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
+
+        PrintResolutionReport(stdout, options.Resource!, resolved);
+        SecretsStep.PrintReport(stdout, merged, secrets);
+
+        // Previews: placeholders as written, unless --reveal-secrets. In a revealed diff every side
+        // resolves with the whole chain's secrets, so a diff never shows a placeholder turning into
+        // its value (docs/SECRETS_DESIGN.md).
+        string Preview(string content) => SecretsStep.ForPreview(engine, content, secrets, options.RevealSecrets);
 
         if (options.DiffLayers)
         {
-            var sections = LayerDiffAttribution.Compute(resolved, engine.Merge, color);
+            var sections = LayerDiffAttribution.Compute(
+                resolved, (basePath, patches) => Preview(engine.Merge(basePath, patches)), color);
             stdout.WriteLine();
             stdout.WriteLine(sections.Count == 0 ? "(no changes)" : string.Join("\n\n", sections.Select(s => s.Diff)));
             return;
@@ -105,7 +115,7 @@ public static class CliRunner
         if (options.Diff)
         {
             var baseOnly = engine.Merge(resolved.BasePath, []);
-            var diff = GitDiff.Render(baseOnly, merged, color);
+            var diff = GitDiff.Render(Preview(baseOnly), Preview(merged), color);
             stdout.WriteLine();
             stdout.WriteLine(string.IsNullOrWhiteSpace(diff) ? "(no changes)" : diff);
             return;
@@ -114,9 +124,11 @@ public static class CliRunner
         if (options.DryRun)
         {
             stdout.WriteLine();
-            stdout.WriteLine(merged);
+            stdout.WriteLine(Preview(merged));
             return;
         }
+
+        var final = SecretsStep.ForRealRun(engine, options.Resource!, merged, secrets);
 
         var outputPath = options.Output
             ?? throw new InvalidOperationException("--output was not set for a real run.");
@@ -124,7 +136,7 @@ public static class CliRunner
         if (!string.IsNullOrEmpty(outputDir))
             Directory.CreateDirectory(outputDir);
 
-        File.WriteAllText(outputPath, merged);
+        File.WriteAllText(outputPath, final);
         stdout.WriteLine($"Wrote merged result to '{outputPath}'.");
     }
 
@@ -144,7 +156,7 @@ public static class CliRunner
     /// YAML, docs/CONFIG_MANAGEMENT.md §5.5) plugs into with no orchestration changes.
     /// </summary>
     private static void RunEveryResource(
-        CliOptions options, string root, string? targetLayerPath, IReadOnlyList<ResolvedLayer> chain,
+        CliOptions options, string root, string? targetLayerPath, IReadOnlyList<ResolvedLayer> chain, SecretSet secrets,
         FormatEngineRegistry engines, TextWriter stdout, TextWriter stderr, bool color)
     {
         var allResources = LayerChain.ResolveAllResources(chain);
@@ -204,18 +216,24 @@ public static class CliRunner
                     "or point --output at a different or empty directory.");
             }
 
-            foreach (var resourcePath in owned)
+            // All-or-nothing: every resource is merged and its secrets resolved before any file is
+            // written, so an unresolvable secret in one resource never leaves a half-updated output.
+            var finals = owned.Select(resourcePath =>
             {
                 var engine = engines.Require(resourcePath);
                 var resolved = LayerChain.ResolveResource(root, chain, resourcePath);
                 var merged = engine.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
+                return (ResourcePath: resourcePath, Content: SecretsStep.ForRealRun(engine, resourcePath, merged, secrets));
+            }).ToList();
 
+            foreach (var (resourcePath, content) in finals)
+            {
                 var outPath = Path.Combine(outputRoot, resourcePath.Replace('/', Path.DirectorySeparatorChar));
                 var outDir = Path.GetDirectoryName(outPath);
                 if (!string.IsNullOrEmpty(outDir))
                     Directory.CreateDirectory(outDir);
 
-                File.WriteAllText(outPath, merged);
+                File.WriteAllText(outPath, content);
                 stdout.WriteLine($"Wrote '{outPath}'.");
             }
 
@@ -229,21 +247,25 @@ public static class CliRunner
             var merged = engine.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
             stdout.WriteLine($"=== {resourcePath} ===");
+            SecretsStep.PrintReport(stdout, merged, secrets, indent: "");
+
+            string Preview(string content) => SecretsStep.ForPreview(engine, content, secrets, options.RevealSecrets);
 
             if (options.DiffLayers)
             {
-                var sections = LayerDiffAttribution.Compute(resolved, engine.Merge, color);
+                var sections = LayerDiffAttribution.Compute(
+                    resolved, (basePath, patches) => Preview(engine.Merge(basePath, patches)), color);
                 stdout.WriteLine(sections.Count == 0 ? "(no changes)" : string.Join("\n\n", sections.Select(s => s.Diff)));
             }
             else if (options.Diff)
             {
                 var baseOnly = engine.Merge(resolved.BasePath, []);
-                var diff = GitDiff.Render(baseOnly, merged, color);
+                var diff = GitDiff.Render(Preview(baseOnly), Preview(merged), color);
                 stdout.WriteLine(string.IsNullOrWhiteSpace(diff) ? "(no changes)" : diff);
             }
             else
             {
-                stdout.WriteLine(merged);
+                stdout.WriteLine(Preview(merged));
             }
 
             stdout.WriteLine();

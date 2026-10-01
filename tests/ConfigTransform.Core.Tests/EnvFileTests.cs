@@ -1,6 +1,6 @@
 using Xunit;
 
-namespace ConfigTransform.Env.Tests;
+namespace ConfigTransform.Core.Tests;
 
 /// <summary>
 /// Direct tests of the `.env` grammar itself (see EnvFile.cs's own remarks for the full rule

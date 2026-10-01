@@ -105,7 +105,8 @@ here is accidental rather than deliberate.
   Registers all four format engines above into Core's dispatcher; this is genuinely all it does.
 - `tests/*/Fixtures/` — real-shaped fixture files per scenario: `DotNetFramework`,
   `IisWebConfig`, `GenericXml` (XML); `DotNetCore`, `GenericJson` (JSON); `GenericEnv` (`.env`);
-  `DotNetCore`, `GenericYaml` (YAML). New merge-behavior test cases belong here as fixtures,
+  `DotNetCore`, `GenericYaml` (YAML); plus a `Secrets` fixture in each of the four, for
+  placeholder substitution. New merge-behavior test cases belong here as fixtures,
   exercised by data-driven tests — not as inline strings duplicated per test method. Full test
   matrix: `docs/CONFIGTRANSFORM_TOOL_DESIGN.md` §3.
 - `docs/` — see [`docs/INDEX.md`](docs/INDEX.md) for the full map.
@@ -303,7 +304,10 @@ only by case is an error (it would otherwise deploy a file .NET refuses to load)
 `config-transform-pilot` is re-pinned to `0.23.0-alpha` and verified via a real CI dispatch.
 Then `0.23.1-alpha`: JSON/YAML output (and every file `set` rewrites) keeps the base or
 existing file's line endings and final newline (`TextLayout` in Core), as XML always did;
-`config-transform-pilot` is re-pinned to it and verified via a real CI dispatch. Next, designed but
-not implemented: secrets (`docs/SECRETS_DESIGN.md`) — `{{CFSECRET_NAME}}` placeholders filled from
-encrypted `*.secret.env` files a layer lists under `secrets`, plus whole-file secrets via a
-resource's `replace`, so git-crypt only needs to cover `.configtransform/**/*.secret.*`.
+`config-transform-pilot` is re-pinned to it and verified via a real CI dispatch. Secrets
+(`docs/SECRETS_DESIGN.md`) are being implemented in three stages; stage 1 is done, not yet tagged:
+`{{CFSECRET_NAME}}` placeholders filled from encrypted `*.secret.env` files a layer lists under
+`secrets` (`SecretResolver`/`SecretsStep` in Core, one `*SecretSubstitution` per engine),
+`--reveal-secrets`, and a strict layer loader. Stage 2 is whole-file secrets via a resource's
+`replace`; stage 3 rewrites the git-crypt docs and migrates the pilot. Never let a secret value
+reach stdout, stderr or an exception message — two such leaks were found and fixed in stage 1.

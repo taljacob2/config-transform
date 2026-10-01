@@ -40,6 +40,8 @@ namespace ConfigTransform.Core;
 /// overrides when relevant — mutually exclusive with <see cref="Diff"/>, not valid with `init`.
 /// <see cref="Color"/> is <c>--color auto|always|never</c> — whether diff output (<c>--diff</c>,
 /// <c>--diff-layers</c>, `set`'s auto-diff) carries ANSI colour; see <see cref="ColorMode"/>.
+/// <see cref="RevealSecrets"/> is <c>--reveal-secrets</c> (docs/SECRETS_DESIGN.md): previews
+/// substitute real secret values instead of leaving <c>{{CFSECRET_…}}</c> placeholders as written.
 /// </summary>
 public sealed record CliOptions(
     string? Resource,
@@ -64,7 +66,8 @@ public sealed record CliOptions(
     bool Yes,
     bool NoScan,
     string? Template,
-    ColorMode Color = ColorMode.Auto);
+    ColorMode Color = ColorMode.Auto,
+    bool RevealSecrets = false);
 
 /// <summary>
 /// <c>--color</c>'s value — the git/ls convention. <see cref="Auto"/> colours diff output only when

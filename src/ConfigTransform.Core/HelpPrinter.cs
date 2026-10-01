@@ -11,16 +11,16 @@ public static class HelpPrinter
 {
     public static void Print(TextWriter stdout, FormatEngineRegistry engines)
     {
-        stdout.WriteLine($$"""
+        stdout.WriteLine($$$"""
             configtransform — resolve, preview, and write per-client/per-environment config overrides
 
             Layers self-describe what they touch via .configtransform/**/configtransform.json
             (extends + resources[] — docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md). Every path below is
             repo-root-relative; run from the repo root, same as CI. Supported resource formats right
-            now: {{engines.SupportedExtensions}}.
+            now: {{{engines.SupportedExtensions}}}.
 
             USAGE
-              configtransform [--resource <path>] [--client <C>] [--environment <E>] [--host <H>] [--dry-run | --diff | --diff-layers | --output <path>] [--color auto|always|never]
+              configtransform [--resource <path>] [--client <C>] [--environment <E>] [--host <H>] [--dry-run | --diff | --diff-layers | --output <path>] [--color auto|always|never] [--reveal-secrets]
               configtransform --list [--client <C> --environment <E> [--host <H>] | --resource <path>]
               configtransform set --resource <path> [--client <C> --environment <E> [--host <H>]] --match <k>=<v> [--match ...] --set <k>=<v> [--set ...]
               configtransform init [--environment <E> ...] [--client <C> ...] [--host <H> ...] [--resource <path> ...] [--yes] [--dry-run]
@@ -69,6 +69,14 @@ public static class HelpPrinter
               easy:  configtransform --list -c Acme -e Production
               tldr:  configtransform --list -r OrderProcessor.Framework/App.config
                      (reverse lookup: every configtransform.json anywhere that patches this file)
+
+            secrets — {{CFSECRET_NAME}} placeholders, filled from *.secret.env files a layer lists under "secrets"
+              easy:  configtransform -r Web/AdminPortal.Web/Web.config -c Acme -e Production --dry-run
+                     (placeholders stay as written; the report above the output says whether each one
+                     resolves, and from which file -- never the value)
+              tldr:  configtransform -c Acme -e Production --dry-run --reveal-secrets
+                     (real values in the preview -- for a key holder, never in a CI log; a real run with
+                     -o always substitutes, and writes nothing if any secret is missing or locked)
 
             set — author an overlay field without hand-writing XDT or nested JSON
               easy:  configtransform set -r OrderProcessor.Framework/App.config -c Acme -e Production --match ApiUrl --set https://acme.example.com

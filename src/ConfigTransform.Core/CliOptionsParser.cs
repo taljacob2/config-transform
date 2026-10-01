@@ -48,7 +48,7 @@ public static class CliOptionsParser
     [
         "--help", "-h", "help", "--resource", "-r", "--client", "-c", "--environment", "-e",
         "--host", "-H", "--output", "-o", "--dry-run", "--diff", "--diff-layers", "--list", "--match", "--set",
-        "--scan-root", "--yes", "--no-scan", "--template", "--color"
+        "--scan-root", "--yes", "--no-scan", "--template", "--color", "--reveal-secrets"
     ];
 
     private const string ColorFlagPrefix = "--color=";
@@ -84,6 +84,7 @@ public static class CliOptionsParser
         var noScan = false;
         string? template = null;
         var color = ColorMode.Auto;
+        var revealSecrets = false;
 
         for (var i = 0; i < rest.Length; i++)
         {
@@ -165,6 +166,9 @@ public static class CliOptionsParser
                     break;
                 case "--color":
                     color = ParseColorMode(RequireValue(rest, ref i, rest[i]));
+                    break;
+                case "--reveal-secrets":
+                    revealSecrets = true;
                     break;
                 case var arg when arg.StartsWith(ColorFlagPrefix, StringComparison.Ordinal):
                     color = ParseColorMode(arg[ColorFlagPrefix.Length..]);
@@ -252,7 +256,8 @@ public static class CliOptionsParser
 
         return new CliOptions(
             resource, client, environment, host, output, dryRun, diff, diffLayers, list, set, Help: false, match,
-            setFields, init, initEnvironments, initClients, initResources, initHosts, scanRoot, yes, noScan, template, color);
+            setFields, init, initEnvironments, initClients, initResources, initHosts, scanRoot, yes, noScan, template, color,
+            revealSecrets);
     }
 
     private static ColorMode ParseColorMode(string value) => value switch

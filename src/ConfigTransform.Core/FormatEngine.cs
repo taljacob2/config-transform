@@ -14,6 +14,16 @@ public delegate string FieldAuthor(
     IReadOnlyList<MatchSpec> setFields);
 
 /// <summary>
+/// Signature of a format's secret substitution (docs/SECRETS_DESIGN.md): replaces
+/// <c>{{CFSECRET_…}}</c> placeholders inside the <i>values</i> of already-merged
+/// <paramref name="content"/> — never inside keys, and never by editing the raw text, so the
+/// format's own writer escapes each substituted value. <paramref name="resolve"/> returns a
+/// secret's value, or null to leave that placeholder as written. Content with no placeholder must
+/// come back unchanged.
+/// </summary>
+public delegate string SecretSubstitution(string content, Func<string, string?> resolve);
+
+/// <summary>
 /// One merge engine plus the file extensions it owns — what makes the otherwise format-agnostic
 /// orchestration in <see cref="CliRunner"/>/<see cref="SetRunner"/> concrete for a given resource.
 /// Registered by the CLI entry point (docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md "Settled decisions"
@@ -24,7 +34,8 @@ public sealed record FormatEngine(
     IReadOnlyList<string> Extensions,
     string PatchExtension,
     LayerMerge Merge,
-    FieldAuthor Author)
+    FieldAuthor Author,
+    SecretSubstitution? SubstituteSecrets = null)
 {
     public bool Handles(string resourcePath) =>
         Extensions.Contains(Path.GetExtension(resourcePath), StringComparer.OrdinalIgnoreCase);

@@ -6,6 +6,28 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+### Added
+
+- **Secrets, stage 1: `{{CFSECRET_NAME}}` placeholders** (`docs/SECRETS_DESIGN.md`). Config files and
+  patches can hold placeholders whose values live in encrypted `*.secret.env` files a layer lists
+  under a new `secrets` field, so git-crypt only needs to cover `.configtransform/**/*.secret.*` and
+  every other overlay stays readable and reviewable. Values follow the layer chain (later layers
+  override), an environment variable with the secret's exact name overrides every file (for CI),
+  and each format engine substitutes inside values with its own escaping. Previews keep
+  placeholders and report each secret as `resolved` (with its source), `MISSING` or `unknown`
+  (git-crypt locked); a new `--reveal-secrets` flag shows real values. A real run writes nothing if
+  any secret is unresolved. `--list` shows the chain's secrets files. Whole-file secrets
+  (`replace`) are stage 2, not in this release.
+
+### Changed
+
+- **A `configtransform.json` field the tool doesn't recognize is now an error.** Before, unknown
+  fields were silently skipped — so an older tool reading a layer that uses `secrets` would deploy
+  unresolved placeholders without a word. From now on a too-old tool fails loudly. A layer with a
+  stray or misspelled field will now fail to load; the error names the field.
+- `EnvFile` (the `.env` grammar) moved from `ConfigTransform.Env` to `ConfigTransform.Core`, so
+  `*.secret.env` files and `.env` resources are parsed by the same code. No behavior change.
+
 ## [0.23.1-alpha] - 2026-10-01
 
 ### Fixed

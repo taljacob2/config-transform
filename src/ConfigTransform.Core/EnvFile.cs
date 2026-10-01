@@ -1,12 +1,14 @@
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace ConfigTransform.Env;
+namespace ConfigTransform.Core;
 
 /// <summary>
-/// The `.env` grammar this tool parses and writes, shared by <see cref="EnvLayerMerger"/> and
-/// <see cref="EnvFieldAuthor"/> (mirrors why <c>JsonLayerMerger.ToJsonValue</c> is <c>internal</c>
-/// rather than private -- one place decides the format's rules, not two). There is no formal
+/// The `.env` grammar this tool parses and writes, shared by the `.env` format engine
+/// (<c>EnvLayerMerger</c>/<c>EnvFieldAuthor</c> in ConfigTransform.Env) and by secrets files
+/// (<see cref="SecretResolver"/>, docs/SECRETS_DESIGN.md) -- one place decides the format's rules,
+/// so a `*.secret.env` file can never be read differently from a `.env` resource. Lives in Core for
+/// that reason: ConfigTransform.Env depends on Core, never the other way around. There is no formal
 /// `.env` spec; real tooling disagrees on edge cases, so these rules are picked deliberately --
 /// see docs/CONFIG_MANAGEMENT.md's `.env` section and docs/FIELD_AUTHORING_DESIGN.md's decision
 /// log for the reasoning behind each one:

@@ -430,7 +430,8 @@ dotnet tool run configtransform -- \
 
 ## 7. Encryption at rest (git-crypt)
 
-**Planned alternative (designed, not implemented): `docs/SECRETS_DESIGN.md`.** Encrypting the whole
+**Alternative, being implemented: `docs/SECRETS_DESIGN.md`** (value secrets work today; whole-file
+secrets and the rewrite of this section are the next stages). Encrypting the whole
 `.configtransform/**` tree treats all configuration as one secret, so nobody without the key can
 read or review any overlay on GitHub. The secrets design keeps configuration in plaintext with
 `{{CFSECRET_NAME}}` placeholders, holds the values (and whole-file secrets) in `*.secret.*` files,

@@ -65,21 +65,57 @@ public static class YamlLayerMerger
     }
 
     /// <returns>The file's single document's root, or null for an empty file. Never mutated by the merge (see <see cref="MergeNode"/>).</returns>
-    private static YamlNode? Load(string text, string path)
+    internal static YamlNode? Load(string text, string path)
     {
         var stream = new YamlStream();
         stream.Load(new StringReader(text));
 
-        return stream.Documents.Count switch
+        var root = stream.Documents.Count switch
         {
             0 => null,
             1 => stream.Documents[0].RootNode,
             _ => throw new InvalidOperationException(
                 $"'{path}' contains {stream.Documents.Count} YAML documents (separated by '---'); a config file must contain exactly one."),
         };
+
+        if (root is not null)
+            RejectUnquotedSecretPlaceholders(root, path);
+        return root;
     }
 
-    private static string Save(YamlNode? document, (int Indent, bool IndentSequences) layout)
+    /// <summary>
+    /// In YAML, an unquoted value that starts with <c>{</c> is a flow mapping, so an unquoted
+    /// <c>{{CFSECRET_X}}</c> (docs/SECRETS_DESIGN.md) parses as a map nested in a map's key —
+    /// not text. Once parsed, the <c>{{CFSECRET_</c> text no longer exists anywhere, so neither the
+    /// secrets report nor the real run's leftover-placeholder check could see it, and the mangled map
+    /// would be deployed silently. Caught here, while reading any YAML file, instead.
+    /// </summary>
+    private static void RejectUnquotedSecretPlaceholders(YamlNode node, string path)
+    {
+        switch (node)
+        {
+            case YamlMappingNode map:
+                foreach (var (key, value) in map.Children)
+                {
+                    if (key is YamlMappingNode keyMap &&
+                        keyMap.Children.Keys.OfType<YamlScalarNode>().FirstOrDefault(k =>
+                            k.Value is { } text && text.StartsWith(SecretPlaceholders.Prefix, StringComparison.Ordinal)) is { } name)
+                        throw new InvalidOperationException(
+                            $"'{path}' has an unquoted {{{{{name.Value}}}}} (line {key.Start.Line}). In YAML, a value starting with " +
+                            "'{' is a map, not text, so a placeholder there must be quoted.\n" +
+                            $"Try: \"{{{{{name.Value}}}}}\"");
+                    RejectUnquotedSecretPlaceholders(key, path);
+                    RejectUnquotedSecretPlaceholders(value, path);
+                }
+                break;
+            case YamlSequenceNode sequence:
+                foreach (var item in sequence.Children)
+                    RejectUnquotedSecretPlaceholders(item, path);
+                break;
+        }
+    }
+
+    internal static string Save(YamlNode? document, (int Indent, bool IndentSequences) layout)
     {
         if (document is null)
             return "{}" + Environment.NewLine;
@@ -240,7 +276,7 @@ public static class YamlLayerMerger
     /// from. Defaults to 2 / flush (YamlDotNet's own) when the base has nothing nested to read from.
     /// Needs the base exactly as parsed: <see cref="Clone"/> doesn't carry source positions over.
     /// </summary>
-    private static (int Indent, bool IndentSequences) DetectLayout(YamlNode? root)
+    internal static (int Indent, bool IndentSequences) DetectLayout(YamlNode? root)
     {
         int? indent = null;
         bool? indentSequences = null;

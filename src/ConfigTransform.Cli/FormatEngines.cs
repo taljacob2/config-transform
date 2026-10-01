@@ -18,12 +18,16 @@ public static class FormatEngines
     public static readonly FormatEngineRegistry All = new(
     [
         new FormatEngine("XML", [".config", ".xml"], "xml",
-            ConfigTransform.Xml.XmlLayerMerger.Merge, ConfigTransform.Xml.XmlFieldAuthor.Author),
+            ConfigTransform.Xml.XmlLayerMerger.Merge, ConfigTransform.Xml.XmlFieldAuthor.Author,
+            ConfigTransform.Xml.XmlSecretSubstitution.Substitute),
         new FormatEngine("JSON", [".json"], "json",
-            ConfigTransform.Json.JsonLayerMerger.Merge, ConfigTransform.Json.JsonFieldAuthor.Author),
+            ConfigTransform.Json.JsonLayerMerger.Merge, ConfigTransform.Json.JsonFieldAuthor.Author,
+            ConfigTransform.Json.JsonSecretSubstitution.Substitute),
         new FormatEngine("ENV", [".env"], "env",
-            ConfigTransform.Env.EnvLayerMerger.Merge, ConfigTransform.Env.EnvFieldAuthor.Author),
+            ConfigTransform.Env.EnvLayerMerger.Merge, ConfigTransform.Env.EnvFieldAuthor.Author,
+            ConfigTransform.Env.EnvSecretSubstitution.Substitute),
         new FormatEngine("YAML", [".yaml", ".yml"], "yaml",
-            ConfigTransform.Yaml.YamlLayerMerger.Merge, ConfigTransform.Yaml.YamlFieldAuthor.Author),
+            ConfigTransform.Yaml.YamlLayerMerger.Merge, ConfigTransform.Yaml.YamlFieldAuthor.Author,
+            ConfigTransform.Yaml.YamlSecretSubstitution.Substitute),
     ]);
 }

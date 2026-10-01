@@ -766,4 +766,11 @@ public class CliOptionsParserTests
 
         Assert.Contains("--color requires a value", ex.Message);
     }
+
+    [Fact]
+    public void Reveal_secrets_is_off_unless_given()
+    {
+        Assert.False(CliOptionsParser.Parse(["--environment", "Production", "--dry-run"]).RevealSecrets);
+        Assert.True(CliOptionsParser.Parse(["--environment", "Production", "--dry-run", "--reveal-secrets"]).RevealSecrets);
+    }
 }

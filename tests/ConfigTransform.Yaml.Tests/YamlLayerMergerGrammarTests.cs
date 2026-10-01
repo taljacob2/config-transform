@@ -210,6 +210,22 @@ public class YamlLayerMergerGrammarTests
         Assert.Equal($"A: 1{newLine}B:{newLine}  C: 2{newLine}D: 3" + (finalNewLine ? newLine : ""), merged);
     }
 
+    [Theory]
+    [InlineData("Password: {{CFSECRET_DB_PASSWORD}}\n")]
+    [InlineData("Tokens:\n- {{CFSECRET_DB_PASSWORD}}\n")]
+    public void An_unquoted_secret_placeholder_is_an_error_not_a_silently_mangled_map(string yaml)
+    {
+        // Unquoted, YAML reads {{X}} as a map inside a map's key -- the placeholder text would be
+        // gone before anything could see it, and the mangled map deployed (docs/SECRETS_DESIGN.md).
+        using var dir = new TempDir();
+        var basePath = dir.WriteFile("base.yaml", yaml);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => YamlLayerMerger.Merge(basePath, []));
+
+        Assert.Contains("unquoted {{CFSECRET_DB_PASSWORD}}", ex.Message);
+        Assert.Contains("Try: \"{{CFSECRET_DB_PASSWORD}}\"", ex.Message);
+    }
+
     private sealed class TempDir : IDisposable
     {
         private readonly string _path = Directory.CreateTempSubdirectory("configtransform-yaml-tests-").FullName;

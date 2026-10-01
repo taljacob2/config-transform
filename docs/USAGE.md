@@ -24,6 +24,7 @@ supports differs by format for reasons that come from the format itself, not an 
 --diff                                     print a unified diff (unpatched vs. merged) via `git diff --no-index`; nothing written to disk
 --diff-layers                              like --diff, but one diff per layer that actually changes the resource, tagged with which earlier layer it overrides (docs/DIFF_LAYERS_DESIGN.md); mutually exclusive with --diff
 --color <auto|always|never>                ANSI colour in diff output (--diff, --diff-layers, set's auto-diff); default auto — colour only on a terminal with NO_COLOR unset. Also accepted as --color=<mode>
+--reveal-secrets                           previews (--dry-run/--diff/--diff-layers) show real secret values instead of {{CFSECRET_…}} placeholders — see "Secrets" below
 --list                                     show a layer's resources (--client/--environment[/--host]), or a tree-wide reverse lookup (--resource) — see below
 help, --help, -h                           print the help page (see "Getting help" below) — also the default with no arguments at all
 init                                       scaffold a .configtransform/ tree — a different verb, see "init" below
@@ -272,6 +273,63 @@ and the `NO_COLOR` environment variable (https://no-color.org) is unset — so `
 or a pipe gets plain text with no escape codes. `always` forces colour anyway, e.g. for a CI log
 viewer that renders ANSI even though the job's stdout isn't a terminal (GitHub Actions does);
 `never` turns it off on a terminal too. An explicit `always`/`never` wins over `NO_COLOR`.
+
+## Secrets
+
+Secrets live outside the configuration: a config file or patch holds a `{{CFSECRET_NAME}}`
+placeholder, and the value lives in an encrypted `*.secret.env` file that a layer lists under
+`secrets` (`docs/SECRETS_DESIGN.md` has the full design and every decision behind it):
+
+```xml
+<add name="AdminDb" connectionString="Server=proddb;Password={{CFSECRET_ADMIN_DB_PASSWORD}}" />
+```
+
+```json
+// .configtransform/Clients/Acme/Production/configtransform.json
+{
+  "extends": ".configtransform/Environments/Production/configtransform.json",
+  "secrets": [ ".configtransform/Clients/Acme/Production/sql.secret.env" ],
+  "resources": [ ... ]
+}
+```
+
+```
+# .configtransform/Clients/Acme/Production/sql.secret.env -- encrypted by .configtransform/**/*.secret.* filter=git-crypt
+CFSECRET_ADMIN_DB_PASSWORD=Pa55+w&rd
+```
+
+- **Names** are `CFSECRET_` + letters, digits and `_`, and the same full name is used everywhere: the
+  placeholder, the key in the `*.secret.env` file, and the environment-variable override. A
+  secrets-file key without the prefix is an error.
+- **Resolution** follows the layer chain: later layers override earlier ones, name by name. The
+  same name in two files of one layer is an error. An environment variable with the secret's exact
+  name overrides every file; an empty one counts as unset.
+- **Substitution** happens inside values, by each format's own writer, so a value containing `"`,
+  `&`, `<` or `: ` comes out correctly escaped. In YAML, a placeholder that starts a value must be
+  quoted (`Password: "{{CFSECRET_DB}}"`) — unquoted, YAML reads `{{…}}` as a map, and the tool
+  stops with an error saying so.
+- **Previews** (`--dry-run`, `--diff`, `--diff-layers`) keep placeholders as written, and the report
+  above the output says, per secret, `resolved` (and from which file, or `environment variable`),
+  `MISSING`, or `unknown` (a secrets file in the chain is still git-crypt encrypted). Values are
+  never printed unless you pass `--reveal-secrets`; even then, never in the report, `--list` or
+  `set`'s automatic diff. In a revealed diff, every side resolves with the whole chain's secrets.
+- **A real run** (`-o`) always substitutes. If any secret in any resource of the call is missing or
+  locked, or a placeholder is left outside a value (a key, an XML comment), it fails and **writes
+  nothing**.
+- **`--list`** shows the chain's secrets files (paths only).
+
+```
+$ configtransform -r Web/AdminPortal.Web/Web.config -c Acme -e Production --dry-run
+Resolving 'Web/AdminPortal.Web/Web.config'
+    ...chain...
+    secrets
+      CFSECRET_ADMIN_DB_PASSWORD   resolved   .configtransform/Clients/Acme/Production/sql.secret.env
+      CFSECRET_SMTP_PASSWORD       MISSING    no secrets file in this chain defines it
+```
+
+Pin a tool version that supports `secrets` before using it: from this version on, a
+`configtransform.json` field the tool doesn't recognize is an error, but older versions silently
+ignored unknown fields and would deploy unresolved placeholders.
 
 ## `init` — scaffold a tree
 

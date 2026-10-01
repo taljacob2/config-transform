@@ -1,8 +1,10 @@
 # Secrets — design
 
-**Status: design only, not implemented (2026-10-01).** Decisions below were settled with the repo
-owner in conversation; nothing here exists in the tool yet. See "Implementation plan" for the
-staged PRs, and `docs/ROADMAP.md` for where this sits in priority.
+**Status: stage 1 (value secrets) implemented, unreleased; stages 2–3 not started (2026-10-01).**
+Decisions below were settled with the repo owner in conversation. Value secrets — placeholders,
+`*.secret.env` files, the `secrets` field, `--reveal-secrets`, the strict loader — work as described.
+File secrets (`replace`) and the docs/pilot migration don't exist yet. See "Implementation plan",
+and `docs/ROADMAP.md` for where this sits in priority.
 
 ## Why this exists
 
@@ -338,6 +340,26 @@ simpler schema; see the decision log.
     unresolved, so a deploy never ends up half-updated.
 12. **The loader becomes strict about unknown fields.** Prevents a repeat of the silent-ignore
     hazard above for any future field.
+
+Found while implementing stage 1, not in the original design:
+
+13. **In YAML, an unquoted placeholder is an error, read as soon as the file is parsed.** YAML reads
+    an unquoted value starting with `{` as a map, so `Password: {{CFSECRET_DB}}` parses as a map
+    nested in a map's key — the placeholder text is gone before anything can see it, so neither the
+    secrets report nor the leftover check would catch it, and the mangled map would deploy
+    silently (verified empirically). `YamlLayerMerger` recognizes that shape in every YAML file it
+    reads and says to quote the placeholder (`Password: "{{CFSECRET_DB}}"`). Placeholders later in
+    a plain value (`Url: https://x/?k={{CFSECRET_K}}`) are fine unquoted.
+14. **An empty environment variable counts as unset.** A GitHub Actions expression that looks up a
+    secret that doesn't exist evaluates to `""`; using that would deploy an empty secret because of
+    a typo in a workflow.
+15. **No error message ever contains a secret value.** Two leaks found and fixed during
+    implementation: `EnvFile`'s own parse error quotes the offending line, which would print part
+    of a secret — both for a malformed `*.secret.env` file and for a multi-line value substituted
+    into a `.env` resource. Both now name only the file or key.
+16. **`EnvFile` (the `.env` grammar) moved from `ConfigTransform.Env` to Core**, so secrets files and
+    `.env` resources are parsed by literally the same code. Core is the shared library every engine
+    depends on; the reverse dependency isn't allowed.
 
 ## Open items
 

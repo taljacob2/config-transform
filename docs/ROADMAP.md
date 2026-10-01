@@ -701,10 +701,13 @@ repo owner can make. Not a "next slice" in the same sense as the ones before thi
 from below (or something new) when ready, rather than assuming the next item in this list is the
 default next step.
 
-- **Secrets** (`docs/SECRETS_DESIGN.md`, designed 2026-10-01 with the repo owner, not yet
-  implemented) — the repo owner's stated next step after the design: implement it, in the three
-  staged PRs the design's "Implementation plan" lays out (value secrets, then file secrets via
-  `replace`, then docs and a pilot migration). Separates secrets from configuration so only
+- **Secrets** (`docs/SECRETS_DESIGN.md`, designed 2026-10-01 with the repo owner) — being
+  implemented in the three stages the design's "Implementation plan" lays out. **Stage 1 (value
+  secrets) is done, unreleased**: `{{CFSECRET_NAME}}` placeholders, `*.secret.env` files under a
+  layer's `secrets`, `--reveal-secrets`, the secrets report, all-or-nothing real runs, and a
+  strict loader (unknown fields are errors). Implementation surfaced four extra decisions, now in
+  the design's decision log (#13–#16) — notably that YAML needs quoted placeholders. **Next: stage
+  2** (whole-file secrets via `replace`), then stage 3 (docs rewrite and the pilot migration). Separates secrets from configuration so only
   `.configtransform/**/*.secret.*` needs git-crypt and every other overlay is readable and
   reviewable on GitHub. Every behavior question raised so far is settled in the design's decision
   log; its "Open items" are deliberately deferred, not blockers.

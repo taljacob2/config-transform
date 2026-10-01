@@ -68,4 +68,49 @@ public class LayerManifestLoaderTests
         Assert.Contains("git-crypt", ex.Message);
         Assert.Contains("git-crypt unlock", ex.Message);
     }
+
+    [Fact]
+    public void Loads_the_secrets_list()
+    {
+        using var dir = new TempDirectory();
+        var path = Path.Combine(dir.Path, "configtransform.json");
+        File.WriteAllText(path, """
+            { "secrets": [ ".configtransform/Environments/Production/db.secret.env" ], "resources": [] }
+            """);
+
+        var manifest = LayerManifestLoader.Load(path);
+
+        Assert.Equal([".configtransform/Environments/Production/db.secret.env"], manifest.Secrets);
+    }
+
+    [Theory]
+    [InlineData(".configtransform/Environments/Production/db.env")]
+    [InlineData(".configtransform/Environments/Production/db.secrets.env")]
+    [InlineData(".configtransform/Environments/Production/db.SECRET.env")]
+    public void A_secrets_file_not_ending_in_dot_secret_dot_env_is_rejected(string entry)
+    {
+        // The suffix is the only thing tying the file to the *.secret.* git-crypt rule.
+        using var dir = new TempDirectory();
+        var path = Path.Combine(dir.Path, "configtransform.json");
+        File.WriteAllText(path, $$"""{ "secrets": [ "{{entry}}" ], "resources": [] }""");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => LayerManifestLoader.Load(path));
+
+        Assert.Contains(".secret.env", ex.Message);
+    }
+
+    [Fact]
+    public void An_unknown_field_is_rejected_instead_of_silently_ignored()
+    {
+        // An older tool used to skip fields it didn't know -- deploying unresolved placeholders
+        // when a layer used a newer field like "secrets".
+        using var dir = new TempDirectory();
+        var path = Path.Combine(dir.Path, "configtransform.json");
+        File.WriteAllText(path, """{ "resources": [], "secretz": [] }""");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => LayerManifestLoader.Load(path));
+
+        Assert.Contains("secretz", ex.Message);
+        Assert.Contains("dotnet-tools.json", ex.Message);
+    }
 }
