@@ -13,9 +13,10 @@ those first.
 Ask whoever onboarded you (or check this repo's own README/SECRETS doc) for:
 
 - [ ] The GitHub Packages feed URL this repo uses for `config-transform`'s packages.
-- [ ] Whether this repo encrypts `.configtransform/**` with git-crypt (look for a
-      `.configtransform/** filter=git-crypt` line in the repo's `.gitattributes` — if it's not
-      there, skip every git-crypt step below).
+- [ ] Whether this repo uses git-crypt — look in its `.gitattributes` for a
+      `.configtransform/**/*.secret.* filter=git-crypt` line (only secrets are encrypted) or a
+      `.configtransform/** filter=git-crypt` line (the whole tree is). If neither is there, skip
+      every git-crypt step below.
 - [ ] If it does: who holds the git-crypt key.
 
 ## 1. Install prerequisites (once per machine)

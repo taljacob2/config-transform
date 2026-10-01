@@ -198,16 +198,19 @@ Actions job made of separate steps.
 This is the *consuming repo's own* encryption choice (`CONFIG_MANAGEMENT.md` §7) — the tool
 itself has no git-crypt dependency at all; `configtransform` just reads plaintext files off
 whatever disk it's given, encrypted-and-unlocked or not. Most real consuming repos
-will still want this, since it's what this architecture recommends for secrets sitting in
-`.configtransform/**` (connection strings, API keys). Skip this whole section if a consuming
-repo has decided not to encrypt that tree.
+will still want this, for their secrets (connection strings, API keys, credential files). There
+are two scopes (`CONFIG_MANAGEMENT.md` §7): **secrets only** — `.configtransform/**/*.secret.*`,
+with `{{CFSECRET_NAME}}` placeholders in the plaintext configuration (`SECRETS_DESIGN.md`,
+recommended) — or **the whole `.configtransform/**` tree**. Skip this whole section if a consuming
+repo has decided not to encrypt anything.
 
 ### Setting it up fresh, in a repo that doesn't have a key yet
 
 ```bash
-# Run once, in the repo root, before anything under .configtransform/ is committed:
+# Run once, in the repo root, before any secret is committed:
 git-crypt init
-echo ".configtransform/** filter=git-crypt diff=git-crypt" >> .gitattributes
+echo ".configtransform/**/*.secret.* filter=git-crypt diff=git-crypt" >> .gitattributes
+# (or, to encrypt the whole tree instead: ".configtransform/** filter=git-crypt diff=git-crypt")
 git add .gitattributes
 git commit -m "Add git-crypt attributes for .configtransform/"
 
@@ -224,10 +227,10 @@ git add --renormalize .
 git commit -m "Encrypt .configtransform/ with git-crypt"
 git push
 ```
-This encrypts everything under `.configtransform/**` from that commit forward — it does not
-retroactively scrub plaintext from earlier commits (a separate concern, §7.4).
+This encrypts every file the rule covers from that commit forward — it does not retroactively
+scrub plaintext from earlier commits (a separate concern, §7.4).
 
-**Losing the exported key with no backup makes `.configtransform/**` permanently
+**Losing the exported key with no backup makes every file the rule covers permanently
 unrecoverable** — not a bug, what encryption without a backdoor means (§7.1's disclaimer). Get
 it into a team password manager/vault before distributing it to anyone, not after.
 
@@ -275,15 +278,17 @@ workflow, which should never need the key at all, per §8.1):
      [GitHub releases](https://github.com/AGWA/git-crypt/releases) placed on `PATH`. Git for
      Windows does **not** bundle git-crypt — it's a separate install on top of Git either way.
    - Verify with `git-crypt --version`.
-2. Clone the repo normally. Everything under `.configtransform/` shows as opaque binary — that's
-   git-crypt working correctly, not a broken clone.
+2. Clone the repo normally. The files the repo's rule covers — every `*.secret.*` file, or
+   everything under `.configtransform/` for a whole-tree repo — show as opaque binary. That's
+   git-crypt working correctly, not a broken clone. (Without the key, the tool still runs:
+   previews report those secrets as `unknown` and keep their placeholders.)
 3. Get the key from whoever holds it, out of band (password manager/vault entry — never via
    git, chat, or email in plaintext).
 4. Unlock — identical command on every platform:
    ```
    git-crypt unlock /path/to/the.key
    ```
-   `.configtransform/**` is now plaintext in your working copy. `git-crypt lock` re-encrypts it
+   Every file the rule covers is now plaintext in your working copy. `git-crypt lock` re-encrypts it
    locally (to double check the round-trip, or before leaving a shared machine unattended).
 
    **A real mistake worth flagging directly: this must be the raw decoded key, not the base64

@@ -1,10 +1,11 @@
 # Secrets — design
 
-**Status: stages 1–2 implemented, unreleased; stage 3 not started (2026-10-01).** Decisions below
-were settled with the repo owner in conversation. Value secrets (placeholders, `*.secret.env`
-files, the `secrets` field, `--reveal-secrets`, the strict loader) and file secrets (`replace`)
-work as described. The docs rewrite of `CONFIG_MANAGEMENT.md` §7 and the pilot migration (stage 3)
-haven't happened yet. See "Implementation plan", and `docs/ROADMAP.md` for where this sits in
+**Status: stages 1–2 implemented, unreleased; stage 3's docs done, its pilot migration pending
+(2026-10-01).** Decisions below were settled with the repo owner in conversation. Value secrets
+(placeholders, `*.secret.env` files, the `secrets` field, `--reveal-secrets`, the strict loader) and
+file secrets (`replace`) work as described, and `CONFIG_MANAGEMENT.md` §7,
+`SECRETS_AND_LOCAL_SETUP.md` and `ONBOARDING.md` now present secrets-only encryption as the
+recommended scope. Migrating `config-transform-pilot` needs a released version first. See "Implementation plan", and `docs/ROADMAP.md` for where this sits in
 priority.
 
 ## Why this exists

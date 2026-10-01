@@ -56,7 +56,7 @@ needs a different mechanism — not an assumption that this design already cover
 | Encryption mechanism | git-crypt, whole-file encryption | SOPS + age/KMS | SOPS only understands JSON/YAML/etc., not XML, and requires secrets to be split out of App.config first — a refactor the team cannot do right now. git-crypt encrypts whole files regardless of format, requiring zero restructuring of existing mixed App.config files. |
 | git-crypt key model | Single default symmetric key | Per-user GPG keys | GPG gives an auditable grant history but **not** free revocation — revoking access still requires generating a new content key and re-encrypting everything, the same cost as symmetric-key rotation. Given the team's time constraints, the operational overhead of GPG (per-dev keypairs, key exchange/trust, a CI GPG identity) isn't worth it for a benefit (audit trail of grants) that's thin relative to its cost. |
 | Per-client key segmentation | Not implemented now; kept as an explicit future escape hatch | Per-client keys/filters from day one | Adds bookkeeping with no current benefit while everything shares one key. Revisit only if a specific client has an actual isolation requirement. |
-| `.gitattributes` scope | One glob: `.configtransform/** filter=git-crypt diff=git-crypt` | Per-client filter names | Per-client filter names only matter once a client is actually split onto its own key (a distinct key collection). Until then it's pure ceremony. |
+| `.gitattributes` scope | One glob. Recommended: `.configtransform/**/*.secret.* filter=git-crypt diff=git-crypt` (secrets only, with `{{CFSECRET_NAME}}` placeholders — `docs/SECRETS_DESIGN.md`); the original `.configtransform/**` (whole tree) stays supported | Per-client filter names | Per-client filter names only matter once a client is actually split onto its own key (a distinct key collection). Until then it's pure ceremony. |
 | Config file location assumption | None — each project's location is declared explicitly via `resources[].path` in a `configtransform.json` layer, pointing directly at wherever the real config file actually is (not specifically a `.csproj`'s directory — see §4) | Assuming a `src/<Project>/` convention | Source layout is not guaranteed to be consistent (flat at root, arbitrarily nested). `resources[].path` decouples the `.configtransform/` tree from wherever code actually lives — and, as a consequence of that decoupling, from any particular language ecosystem too. (Originally a separate `manifest.json` `directory` field added this indirection; `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md` later replaced it with `resources[].path` naming the file directly, an even flatter decoupling — see that document's "Settled decisions" #5.) |
 | Client/environment directory naming | Nested: `Clients/<Client>/<Environment>/configtransform.json` | Flat: `Clients/<Client>-<Environment>/configtransform.json` | Nested scales better for browsing once client count grows past a handful, avoids any hyphen-in-name ambiguity for humans reading the tree, and keeps the door open for future per-client git-crypt key scoping via a directory glob. |
 | Environment-wide layer | Included: `Environments/<Environment>/configtransform.json`, which a Client layer typically `extends` | Skipping straight to `Clients/<Client>/<Environment>/configtransform.json` | Exists specifically to avoid duplicating settings that are identical across all clients within one environment (e.g. `debug=false` in Production). If a given project turns out to have nothing genuinely shared across clients, the Environment layer simply doesn't list it in its own `resources` — decide per project based on actual content, not globally (see `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`'s "The Environment layer stays optional, per project" — unchanged by the `extends` redesign). |
@@ -430,22 +430,40 @@ dotnet tool run configtransform -- \
 
 ## 7. Encryption at rest (git-crypt)
 
-**Alternative, being implemented: `docs/SECRETS_DESIGN.md`** (value secrets work today; whole-file
-secrets and the rewrite of this section are the next stages). Encrypting the whole
-`.configtransform/**` tree treats all configuration as one secret, so nobody without the key can
-read or review any overlay on GitHub. The secrets design keeps configuration in plaintext with
-`{{CFSECRET_NAME}}` placeholders, holds the values (and whole-file secrets) in `*.secret.*` files,
-and narrows the rule below to `.configtransform/**/*.secret.*`. Whole-tree encryption, as set up
-here, stays supported either way.
+git-crypt can cover one of two scopes. Pick one per repo:
+
+- **Secrets only — recommended** (`docs/SECRETS_DESIGN.md`). Configuration stays plaintext, with
+  `{{CFSECRET_NAME}}` placeholders where secret values go. The values live in `*.secret.env` files a
+  layer lists under `secrets`; whole-file secrets (a Firebase JSON, a certificate) live in
+  `*.secret.*` files a resource `replace`s itself with. git-crypt covers only those files, so every
+  other overlay is readable and reviewable on GitHub, and `--list`/`--diff`/`--dry-run` work without
+  the key (secrets show as placeholders, with a status report).
+- **The whole `.configtransform/**` tree** — this architecture's original choice. Simpler to start
+  with (secret values can sit in overlays as-is), but it treats all configuration as one secret:
+  nobody without the key can read or review any overlay, on GitHub or locally. Still fully
+  supported; a repo can migrate to secrets-only later (§7.2).
+
+Either way the tool itself needs nothing from git-crypt: it reads plaintext files, and only
+recognizes a still-locked file to say "run git-crypt unlock" instead of failing confusingly.
 
 ### 7.1 Setup
 
 ```bash
 git-crypt init
-echo ".configtransform/** filter=git-crypt diff=git-crypt" >> .gitattributes
+
+# Secrets only (recommended):
+echo ".configtransform/**/*.secret.* filter=git-crypt diff=git-crypt" >> .gitattributes
+# ...or the whole tree:
+# echo ".configtransform/** filter=git-crypt diff=git-crypt" >> .gitattributes
+
 git add .gitattributes
 git commit -m "Add git-crypt attributes for .configtransform/"
 ```
+
+The tool enforces the secrets-only rule's coverage from its side: every `secrets` file must end in
+`.secret.env`, every `replace` file's name must contain `.secret.`, and both must be inside
+`.configtransform/` — a layer that breaks any of these is rejected, so no secrets file can sit
+outside the rule by accident.
 
 Key distribution: `git-crypt export-key ./git-crypt-key`, shared out-of-band (never via git)
 with authorized developers and pasted (base64) into a CI secret. Developers run
@@ -453,7 +471,7 @@ with authorized developers and pasted (base64) into a CI secret. Developers run
 `config-transform`) for the concrete, platform-by-platform commands (Windows included) this
 summary skips over.
 
-This `.gitattributes` glob is unconditional and has nothing to do with any resource's
+Either glob is unconditional and has nothing to do with any resource's
 `resources[].path` value — every layer's `.configtransform/Environments/<Env>/`/
 `.configtransform/Clients/<Client>/<Env>/` tree is covered the same way, regardless of where in
 the repo the resources it patches actually live, including a resource whose own base file sits
@@ -461,7 +479,7 @@ at the repo root itself (`resources[].path` is just `"appsettings.json"`, no spe
 needed — see `MANIFEST_SCHEMA.md`).
 
 > **Disclaimer for whoever runs this the first time:** losing this key, with no backup, means
-> everything under `.configtransform/**` becomes **permanently unrecoverable** — this is not a
+> every file the rule covers becomes **permanently unrecoverable** — this is not a
 > bug, it's what encryption without a backdoor means. This is intentional and accepted as part
 > of the design (§2), but it means the key must be stored somewhere durable with more than one
 > person able to retrieve it (e.g. a team password manager/vault entry) — not solely on the
@@ -476,8 +494,21 @@ git commit -m "Encrypt .configtransform/ with git-crypt"
 git push
 ```
 
-This encrypts everything under `.configtransform/**` from this commit forward. It does **not** remove
+This encrypts every file the rule covers from this commit forward. It does **not** remove
 plaintext from prior commits — that is handled separately (§7.4).
+
+**Moving an existing whole-tree repo to secrets-only** is the reverse direction — files that were
+encrypted become plaintext from the next commit on. Do it in this order (full steps:
+`docs/SECRETS_DESIGN.md`'s "Migrating a repo off whole-tree encryption"):
+
+1. Pin a tool version that supports secrets.
+2. Move every secret value into a `*.secret.env` file and replace it with its `{{CFSECRET_NAME}}`
+   placeholder; turn every whole-file secret into a `replace`.
+3. Verify with the key: every combination's `--dry-run` reports every secret `resolved`, and `-o`
+   output is byte-identical to before.
+4. Remove or mask any CI step that prints resolved output (a `cat` of an `-o` file).
+5. **Only then** narrow `.gitattributes` and, with the repo unlocked,
+   `git add --renormalize .configtransform`. Earlier history stays encrypted.
 
 ### 7.3 Diffing encrypted files, and the PR review workflow
 
@@ -488,7 +519,9 @@ arbitrary command to execute). Consequences:
 
 - Anyone with the key and an unlocked clone gets normal, readable `git diff`/`git log -p`
   locally.
-- **GitHub's PR web UI shows only a blob-level diff for these files** ("binary file changed" /
+- With the **secrets-only** rule, this applies only to `*.secret.*` files — every other overlay
+  is plaintext and diffs normally on GitHub, including inline review comments.
+- **GitHub's PR web UI shows only a blob-level diff for encrypted files** ("binary file changed" /
   no line-level content) — GitHub's servers don't have the key and can't run a local
   `textconv` command. This is not a defect to work around; it is the correct and intended
   behavior. Anyone without the key seeing "content changed, values not shown" is git-crypt
@@ -498,9 +531,10 @@ arbitrary command to execute). Consequences:
   semantic difference between a project's base config and what a specific client actually
   ends up with, at the current state, independent of history.
 
-**Review policy: local-only, by design.** Reviewers who hold the git-crypt key review changes
-under `.configtransform/**` by pulling the branch, unlocking, and running `git diff`/`--diff`
-themselves, then approving on GitHub without GitHub itself ever rendering the content. GitHub's
+**Review policy for encrypted files: local-only, by design.** Under the whole-tree rule that means
+every change under `.configtransform/**`; under the secrets-only rule, only `*.secret.*` files.
+Reviewers who hold the git-crypt key review those by pulling the branch, unlocking, and running
+`git diff`/`--diff` themselves, then approving on GitHub without GitHub itself ever rendering the content. GitHub's
 inline line-comment UI is not available for these specific files as a result — an accepted UX
 cost, not a bug to fix.
 
@@ -514,6 +548,12 @@ which is strictly less protected than the file was before, not a review-convenie
 making. The only scenario where this would be safe is if a repo's read-access list is already
 identical to its key-holder list, which is a fact about that specific repo's permissions that
 would need explicit verification, not something to assume as a default behavior.
+
+**Under the secrets-only rule this changes**, with one condition. `--diff` without
+`--reveal-secrets` prints placeholders, never values, so posting it on a PR exposes nothing — *as
+long as every secret in the repo really is behind a placeholder or a `replace`*. A secret value
+someone left directly in an overlay would be posted in plaintext. Treat it as safe only after the
+migration in §7.2 is complete, and never pass `--reveal-secrets` in such a step.
 
 ### 7.4 Handling secrets already exposed in history
 

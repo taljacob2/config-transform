@@ -709,9 +709,12 @@ default next step.
   in the design's decision log (#13–#18) — notably that YAML needs quoted placeholders, and that a
   secrets file must sit inside `.configtransform/` for git-crypt to cover it. Stage 2
   (whole-file secrets via a resource's `replace`, byte for byte, any format) added decisions
-  #19–#22. **Next: stage 3** — rewrite `CONFIG_MANAGEMENT.md` §7 and `SECRETS_AND_LOCAL_SETUP.md`
-  around the narrowed `.configtransform/**/*.secret.*` rule, and migrate `config-transform-pilot`
-  (one placeholder secret, one whole-file secret, narrowed `.gitattributes`, real CI dispatch). Separates secrets from configuration so only
+  #19–#22. Stage 3's docs half is done too: `CONFIG_MANAGEMENT.md` §7, `SECRETS_AND_LOCAL_SETUP.md`
+  and `ONBOARDING.md` present secrets-only encryption as the recommended scope, with whole-tree
+  still supported and a migration path between them. **Next:** release stages 1–2, then migrate
+  `config-transform-pilot` (one placeholder secret, one whole-file secret, narrowed
+  `.gitattributes`, a real CI dispatch) — which makes the pilot's currently encrypted overlays
+  plaintext on GitHub, so it waits for the repo owner's go-ahead. Separates secrets from configuration so only
   `.configtransform/**/*.secret.*` needs git-crypt and every other overlay is readable and
   reviewable on GitHub. Every behavior question raised so far is settled in the design's decision
   log; its "Open items" are deliberately deferred, not blockers.
