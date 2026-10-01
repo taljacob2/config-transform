@@ -304,6 +304,6 @@ only by case is an error (it would otherwise deploy a file .NET refuses to load)
 Then `0.23.1-alpha`: JSON/YAML output (and every file `set` rewrites) keeps the base or
 existing file's line endings and final newline (`TextLayout` in Core), as XML always did;
 `config-transform-pilot` is re-pinned to it and verified via a real CI dispatch. Next, designed but
-not implemented: secrets (`docs/SECRETS_DESIGN.md`) — `{{cfsecret:NAME}}` placeholders filled from
+not implemented: secrets (`docs/SECRETS_DESIGN.md`) — `{{CFSECRET_NAME}}` placeholders filled from
 encrypted `*.secret.env` files a layer lists under `secrets`, plus whole-file secrets via a
 resource's `replace`, so git-crypt only needs to cover `.configtransform/**/*.secret.*`.

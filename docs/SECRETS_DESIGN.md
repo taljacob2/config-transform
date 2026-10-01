@@ -29,7 +29,7 @@ same file the app always got, with the real value back in place. No application 
 ## Two shapes of secret
 
 1. **Value secrets** — a password, API key or token inside an otherwise ordinary config file.
-   The config file holds a placeholder (`{{cfsecret:NAME}}`); the value lives in an encrypted
+   The config file holds a placeholder (`{{CFSECRET_NAME}}`); the value lives in an encrypted
    `*.secret.env` file that a layer lists under `secrets`.
 2. **File secrets** — a file that is a secret in its entirety: a Firebase service-account JSON,
    an Android `google-services.json`, a `.pem`/`.p12` certificate. The real file lives encrypted
@@ -50,20 +50,34 @@ for a team that keeps secrets out of git entirely and provides them some other w
 ### Placeholder syntax
 
 ```
-{{cfsecret:NAME}}
+{{CFSECRET_NAME}}
 ```
 
-`cfsecret` = "configtransform secret". Namespaced on purpose: bare `{{…}}` already appears in real
-config (Helm, Handlebars, some logging templates), and the tool must never replace something it
-doesn't own. `NAME` follows the `.env` key grammar the tool already enforces
-(`[A-Za-z_][A-Za-z0-9_]*`, `EnvFile`), so every name is also a valid environment-variable suffix
-(see "Environment-variable override").
+A secret's name always starts with `CFSECRET_` ("configtransform secret"), the same way a React app's
+public variables start with `REACT_APP_` or Vite's with `VITE_`: a developer sees the prefix and
+knows what it is. Exactly: `{{` + `CFSECRET_` (uppercase) + one or more of `[A-Za-z0-9_]` + `}}`.
+
+**The full name, prefix included, is the one spelling used everywhere** — in the placeholder, as the
+key in a `*.secret.env` file, as the environment-variable override, and in CI wiring:
+
+| Where | Looks like |
+|---|---|
+| Config file or patch | `Password={{CFSECRET_ADMIN_DB_PASSWORD}}` |
+| `sql.secret.env` | `CFSECRET_ADMIN_DB_PASSWORD=Pa55+w&rd` |
+| Environment-variable override | `CFSECRET_ADMIN_DB_PASSWORD` |
+| GitHub Actions workflow | `env: { CFSECRET_ADMIN_DB_PASSWORD: ... }` |
+
+So searching the repo for one name finds the placeholder, the secrets-file entry and the CI wiring,
+and a secrets file is literally a set of environment variables (`source sql.secret.env` produces the
+same overrides). The prefix also keeps placeholders from colliding with other template syntax —
+bare `{{…}}` already appears in real config (Helm, Handlebars, some logging templates), and the tool
+must never replace something it doesn't own.
 
 A placeholder can be a whole value or part of one:
 
 ```xml
 <add name="AdminDb"
-     connectionString="Server=proddb;User=admin;Password={{cfsecret:ADMIN_DB_PASSWORD}}"
+     connectionString="Server=proddb;User=admin;Password={{CFSECRET_ADMIN_DB_PASSWORD}}"
      xdt:Transform="SetAttributes" xdt:Locator="Match(name)" />
 ```
 
@@ -85,7 +99,7 @@ the *merged* output, so it doesn't matter which layer wrote them.
 
 ```
 # .configtransform/Clients/Acme/Production/sql.secret.env  (encrypted at rest)
-ADMIN_DB_PASSWORD=Pa55+w&rd
+CFSECRET_ADMIN_DB_PASSWORD=Pa55+w&rd
 ```
 
 - **A layer lists the secret files it contributes**, the same way it lists the patch it contributes
@@ -94,6 +108,9 @@ ADMIN_DB_PASSWORD=Pa55+w&rd
 - **Paths are repo-root-relative**, like `extends`, `path` and `patch` — no exceptions
   (`SELF_DESCRIBING_OVERLAYS_DESIGN.md` Settled decision #4 already rejected bare, file-relative
   names for `patch`).
+- **Every key in a `*.secret.env` file must start with `CFSECRET_`**, or the file is rejected. A
+  key without the prefix could never match a placeholder; failing loudly catches the mistake
+  instead of leaving a secret that silently never applies.
 - **Every entry must end in `.secret.env`**, or the layer is rejected. This guarantees the file is
   covered by the `*.secret.*` git-crypt rule — a secrets file can never sit outside it by accident
   and be committed in plaintext.
@@ -108,10 +125,10 @@ For one resolved resource, with its layer chain (outermost first, as everywhere 
 1. Collect every `secrets` file from every layer in the chain. Later layers override earlier ones,
    name by name, like patches. The same name in two files of the *same* layer is an error — there's
    no order between them to decide which wins.
-2. An environment variable `CFSECRET_<NAME>` overrides every file (see below).
-3. Find every `{{cfsecret:NAME}}` in the merged output and look `NAME` up. A secret file that
+2. An environment variable with the same name overrides every file (see below).
+3. Find every `{{CFSECRET_…}}` in the merged output and look its name up. A secret file that
    declares names no placeholder uses is fine (one layer's file may serve several resources).
-4. Substitution is a single pass: a secret *value* containing `{{cfsecret:…}}` is not expanded again.
+4. Substitution is a single pass: a secret *value* containing `{{CFSECRET_…}}` is not expanded again.
 
 ### Substitution happens inside values, per format engine
 
@@ -138,23 +155,23 @@ open item.
 
 **Real run (`-o`)** always substitutes. Before writing anything, every placeholder in every
 resource the call covers must resolve; any that is missing or locked is an error and **nothing is
-written** (all-or-nothing, not per resource). After substitution, any remaining `{{cfsecret:` text
+written** (all-or-nothing, not per resource). After substitution, any remaining `{{CFSECRET_` text
 anywhere in the output (a key, an XML comment) is also an error — a placeholder must never reach a
 deployed file.
 
 **Previews (`--dry-run`, `--diff`, `--diff-layers`) do not substitute by default.** The output keeps
-`{{cfsecret:ADMIN_DB_PASSWORD}}` as written — that's more useful than a `****` mask, because it says
+`{{CFSECRET_ADMIN_DB_PASSWORD}}` as written — that's more useful than a `****` mask, because it says
 *which* secret goes there. The resolution report printed above the output gains a secrets section:
 
 ```
 secrets
-  ADMIN_DB_PASSWORD   resolved   .configtransform/Clients/Acme/Production/sql.secret.env
-  MONGO_PASSWORD      MISSING    no secrets file in this chain defines it
-  SMTP_PASSWORD       unknown    .configtransform/Environments/Production/mail.secret.env is locked (git-crypt: run git-crypt unlock)
+  CFSECRET_ADMIN_DB_PASSWORD   resolved   .configtransform/Clients/Acme/Production/sql.secret.env
+  CFSECRET_MONGO_PASSWORD      MISSING    no secrets file in this chain defines it
+  CFSECRET_SMTP_PASSWORD       unknown    .configtransform/Environments/Production/mail.secret.env is locked (git-crypt: run git-crypt unlock)
 ```
 
-- `resolved` names the file the value came from (or `CFSECRET_SMTP_PASSWORD` for an environment
-  variable). The value itself is never printed.
+- `resolved` names the file the value came from, or says `environment variable` when the override
+  supplied it. The value itself is never printed.
 - `MISSING` — every secrets file in the chain is readable and none defines this name.
 - `unknown` — at least one secrets file in the chain is still git-crypt-encrypted, so the tool
   can't tell. Detected by git-crypt's own header (NUL + `GITCRYPT` + NUL), which
@@ -189,8 +206,9 @@ secrets report says which file each value came from.
 
 ### Environment-variable override
 
-`CFSECRET_<NAME>` (e.g. `CFSECRET_ADMIN_DB_PASSWORD`) overrides any file value. The prefix keeps
-arbitrary environment variables from being picked up. This is how CI feeds GitHub Actions secrets
+An environment variable named exactly like the secret (e.g. `CFSECRET_ADMIN_DB_PASSWORD`) overrides
+any file value. Since every secret name carries the `CFSECRET_` prefix, arbitrary environment
+variables are never picked up. This is how CI feeds GitHub Actions secrets
 in — the tool itself never knows about GitHub. One invocation resolves one client/environment/host,
 so the workflow maps the right secret for that target:
 
@@ -269,7 +287,7 @@ simpler schema; see the decision log.
 1. Upgrade the pinned tool to the version that ships this feature.
 2. For each secret value in an overlay or base file: move it into a `*.secret.env` file in the
    layer that set it, list that file under the layer's `secrets`, and put
-   `{{cfsecret:NAME}}` where the value was. For each whole-file secret: rename it `*.secret.*`,
+   `{{CFSECRET_NAME}}` where the value was. For each whole-file secret: rename it `*.secret.*`,
    add a `replace` entry, and commit a harmless file at the real path.
 3. Verify with the key: every combination's `--dry-run` reports every secret `resolved`, and
    `-o` output is byte-identical to before the migration.
@@ -288,8 +306,12 @@ simpler schema; see the decision log.
 
 1. **Separate secrets from configuration, opt-in, alongside whole-tree encryption.** Whole-tree
    stays supported; it's just no longer the only option.
-2. **Placeholder syntax `{{cfsecret:NAME}}`.** Rejected: bare `{{SECRET}}` and `${…}` — both already
-   occur in real config files and template languages.
+2. **Placeholder syntax `{{CFSECRET_NAME}}`, one name used everywhere** (repo owner's call, like
+   `REACT_APP_`/`VITE_`). Rejected: `{{cfsecret:NAME}}` — this design's first version — because the
+   same secret was then spelled three ways (`cfsecret:ADMIN_DB_PASSWORD` in the placeholder,
+   `ADMIN_DB_PASSWORD` in the file, `CFSECRET_ADMIN_DB_PASSWORD` as the environment variable).
+   Also rejected: bare `{{SECRET}}` and `${…}` — both already occur in real config files and
+   template languages.
 3. **Previews keep placeholders and report status; no masking.** Rejected: `****` masks — they hide
    which secret is where. Real values only behind an explicit `--reveal-secrets`.
 4. **`secrets` lists files, and names come from inside them** (repo owner's call). Rejected:
@@ -323,8 +345,8 @@ simpler schema; see the decision log.
   chain and report unresolved placeholders, without writing anything. `--dry-run` per combination
   covers it today; a dedicated mode may be worth adding once real usage shows the need.
 - **JSON types for whole-value placeholders** — currently always a string. A typed form (e.g.
-  `{{cfsecret:PORT|number}}`) could come later if a real case needs it.
-- **Escaping a literal `{{cfsecret:`** in a config value that isn't a placeholder. No known real
+  `{{CFSECRET_PORT|number}}`) could come later if a real case needs it.
+- **Escaping a literal `{{CFSECRET_`** in a config value that isn't a placeholder. No known real
   case; v1 has no escape syntax and treats it as a placeholder.
 - **`replace` for non-secret whole files** (e.g. a client's logo). `CONFIG_MANAGEMENT.md` §1.1 puts
   branding assets out of scope; v1 requires `*.secret.*` names for `replace`.
@@ -338,7 +360,8 @@ Each stage is its own PR, with fixture-backed tests across every applicable fixt
 (`CONFIGTRANSFORM_TOOL_DESIGN.md` §3), docs in the same change, and a CHANGELOG entry.
 
 1. **Value secrets.** `secrets` field, `*.secret.env` loading and the `.secret.env` naming check,
-   chain resolution and same-layer conflict error, `CFSECRET_` override, git-crypt detection,
+   chain resolution and same-layer conflict error, the `CFSECRET_` key check, environment-variable
+   override, git-crypt detection,
    per-engine substitution (XML, JSON, YAML, `.env`), the report section, `--reveal-secrets`, the
    all-or-nothing real run and leftover-placeholder check, and the strict loader.
 2. **File secrets.** `replace` on resource entries, its layering rules and errors, byte-for-byte
