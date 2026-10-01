@@ -6,6 +6,8 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.23.1-alpha] - 2026-10-01
+
 ### Fixed
 
 - **JSON and YAML output now keeps the base file's line endings and final newline.** Found in

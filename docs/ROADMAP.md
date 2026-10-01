@@ -687,8 +687,8 @@ this order, each as its own commit on `main`:
 
 `config-transform-pilot` is re-pinned to `0.23.0-alpha` (its `--diff-layers` CI step now passes
 `--color always`) and verified against a real `build-transformed.yml` dispatch, run #32 — see that
-repo's `FINDINGS.md`. That run's log exposed one more fidelity gap, fixed since but not yet
-released: merged JSON had no final newline, and JSON/YAML used the platform's newline instead of
+repo's `FINDINGS.md`. That run's log exposed one more fidelity gap, fixed and released as
+`0.23.1-alpha`: merged JSON had no final newline, and JSON/YAML used the platform's newline instead of
 the base file's — `set` rewrote committed files that way too. Output and `set`'s rewrites now
 mirror the base/existing file (`TextLayout`; `docs/TREE_MERGE_DESIGN.md`).
 
