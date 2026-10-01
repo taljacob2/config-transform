@@ -113,9 +113,11 @@ CFSECRET_ADMIN_DB_PASSWORD=Pa55+w&rd
 - **Every key in a `*.secret.env` file must start with `CFSECRET_`**, or the file is rejected. A
   key without the prefix could never match a placeholder; failing loudly catches the mistake
   instead of leaving a secret that silently never applies.
-- **Every entry must end in `.secret.env`**, or the layer is rejected. This guarantees the file is
-  covered by the `*.secret.*` git-crypt rule — a secrets file can never sit outside it by accident
-  and be committed in plaintext.
+- **Every entry must end in `.secret.env` and be inside `.configtransform/`**, or the layer is
+  rejected. Together these guarantee the file is covered by the `.configtransform/**/*.secret.*`
+  git-crypt rule — a secrets file can never sit outside it by accident and be committed in
+  plaintext.
+- **A name defined twice** — in one file, or in two files of the same layer — is an error.
 - **Format: `.env`**, parsed by the existing `EnvFile` (same grammar as `.env` resources:
   whole-line `#` comments, optional quotes, no `${VAR}` expansion — `CONFIG_MANAGEMENT.md` §5.5).
   The simplest possible format, and it's expected to stay the only one.
@@ -360,6 +362,16 @@ Found while implementing stage 1, not in the original design:
 16. **`EnvFile` (the `.env` grammar) moved from `ConfigTransform.Env` to Core**, so secrets files and
     `.env` resources are parsed by literally the same code. Core is the shared library every engine
     depends on; the reverse dependency isn't allowed.
+17. **The same name twice in one secrets file is an error** (raised by the repo owner). The shared
+    `.env` grammar follows shell semantics — the last assignment wins — which stays right for a
+    `.env` *resource*. In a secrets file a repeated name is almost always a copy-paste mistake, and
+    which value won would only surface when something failed in production. It also matches the
+    existing rule for the same name in two files of one layer. The error names the file and the
+    key, never either value.
+18. **A `secrets` entry must be inside `.configtransform/`.** The `.secret.env` suffix alone doesn't
+    guarantee git-crypt coverage: the rule is `.configtransform/**/*.secret.*`, so a correctly named
+    `app/db.secret.env` would be committed in plaintext. Entries whose first path segment isn't
+    `.configtransform`, or that climb out with `..`, are rejected.
 
 ## Open items
 

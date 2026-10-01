@@ -76,6 +76,13 @@ public class EnvFileTests
     }
 
     [Fact]
+    public void ParseAssignments_keeps_every_assignment_including_duplicates_in_order()
+    {
+        var assignments = EnvFile.ParseAssignments("FOO=1\nBAR=2\nFOO=3");
+        Assert.Equal([new("FOO", "1"), new("BAR", "2"), new("FOO", "3")], assignments);
+    }
+
+    [Fact]
     public void Serialize_leaves_a_plain_value_unquoted()
     {
         var result = EnvFile.Serialize([new("FOO", "bar")]);

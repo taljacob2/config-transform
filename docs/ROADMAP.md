@@ -705,8 +705,9 @@ default next step.
   implemented in the three stages the design's "Implementation plan" lays out. **Stage 1 (value
   secrets) is done, unreleased**: `{{CFSECRET_NAME}}` placeholders, `*.secret.env` files under a
   layer's `secrets`, `--reveal-secrets`, the secrets report, all-or-nothing real runs, and a
-  strict loader (unknown fields are errors). Implementation surfaced four extra decisions, now in
-  the design's decision log (#13–#16) — notably that YAML needs quoted placeholders. **Next: stage
+  strict loader (unknown fields are errors). Implementation and review surfaced six extra decisions, now
+  in the design's decision log (#13–#18) — notably that YAML needs quoted placeholders, and that a
+  secrets file must sit inside `.configtransform/` for git-crypt to cover it. **Next: stage
   2** (whole-file secrets via `replace`), then stage 3 (docs rewrite and the pilot migration). Separates secrets from configuration so only
   `.configtransform/**/*.secret.*` needs git-crypt and every other overlay is readable and
   reviewable on GitHub. Every behavior question raised so far is settled in the design's decision

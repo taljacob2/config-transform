@@ -16,7 +16,9 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
   and each format engine substitutes inside values with its own escaping. Previews keep
   placeholders and report each secret as `resolved` (with its source), `MISSING` or `unknown`
   (git-crypt locked); a new `--reveal-secrets` flag shows real values. A real run writes nothing if
-  any secret is unresolved. `--list` shows the chain's secrets files. Whole-file secrets
+  any secret is unresolved. `--list` shows the chain's secrets files. Secrets files must end in
+  `.secret.env` and live inside `.configtransform/`, so the git-crypt rule always covers them, and
+  a name defined twice (in one file, or in two files of one layer) is an error. Whole-file secrets
   (`replace`) are stage 2, not in this release.
 
 ### Changed

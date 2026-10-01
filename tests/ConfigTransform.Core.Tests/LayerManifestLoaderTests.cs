@@ -99,6 +99,22 @@ public class LayerManifestLoaderTests
         Assert.Contains(".secret.env", ex.Message);
     }
 
+    [Theory]
+    [InlineData("app/db.secret.env")]
+    [InlineData(".configtransform/../app/db.secret.env")]
+    [InlineData("db.secret.env")]
+    public void A_secrets_file_outside_dot_configtransform_is_rejected(string entry)
+    {
+        // The git-crypt rule only covers .configtransform/ -- anywhere else, the file is plaintext.
+        using var dir = new TempDirectory();
+        var path = Path.Combine(dir.Path, "configtransform.json");
+        File.WriteAllText(path, $$"""{ "secrets": [ "{{entry}}" ], "resources": [] }""");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => LayerManifestLoader.Load(path));
+
+        Assert.Contains("isn't inside .configtransform/", ex.Message);
+    }
+
     [Fact]
     public void An_unknown_field_is_rejected_instead_of_silently_ignored()
     {

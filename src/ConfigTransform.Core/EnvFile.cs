@@ -49,6 +49,25 @@ public static class EnvFile
         var order = new List<string>();
         var values = new Dictionary<string, string>();
 
+        foreach (var (key, value) in ParseAssignments(content))
+        {
+            if (!values.ContainsKey(key))
+                order.Add(key);
+            values[key] = value;
+        }
+
+        return order.Select(key => new KeyValuePair<string, string>(key, values[key])).ToList();
+    }
+
+    /// <returns>
+    /// Every assignment in file order, duplicates included -- for a caller that must treat a
+    /// repeated key as a mistake rather than apply shell semantics (<see cref="SecretResolver"/>:
+    /// a key defined twice in one secrets file is an error, docs/SECRETS_DESIGN.md).
+    /// </returns>
+    public static List<KeyValuePair<string, string>> ParseAssignments(string content)
+    {
+        var assignments = new List<KeyValuePair<string, string>>();
+
         foreach (var rawLine in content.Split('\n'))
         {
             var line = rawLine.TrimEnd('\r').Trim();
@@ -65,13 +84,10 @@ public static class EnvFile
 
             var key = withoutExport[..eq].Trim();
             ValidateKey(key);
-
-            if (!values.ContainsKey(key))
-                order.Add(key);
-            values[key] = Unquote(withoutExport[(eq + 1)..].Trim());
+            assignments.Add(new KeyValuePair<string, string>(key, Unquote(withoutExport[(eq + 1)..].Trim())));
         }
 
-        return order.Select(key => new KeyValuePair<string, string>(key, values[key])).ToList();
+        return assignments;
     }
 
     public static string Serialize(IEnumerable<KeyValuePair<string, string>> pairs)

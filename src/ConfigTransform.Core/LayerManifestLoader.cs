@@ -67,8 +67,25 @@ public static class LayerManifestLoader
                     $"'{layerManifestPath}' lists secrets file '{secretsFile}', which doesn't end in '{SecretFileSuffix}'. " +
                     "Every secrets file must, so the '.configtransform/**/*.secret.*' git-crypt rule always covers it " +
                     $"(docs/SECRETS_DESIGN.md).\nTry: rename it to end in '{SecretFileSuffix}'.");
+            RequireInsideConfigTransform(layerManifestPath, "secrets file", secretsFile);
         }
 
         return manifest;
+    }
+
+    /// <summary>
+    /// The '.configtransform/**/*.secret.*' git-crypt rule only covers files under .configtransform/
+    /// -- a correctly named secret file anywhere else would be committed in plaintext. Paths here are
+    /// repo-root-relative, so "inside" means the first segment is .configtransform and no segment
+    /// climbs back out with "..".
+    /// </summary>
+    private static void RequireInsideConfigTransform(string layerManifestPath, string what, string path)
+    {
+        var segments = path.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length < 2 || segments[0] != ".configtransform" || segments.Contains(".."))
+            throw new InvalidOperationException(
+                $"'{layerManifestPath}' lists {what} '{path}', which isn't inside .configtransform/ -- the " +
+                "'.configtransform/**/*.secret.*' git-crypt rule wouldn't cover it, so it would be committed in plaintext " +
+                "(docs/SECRETS_DESIGN.md).\nTry: move it next to this configtransform.json and list it by its repo-root-relative path.");
     }
 }

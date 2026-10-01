@@ -104,6 +104,22 @@ public class SecretResolverTests
     }
 
     [Fact]
+    public void The_same_name_twice_in_one_file_is_an_error_naming_neither_value()
+    {
+        // A .env *resource* keeps shell semantics (last wins); a secrets file doesn't.
+        using var dir = new TempDirectory();
+        var chain = Chain(dir, ("Environments/Production", [("db.secret.env", "CFSECRET_DB=first-value\nCFSECRET_DB=second-value")]));
+
+        var ex = Assert.Throws<InvalidOperationException>(() => SecretResolver.Build(dir.Path, chain, NoEnvironment));
+
+        Assert.Contains("db.secret.env", ex.Message);
+        Assert.Contains("CFSECRET_DB", ex.Message);
+        Assert.Contains("more than once", ex.Message);
+        Assert.DoesNotContain("first-value", ex.Message);
+        Assert.DoesNotContain("second-value", ex.Message);
+    }
+
+    [Fact]
     public void A_key_without_the_CFSECRET_prefix_is_an_error_naming_the_fix_but_not_the_value()
     {
         using var dir = new TempDirectory();

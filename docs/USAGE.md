@@ -301,8 +301,11 @@ CFSECRET_ADMIN_DB_PASSWORD=Pa55+w&rd
 - **Names** are `CFSECRET_` + letters, digits and `_`, and the same full name is used everywhere: the
   placeholder, the key in the `*.secret.env` file, and the environment-variable override. A
   secrets-file key without the prefix is an error.
+- **Secrets files** must end in `.secret.env` and live inside `.configtransform/`, so the
+  `.configtransform/**/*.secret.*` git-crypt rule always covers them.
 - **Resolution** follows the layer chain: later layers override earlier ones, name by name. The
-  same name in two files of one layer is an error. An environment variable with the secret's exact
+  same name twice in one file, or in two files of one layer, is an error (naming the file and key,
+  never a value). An environment variable with the secret's exact
   name overrides every file; an empty one counts as unset.
 - **Substitution** happens inside values, by each format's own writer, so a value containing `"`,
   `&`, `<` or `: ` comes out correctly escaped. In YAML, a placeholder that starts a value must be

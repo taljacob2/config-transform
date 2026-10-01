@@ -89,8 +89,16 @@ public static class SecretResolver
                     continue;
                 }
 
+                var seenInThisFile = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var (key, value) in ParseWithoutLeaking(fullPath, display))
                 {
+                    // Shell semantics (last assignment wins) are right for a .env resource, but in a
+                    // secrets file a repeated name is almost always a copy-paste mistake -- and which
+                    // value won would only surface when something failed in production.
+                    if (!seenInThisFile.Add(key))
+                        throw new InvalidOperationException(
+                            $"'{display}' defines \"{key}\" more than once.\nTry: keep one definition.");
+
                     if (!key.StartsWith(SecretPlaceholders.Prefix, StringComparison.Ordinal))
                         throw new InvalidOperationException(
                             $"'{display}' defines \"{key}\", but every secret name must start with '{SecretPlaceholders.Prefix}' " +
@@ -120,7 +128,7 @@ public static class SecretResolver
     {
         try
         {
-            return EnvFile.Parse(File.ReadAllText(fullPath));
+            return EnvFile.ParseAssignments(File.ReadAllText(fullPath));
         }
         catch (InvalidOperationException)
         {
