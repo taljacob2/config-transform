@@ -24,7 +24,7 @@ public static class HelpPrinter
               configtransform --list [--client <C> --environment <E> [--host <H>] | --resource <path>]
               configtransform set --resource <path> [--client <C> --environment <E> [--host <H>]] --match <k>=<v> [--match ...] --set <k>=<v> [--set ...]
               configtransform init [--environment <E> ...] [--client <C> ...] [--host <H> ...] [--resource <path> ...] [--yes] [--dry-run]
-              configtransform init --template [hosts] [--dry-run]
+              configtransform init --template [hosts|secrets] [--dry-run]
               configtransform | help | --help | -h            this page (also shown for no arguments at all)
 
             COMMON COMMANDS
@@ -94,6 +94,8 @@ public static class HelpPrinter
                      (quiet/CI-safe: scans the repo for more .config/.xml/.json candidates too,
                      unless --resource is given; with no flags at all in a real terminal, asks
                      interactively instead)
+                     configtransform init --template secrets adds a runnable secrets example (fake
+                     values; prints how to set up git-crypt before using real ones)
                      configtransform init --template hosts adds one worked Hosts/Host-1/ layer
                      under Client-A/Production to the same starter tree
 

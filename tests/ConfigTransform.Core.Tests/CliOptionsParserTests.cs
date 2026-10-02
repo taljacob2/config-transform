@@ -773,4 +773,10 @@ public class CliOptionsParserTests
         Assert.False(CliOptionsParser.Parse(["--environment", "Production", "--dry-run"]).RevealSecrets);
         Assert.True(CliOptionsParser.Parse(["--environment", "Production", "--dry-run", "--reveal-secrets"]).RevealSecrets);
     }
+
+    [Fact]
+    public void Template_accepts_the_secrets_variant()
+    {
+        Assert.Equal("secrets", CliOptionsParser.Parse(["init", "--template", "secrets"]).Template);
+    }
 }

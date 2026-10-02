@@ -371,7 +371,7 @@ init --environment, -e <EnvName>           repeatable — every environment to c
      --scan-root <dir>                     where to scan for candidate resources (default: repo root)
      --yes                                 accept every scanned candidate without asking
      --no-scan                             don't scan — requires at least one --resource
-     --template [default|hosts]            a canned starter tree — mutually exclusive with every flag above; bare --template (or --template default) is the plain tree, --template hosts adds one worked Hosts/ layer example
+     --template [default|hosts|secrets]    a canned starter tree — mutually exclusive with every flag above; bare --template (or --template default) is the plain tree, --template hosts adds one worked Hosts/ layer example, --template secrets adds a runnable secrets example
      --dry-run                             print what would be written; nothing written to disk
 ```
 
@@ -423,6 +423,12 @@ dotnet run --project src/ConfigTransform.Cli -- init --template --dry-run
 
 # Same starter tree, plus one worked Hosts/Host-1/ layer under Client-A/Production
 dotnet run --project src/ConfigTransform.Cli -- init --template hosts
+
+# Same starter tree, plus a runnable secrets example: a {{CFSECRET_DEMO_API_KEY}} placeholder in each
+# Environment patch, demo.secret.env files (environment-level, and a Client-A/Production override),
+# and one whole-file secret via "replace". Every value is fake; the *.secret.* files are plaintext
+# until git-crypt covers them -- init prints how, and never writes .gitattributes itself.
+dotnet run --project src/ConfigTransform.Cli -- init --template secrets
 
 dotnet run --project src/ConfigTransform.Cli -- \
   --client Client-A --environment Production --host Host-1 \

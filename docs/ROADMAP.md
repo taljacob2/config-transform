@@ -717,19 +717,22 @@ everything the tool writes, never re-quote what an author wrote. Released as `0.
 `config-transform-pilot` is re-pinned to it (no output change there) and verified via run #37. See
 `docs/FIELD_AUTHORING_DESIGN.md`'s "Value typing".
 
+**`init --template secrets` (2026-10-02) — done, unreleased.** An opt-in starter-tree variant that
+demonstrates secrets end to end: a `{{CFSECRET_DEMO_API_KEY}}` placeholder in each Environment
+patch, environment-level `demo.secret.env` files with a Client-A/Production override, and one
+whole-file `replace`. Every value is fake; a notice says how to set up git-crypt, and `init` never
+writes `.gitattributes`. The `default` and `hosts` variants are byte-for-byte unchanged (checked
+against a build of the previous `main`). Designed first: `docs/INIT_COMMAND_DESIGN.md`'s "The
+`secrets` variant".
+
 ## Next up
 
-Two items below are actionable purely within this repo (the first two bullets); every other
+One item below is actionable purely within this repo (the first bullet); every other
 remaining item still either needs a solution repo that doesn't exist yet, or a decision only the
 repo owner can make. Not a "next slice" in the same sense as the ones before this section; pick
 from below (or something new) when ready, rather than assuming the next item in this list is the
 default next step.
 
-- **`init --template secrets`** (designed 2026-10-02 with the repo owner, not yet implemented) — an
-  opt-in starter-tree variant demonstrating secrets: an environment-level and a client-level
-  `*.secret.env`, a placeholder in each Environment patch, and one whole-file `replace`. Never in
-  the default template, and `init` never writes `.gitattributes`. Full design and tests to write:
-  `docs/INIT_COMMAND_DESIGN.md`'s "The `secrets` variant".
 - **Finish `set`** — XML's "update an existing element" case (including matching an existing
   item among repeated siblings, and now `Insert` for a genuinely brand-new element — all closed,
   see "Current state" above), JSON's single-key-path case and array-of-objects matching

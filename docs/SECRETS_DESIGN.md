@@ -412,8 +412,8 @@ Found after release (`0.24.1-alpha`):
 - **External secret stores** (Azure Key Vault, AWS Secrets Manager) as another source, behind the
   same resolution step. Not planned; environment variables already let CI fetch from one.
 - **`set` writing secrets** into `*.secret.env` files.
-- **A runnable example:** `init --template secrets` is designed (`docs/INIT_COMMAND_DESIGN.md`'s
-  "The `secrets` variant"), not yet implemented.
+- ~~**A runnable example**~~ — closed: `init --template secrets` (`docs/INIT_COMMAND_DESIGN.md`'s
+  "The `secrets` variant").
 
 ## Implementation plan
 

@@ -6,7 +6,7 @@ namespace ConfigTransform.Cli.Tests;
 
 /// <summary>
 /// End-to-end tests of the `init` verb (docs/INIT_COMMAND_DESIGN.md) through the unified
-/// <see cref="CliRunner.Run(string[],TextWriter,TextWriter,FormatEngineRegistry,string?,TextReader?,bool)"/>
+/// <see cref="CliRunner.Run"/>
 /// against the real production <see cref="FormatEngines.All"/> registry — quiet/flag-driven mode,
 /// the interactive form (via injected stdin, no real terminal needed), and <c>--template</c>.
 /// </summary>
@@ -438,5 +438,69 @@ public class InitCommandCliTests
         var fullPath = Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
         File.WriteAllText(fullPath, content);
+    }
+
+    [Fact]
+    public void Template_secrets_variant_is_immediately_runnable_for_every_client_and_environment()
+    {
+        using var workspace = new TempDirectory();
+        var initOut = new StringWriter();
+        Assert.Equal(0, CliRunner.Run(new[] { "init", "--template", "secrets" }, initOut, new StringWriter(), FormatEngines.All, workspace.Path));
+
+        Assert.Contains("git-crypt init", initOut.ToString());
+        Assert.Contains(".configtransform/**/*.secret.* filter=git-crypt", initOut.ToString());
+        Assert.False(File.Exists(Path.Combine(workspace.Path, ".gitattributes")));
+
+        // A real run -- which fails on any unresolved secret -- succeeds for every combination, and
+        // each picks up the value its chain should.
+        var expected = new Dictionary<(string Client, string Environment), string>
+        {
+            [("Client-A", "Production")] = "not-a-real-secret-client-a-production", // client-level override
+            [("Client-B", "Production")] = "not-a-real-secret-production",          // inherited from the environment
+            [("Client-A", "Test")] = "not-a-real-secret-test",
+            [("Client-B", "Test")] = "not-a-real-secret-test",
+        };
+        foreach (var ((client, environment), value) in expected)
+        {
+            var output = Path.Combine(workspace.Path, "out", $"{client}-{environment}");
+            var stderr = new StringWriter();
+            var exitCode = CliRunner.Run(new[] { "-c", client, "-e", environment, "-o", output },
+                new StringWriter(), stderr, FormatEngines.All, workspace.Path, environmentVariables: _ => null);
+
+            Assert.True(exitCode == 0, $"{client}/{environment}: {stderr}");
+            Assert.Contains($"\"apiKey\": \"{value}\"", File.ReadAllText(Path.Combine(output, InitTemplate.ResourcePath)));
+        }
+
+        Assert.Equal(
+            File.ReadAllBytes(Path.Combine(workspace.Path, ".configtransform/Clients/Client-A/Production/credentials.secret.json")),
+            File.ReadAllBytes(Path.Combine(workspace.Path, "out", "Client-A-Production", InitTemplate.CredentialsResourcePath)));
+    }
+
+    [Fact]
+    public void Template_secrets_variant_dry_run_prints_the_notice_and_writes_nothing()
+    {
+        using var workspace = new TempDirectory();
+        var stdout = new StringWriter();
+
+        var exitCode = CliRunner.Run(new[] { "init", "--template", "secrets", "--dry-run" }, stdout, new StringWriter(), FormatEngines.All, workspace.Path);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("Would write:", stdout.ToString());
+        Assert.Contains("git-crypt init", stdout.ToString());
+        Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.Path));
+    }
+
+    [Fact]
+    public void Template_secrets_variant_refuses_to_overwrite_a_differently_content_credentials_file()
+    {
+        using var workspace = new TempDirectory();
+        File.WriteAllText(Path.Combine(workspace.Path, InitTemplate.CredentialsResourcePath), "{ \"mine\": true }");
+        var stderr = new StringWriter();
+
+        var exitCode = CliRunner.Run(new[] { "init", "--template", "secrets" }, new StringWriter(), stderr, FormatEngines.All, workspace.Path);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("refusing to overwrite", stderr.ToString());
+        Assert.False(Directory.Exists(Path.Combine(workspace.Path, ".configtransform")));
     }
 }

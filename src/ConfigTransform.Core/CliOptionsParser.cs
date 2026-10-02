@@ -38,7 +38,7 @@ public static class CliOptionsParser
         null, null, null, null, null, DryRun: false, Diff: false, DiffLayers: false, List: false, Set: false,
         Help: true, [], [], Init: false, [], [], [], [], null, Yes: false, NoScan: false, Template: null);
 
-    private static readonly string[] TemplateVariants = ["default", "hosts"];
+    private static readonly string[] TemplateVariants = ["default", "hosts", "secrets"];
 
     // Every token the switch below recognizes as a flag (or the bare "help" verb it also
     // accepts) — used only to power the "did you mean" suggestion on an unrecognized argument,
@@ -219,7 +219,7 @@ public static class CliOptionsParser
                     initResources.Count > 0 || initHosts.Count > 0 || noScan || yes)
                     throw new ArgumentException("--template is mutually exclusive with every other 'init' flag.\nTry: configtransform init --template on its own, or drop --template to scaffold a custom tree.");
                 if (!TemplateVariants.Contains(template))
-                    throw new ArgumentException($"Unrecognized --template variant: '{template}'.\nTry: configtransform init --template (the default tree), or configtransform init --template hosts.");
+                    throw new ArgumentException($"Unrecognized --template variant: '{template}'.\nTry: configtransform init --template (the default tree), configtransform init --template hosts, or configtransform init --template secrets.");
             }
             else
             {

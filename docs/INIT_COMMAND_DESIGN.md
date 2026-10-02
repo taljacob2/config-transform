@@ -248,7 +248,7 @@ as the variant name; anything else defaults to `"default"`.
 
 ### The `secrets` variant (`init --template secrets`)
 
-**Status: designed 2026-10-02 with the repo owner, not yet implemented.**
+**Status: implemented (2026-10-02).** Designed with the repo owner first; built as designed.
 
 A runnable example of secrets (`docs/SECRETS_DESIGN.md`): `{{CFSECRET_NAME}}` placeholders filled
 from `*.secret.env` files, a client-level override of an environment-level secret, and one
@@ -468,8 +468,6 @@ rather than a one-shot, destructive bootstrap.
 
 ## Open items for implementation
 
-- **Implement `--template secrets`** — designed, not built (see "The `secrets` variant" under
-  "Template mode").
 - **Combining template variants** (e.g. `hosts` and `secrets` in one tree) — `--template` takes one
   variant today. Worth a list-valued `--template hosts,secrets` only if someone actually wants
   both; until then, run one variant and add the other's pieces by hand.

@@ -109,4 +109,37 @@ public class InitTemplateTests
         File.WriteAllText(file.FullPath, file.Content);
         return file.FullPath;
     }
+
+    [Fact]
+    public void The_default_and_hosts_variants_contain_no_secrets()
+    {
+        // Secrets are opt-in: only --template secrets writes *.secret.* files or placeholders.
+        using var root = new TempDirectory();
+
+        foreach (var files in new[] { InitTemplate.BuildPlan(root.Path), InitTemplate.BuildHostsPlan(root.Path) })
+        {
+            Assert.DoesNotContain(files, f => f.RepoRelativePath.Contains(".secret."));
+            Assert.DoesNotContain(files, f => f.Content.Contains("CFSECRET_"));
+        }
+    }
+
+    [Fact]
+    public void Secrets_variant_adds_secrets_files_placeholders_and_a_whole_file_secret_to_the_default_tree()
+    {
+        using var root = new TempDirectory();
+
+        var files = InitTemplate.BuildSecretsPlan(root.Path);
+        var byPath = files.ToDictionary(f => f.RepoRelativePath, f => f.Content);
+
+        // 13 default files + 2 environment secrets files + 1 client secrets file + the credentials base + its replace file
+        Assert.Equal(18, files.Count);
+        Assert.Equal(InitTemplate.BaseContent, byPath[InitTemplate.ResourcePath]); // the base file stays secret-free
+        Assert.Equal(InitTemplate.CredentialsBaseContent, byPath[InitTemplate.CredentialsResourcePath]);
+        Assert.Contains("\"apiKey\": \"{{CFSECRET_DEMO_API_KEY}}\"", byPath[".configtransform/Environments/Production/patch-configtransform-template.json"]);
+        Assert.Equal("CFSECRET_DEMO_API_KEY=not-a-real-secret-test\n", byPath[".configtransform/Environments/Test/demo.secret.env"]);
+        Assert.Equal("CFSECRET_DEMO_API_KEY=not-a-real-secret-client-a-production\n", byPath[".configtransform/Clients/Client-A/Production/demo.secret.env"]);
+        Assert.Contains("\"replace\": \".configtransform/Clients/Client-A/Production/credentials.secret.json\"",
+            byPath[".configtransform/Clients/Client-A/Production/configtransform.json"]);
+        Assert.DoesNotContain(files, f => f.RepoRelativePath.EndsWith(".gitattributes")); // encryption stays a deliberate step
+    }
 }

@@ -6,6 +6,18 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+### Added
+
+- **`init --template secrets`**: an opt-in starter-tree variant that demonstrates secrets
+  (`docs/SECRETS_DESIGN.md`) and runs on the first command — a `{{CFSECRET_DEMO_API_KEY}}`
+  placeholder in each Environment patch, environment-level `demo.secret.env` files with a
+  Client-A/Production override, and one whole-file secret via `replace`
+  (`configtransform-template-credentials.json`). Every value is obviously fake. Because the
+  `*.secret.*` files are plaintext until git-crypt covers them, `init` prints how to set that up —
+  and never writes `.gitattributes` itself, since a git-crypt rule on a machine without git-crypt
+  breaks `git add`. Never part of the default template. The `default` and `hosts` variants are
+  unchanged byte for byte. See `docs/INIT_COMMAND_DESIGN.md`'s "The `secrets` variant".
+
 ## [0.24.1-alpha] - 2026-10-02
 
 ### Fixed
