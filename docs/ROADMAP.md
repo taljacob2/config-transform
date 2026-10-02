@@ -731,7 +731,8 @@ JSON, resolved at merge time against the document as merged so far (`YamlElemMat
 ported from `JsonElemMatchResolver`). One deliberate difference, recorded in the design before
 any code: conditions compare by text, not type, since an unquoted YAML scalar's type depends on
 the reader. Fixture-backed (`DotNetCore/ElemMatch`, `GenericYaml/ElemMatch`, each with golden
-expected output); the pilot's output is unchanged. See `docs/FIELD_AUTHORING_DESIGN.md`'s "YAML
+expected output); the pilot's output is unchanged, and `config-transform-pilot` is re-pinned to
+`0.26.0-alpha` and verified via run #38. See `docs/FIELD_AUTHORING_DESIGN.md`'s "YAML
 array-of-objects matching".
 
 ## Next up
