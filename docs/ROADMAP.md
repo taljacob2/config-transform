@@ -717,7 +717,7 @@ everything the tool writes, never re-quote what an author wrote. Released as `0.
 `config-transform-pilot` is re-pinned to it (no output change there) and verified via run #37. See
 `docs/FIELD_AUTHORING_DESIGN.md`'s "Value typing".
 
-**`init --template secrets` (2026-10-02) — done, unreleased.** An opt-in starter-tree variant that
+**`init --template secrets` (2026-10-02) — done, released as `0.25.0-alpha`.** An opt-in starter-tree variant that
 demonstrates secrets end to end: a `{{CFSECRET_DEMO_API_KEY}}` placeholder in each Environment
 patch, environment-level `demo.secret.env` files with a Client-A/Production override, and one
 whole-file `replace`. Every value is fake; a notice says how to set up git-crypt, and `init` never

@@ -314,5 +314,5 @@ encryption (`.configtransform/**/*.secret.*`), and `config-transform-pilot` is m
 writes (the YAML "Norway problem"): `set` types a value as a number/boolean only if it reads back exactly
 as typed, and every YAML string the tool writes — via `set` or secret substitution — is
 double-quoted; the merge never re-quotes what an author wrote. `init --template secrets` (an
-opt-in, runnable secrets example — `docs/INIT_COMMAND_DESIGN.md`) is built, not yet tagged. Never let a secret value
+opt-in, runnable secrets example — `docs/INIT_COMMAND_DESIGN.md`) is released as `0.25.0-alpha`. Never let a secret value
 reach stdout, stderr or an exception message — two such leaks were found and fixed in stage 1.

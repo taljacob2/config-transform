@@ -6,6 +6,8 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.25.0-alpha] - 2026-10-02
+
 ### Added
 
 - **`init --template secrets`**: an opt-in starter-tree variant that demonstrates secrets
