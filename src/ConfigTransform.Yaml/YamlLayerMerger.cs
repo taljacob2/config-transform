@@ -57,8 +57,15 @@ public static class YamlLayerMerger
                 continue;
 
             var patch = Load(File.ReadAllText(patchPath), patchPath);
-            if (patch is not null)
-                document = MergeNode(document, patch, patchPath, "");
+            if (patch is null)
+                continue;
+
+            // $elemMatch patches resolve against the document as merged so far -- never the base
+            // alone (docs/FIELD_AUTHORING_DESIGN.md, "YAML array-of-objects matching").
+            if (YamlElemMatchResolver.ContainsElemMatch(patch))
+                patch = YamlElemMatchResolver.Rewrite(patch, document);
+
+            document = MergeNode(document, patch, patchPath, "");
         }
 
         return textLayout.Apply(Save(document, layout));
@@ -244,7 +251,7 @@ public static class YamlLayerMerger
     /// base never mutates a node shared through an alias, or a patch's own tree. Aliases come out
     /// as independent copies, which is how the old IConfiguration-based merge wrote them too.
     /// </summary>
-    private static YamlNode Clone(YamlNode node)
+    internal static YamlNode Clone(YamlNode node)
     {
         switch (node)
         {

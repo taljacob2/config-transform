@@ -1,0 +1,14 @@
+Rules:
+  - role: Admin
+    env: Production
+    enabled: true
+    label: "מנהל & co+"
+  - role: Viewer
+    env: Production
+    enabled: true
+  - role: Auditor
+    enabled: false
+    env: Production
+AllowedOrigins:
+  - https://prod.example.com
+  - https://b.example.com

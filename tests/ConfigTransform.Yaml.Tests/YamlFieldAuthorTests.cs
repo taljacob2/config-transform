@@ -115,15 +115,72 @@ public class YamlFieldAuthorTests
     }
 
     [Fact]
-    public void Element_match_shape_more_than_one_match_is_refused_as_not_yet_supported()
+    public void An_element_match_write_authors_an_elemMatch_patch_not_an_array_position()
+    {
+        var result = YamlFieldAuthor.Author(
+            RulesBase, existingTargetYaml: null, isBaseTarget: false,
+            matches: [Match("key", "Rules"), Match("role", "Admin")],
+            setFields: [Match("enabled", "true")]);
+
+        Assert.Equal("Rules:\n- $elemMatch:\n    role: \"Admin\"\n  enabled: true\n", result);
+    }
+
+    [Fact]
+    public void Re_running_with_the_same_conditions_updates_that_patch_and_different_conditions_append_one()
+    {
+        var first = YamlFieldAuthor.Author(RulesBase, null, false, [Match("key", "Rules"), Match("role", "Admin")], [Match("enabled", "true")]);
+        var again = YamlFieldAuthor.Author(RulesBase, first, false, [Match("key", "Rules"), Match("role", "Admin")], [Match("enabled", "false")]);
+        var second = YamlFieldAuthor.Author(RulesBase, again, false, [Match("key", "Rules"), Match("role", "Viewer")], [Match("enabled", "true")]);
+
+        Assert.Equal(
+            "Rules:\n- $elemMatch:\n    role: \"Admin\"\n  enabled: false\n- $elemMatch:\n    role: \"Viewer\"\n  enabled: true\n",
+            second);
+    }
+
+    [Fact]
+    public void A_base_target_element_match_write_edits_the_real_item_or_appends_one()
+    {
+        var updated = YamlFieldAuthor.Author(RulesBase, RulesBase, true, [Match("key", "Rules"), Match("role", "Admin")], [Match("enabled", "true")]);
+        var created = YamlFieldAuthor.Author(RulesBase, RulesBase, true, [Match("key", "Rules"), Match("role", "Auditor")], [Match("enabled", "true")]);
+
+        Assert.Equal("Rules:\n  - role: Admin\n    enabled: true\n  - role: Viewer\n    enabled: false\n", updated);
+        Assert.Equal("Rules:\n  - role: Admin\n    enabled: false\n  - role: Viewer\n    enabled: false\n  - role: \"Auditor\"\n    enabled: true\n", created);
+    }
+
+    [Fact]
+    public void An_ambiguous_match_is_refused_before_anything_is_written()
+    {
+        var twoAdmins = "Rules:\n- {role: Admin, env: Prod}\n- {role: Admin, env: Test}\n";
+
+        var ex = Assert.Throws<InvalidOperationException>(() => YamlFieldAuthor.Author(
+            twoAdmins, null, false, [Match("key", "Rules"), Match("role", "Admin")], [Match("enabled", "true")]));
+
+        Assert.Contains("More than one item", ex.Message);
+    }
+
+    [Fact]
+    public void An_overlay_key_holding_other_content_is_refused()
     {
         var ex = Assert.Throws<InvalidOperationException>(() => YamlFieldAuthor.Author(
-            DotNetCoreBase, existingTargetYaml: null, isBaseTarget: false,
-            matches: [new MatchSpec("key", "Rules", WasDefaulted: false), new MatchSpec("role", "Admin", WasDefaulted: false)],
-            setFields: [new MatchSpec("enabled", "true", WasDefaulted: false)]));
+            RulesBase, "Rules:\n- plain item\n", false, [Match("key", "Rules"), Match("role", "Admin")], [Match("enabled", "true")]));
 
-        Assert.Contains("not yet supported", ex.Message);
+        Assert.Contains("isn't an element-match patch list", ex.Message);
     }
+
+    [Fact]
+    public void An_element_match_condition_needs_an_explicit_field()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => YamlFieldAuthor.Author(
+            RulesBase, null, false,
+            [Match("key", "Rules"), new MatchSpec("key", "Admin", WasDefaulted: true)],
+            [Match("enabled", "true")]));
+
+        Assert.Contains("explicit field=value", ex.Message);
+    }
+
+    private const string RulesBase = "Rules:\n  - role: Admin\n    enabled: false\n  - role: Viewer\n    enabled: false\n";
+
+    private static MatchSpec Match(string attribute, string value) => new(attribute, value, WasDefaulted: false);
 
     [Fact]
     public void Bad_match_attribute_is_rejected()

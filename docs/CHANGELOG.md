@@ -6,6 +6,17 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+### Added
+
+- **YAML `set` matches or creates an item in an array of objects** — the last `set` gap. The same
+  command and `$elemMatch` overlay shape as JSON (`--match key=Rules --match role=Admin --set
+  enabled=true` writes a patch, never an array position), resolved at merge time against the
+  document as merged so far, with the same upsert, ambiguity and same-item rules
+  (`YamlElemMatchResolver`, ported from `JsonElemMatchResolver`). One deliberate difference:
+  conditions compare by text, not type — an unquoted YAML scalar's type depends on the reader, so
+  `enabled=true` matches both `enabled: true` and `enabled: "true"`. Values `set` writes follow
+  YAML's value-typing rule. See `docs/FIELD_AUTHORING_DESIGN.md`'s "YAML array-of-objects matching".
+
 ## [0.25.0-alpha] - 2026-10-02
 
 ### Added

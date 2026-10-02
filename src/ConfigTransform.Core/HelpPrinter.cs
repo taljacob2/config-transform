@@ -83,8 +83,9 @@ public static class HelpPrinter
             set — author an overlay field without hand-writing XDT or nested JSON
               easy:  configtransform set -r OrderProcessor.Framework/App.config -c Acme -e Production --match ApiUrl --set https://acme.example.com
               tldr:  configtransform set -r BillingApi.Core/appsettings.json -c Acme -e Production --match key=Rules --match role=Admin --match env=Production --set enabled=true
-                     (JSON array-of-objects: matches or creates the item identified by role+env,
-                     via $elemMatch — no array position is ever written; upserts if nothing matches)
+                     (an array of objects, JSON or YAML: matches or creates the item identified by
+                     role+env, via $elemMatch — no array position is ever written; upserts if nothing
+                     matches)
 
             init — scaffold .configtransform/Environments/ and .configtransform/Clients/ trees
               easy:  configtransform init --template

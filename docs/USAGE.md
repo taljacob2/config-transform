@@ -515,12 +515,12 @@ full reasoning behind each:
 - **YAML** (`.yaml`/`.yml` resources): covers a single key path (nested or top-level) — both
   updating an existing key and creating a brand-new one — the same model as JSON's own plain-field
   case, since YAML shares JSON's exact `:`-separated nesting and the same `key=`/`literal-key=`
-  disambiguation for a literal key that happens to contain a colon. **Matching an item inside an
-  array of objects is not implemented for YAML** — a `--match` with more than one coordinate
-  refuses with a clear "not yet supported" message rather than guessing, the same posture XML
-  takes for its own unimplemented array-of-objects matching; see
-  `docs/FIELD_AUTHORING_DESIGN.md`'s "JSON / YAML" section for why this is scoped out of YAML's
-  first version specifically.
+  disambiguation for a literal key that happens to contain a colon — **and matching or creating an
+  item inside an array of objects**, via the same `$elemMatch` overlay shape as JSON (written in
+  YAML syntax). One deliberate difference: YAML conditions compare by text, not type, so
+  `--match enabled=true` matches both `enabled: true` and `enabled: "true"` — an unquoted YAML
+  scalar's type depends on the reader. See `docs/FIELD_AUTHORING_DESIGN.md`'s "YAML array-of-objects
+  matching".
 - **Value typing (JSON and YAML):** a `--set` value is written as a number or boolean only when it
   reads back exactly as typed — `5432`, `-12`, `1.5`, `true`, `false`. Anything else is a string:
   `--set 02134` stays `"02134"`, `--set 1.10` stays `"1.10"`. In YAML, strings are always written
@@ -621,12 +621,16 @@ dotnet run --project src/ConfigTransform.Cli -- set \
   --client Acme --environment Production \
   --match key=Logging:LogLevel:Default --set value=Warning
 
-# YAML -- an array of objects: refused as not yet supported, rather than guessed at.
+# YAML -- an array of objects: matches (or creates) the item whose role is Admin, the same
+# $elemMatch mechanism as JSON. The overlay gets a patch, never an array position:
+#   Rules:
+#   - $elemMatch:
+#       role: "Admin"
+#     enabled: true
 dotnet run --project src/ConfigTransform.Cli -- set \
   --resource NotificationWorker/settings.yaml \
   --client Acme --environment Production \
   --match key=Rules --match role=Admin --set enabled=true
-# Error: matching an item inside a YAML array of objects is not yet supported...
 ```
 
 Zero matching fields fails rather than guessing: for XML, with a suggested

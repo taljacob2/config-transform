@@ -1,6 +1,6 @@
 # Field authoring (`set`) — design
 
-**Status: mostly implemented.** `ConfigTransform.Xml`'s `set` covers the "update an existing
+**Status: implemented for all four formats.** `ConfigTransform.Xml`'s `set` covers the "update an existing
 element" case in full (base file, Environment overlay, Client overlay; the bare `--match`/`--set`
 defaults with verification; the ambiguous/not-found/"did you mean" error paths; the
 auto-`--diff`). `ConfigTransform.Json`'s `set` covers a single key path — both updating an
@@ -22,8 +22,8 @@ objects matching — matching an *existing* item among repeated siblings — is 
 zero new production code (the existing element-matching machinery already handled it; see "Open
 items" below). XML's `Insert` case (a genuinely brand-new element) is also now closed, via a new
 reserved `parent=` `--match` coordinate (see "Reserved coordinate: `parent=`" above and "Open
-items" below). **Being implemented**: YAML's own array-of-objects matching, a port of JSON's
-`$elemMatch` (see "YAML array-of-objects matching" under "JSON / YAML"). This document otherwise still reflects the original completed
+items" below). YAML's own array-of-objects matching is closed too — a port of JSON's `$elemMatch` (see "YAML
+array-of-objects matching" under "JSON / YAML"). This document otherwise still reflects the original completed
 design from a product-brainstorming session; treat any specific claim about *current* behavior as
 superseded by `docs/CHANGELOG.md` where the two differ.
 
@@ -311,7 +311,7 @@ an array of objects was deferred, the same way JSON's own `$elemMatch` landed af
 
 #### YAML array-of-objects matching (`$elemMatch`)
 
-**Status: designed 2026-10-02, being implemented.** A port of JSON's `$elemMatch` above, with the
+**Status: implemented (2026-10-02).** Designed first, built as designed. A port of JSON's `$elemMatch` above, with the
 same command, the same overlay shape and the same resolution rules — `YamlElemMatchResolver`,
 ported from (not shared with) `JsonElemMatchResolver`, working on YamlDotNet's node tree (the
 representation model the YAML merge already uses):
@@ -565,8 +565,8 @@ No case needed a bespoke resolution; each was the same rule applied once more.
   XDT vocabulary `XmlLayerMerger.Merge` already hands straight to `XmlTransformation.Apply`.
   **Creating** a brand-new array item remains the `Insert` gap above — scoped separately, since
   it's the one that actually needs new code and a real design decision.
-- **YAML's own array-of-objects matching** — designed and being implemented: see "YAML
-  array-of-objects matching" under "JSON / YAML" above.
+- ~~**YAML's own array-of-objects matching**~~ — closed: see "YAML array-of-objects matching"
+  under "JSON / YAML" above.
 - `.env` and YAML support have both since shipped; their sections above now describe real,
   implemented behavior rather than a forward-looking design.
 - One deliberate deviation from the design above, decided during implementation: the verified

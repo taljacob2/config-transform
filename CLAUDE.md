@@ -221,11 +221,9 @@ via `NetEscapades.Configuration.Yaml`) — since replaced, for both formats, by 
 keeps order, types and quoting (see the output-fidelity note at the end of this section), sharing
 no code with `ConfigTransform.Json` per this repo's per-format independent-library convention. `set` covers
 the plain-field path only (update/create a key, same `:`-separated model as JSON's own
-plain-field case) — matching an item inside a YAML array of objects is **not** implemented,
-refused with a "not yet supported" message, the same posture XML's own unimplemented
-array-of-objects matching already takes; porting `JsonElemMatchResolver` to YAML is real,
-separable work, deliberately deferred (mirrors how JSON's own `$elemMatch` landed after JSON's
-first `set`). See `docs/CONFIG_MANAGEMENT.md` §5.6 for the full merge semantics and dependency
+plain-field case) in its first version; matching an item inside a YAML array of objects came
+later, a port of JSON's `$elemMatch` (`YamlElemMatchResolver`, conditions compared by text rather
+than type — see the end of this section). See `docs/CONFIG_MANAGEMENT.md` §5.6 for the full merge semantics and dependency
 reasoning. Merged as `taljacob2/config-transform#29` and versioned as `0.16.0-alpha`
 (`docs/CHANGELOG.md` section moved out of `[Unreleased]` in the same change, per
 `docs/RELEASING.md` step 1); re-pinning `config-transform-pilot` and adding a YAML-based pilot
@@ -290,8 +288,7 @@ engine). One real bug surfaced only by a manual smoke test against a real multi-
 the unit suite: the algorithm must read `ResolvedResource.PatchPathsInOrder` (the real, absolute
 patch paths), not `ChainStep.PatchPath` (the repo-relative path `--list` displays) — fixed before
 merging. Versioned as `0.22.0-alpha`. See `docs/ROADMAP.md`'s "Next up" for what's actionable now
-versus what needs either a solution repo that doesn't exist yet or an owner decision — YAML's own
-array-of-objects matching is the remaining `set` gap. An output-fidelity pass has since landed as
+versus what needs either a solution repo that doesn't exist yet or an owner decision. An output-fidelity pass has since landed as
 `0.23.0-alpha` (see `docs/ROADMAP.md`'s "Output-fidelity pass"): console output is now always UTF-8 (`Utf8Console`,
 in `ConfigTransform.Cli`) and JSON output keeps non-ASCII and `< > & ' +` literal instead of
 `\uXXXX` escapes (`JsonWriteOptions`), and diff colour follows a new `--color auto|always|never`
@@ -314,5 +311,7 @@ encryption (`.configtransform/**/*.secret.*`), and `config-transform-pilot` is m
 writes (the YAML "Norway problem"): `set` types a value as a number/boolean only if it reads back exactly
 as typed, and every YAML string the tool writes — via `set` or secret substitution — is
 double-quoted; the merge never re-quotes what an author wrote. `init --template secrets` (an
-opt-in, runnable secrets example — `docs/INIT_COMMAND_DESIGN.md`) is released as `0.25.0-alpha`. Never let a secret value
+opt-in, runnable secrets example — `docs/INIT_COMMAND_DESIGN.md`) is released as `0.25.0-alpha`.
+YAML `set` now matches or creates an item in an array of objects via `$elemMatch`
+(`YamlElemMatchResolver`), closing the last `set` gap across all four formats; not yet tagged. Never let a secret value
 reach stdout, stderr or an exception message — two such leaks were found and fixed in stage 1.

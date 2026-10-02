@@ -725,25 +725,23 @@ writes `.gitattributes`. The `default` and `hosts` variants are byte-for-byte un
 against a build of the previous `main`). Designed first: `docs/INIT_COMMAND_DESIGN.md`'s "The
 `secrets` variant".
 
+**YAML array-of-objects matching (2026-10-02) — done, unreleased.** The last `set` gap: YAML now
+matches or creates an item in an array of objects through the same `$elemMatch` overlay shape as
+JSON, resolved at merge time against the document as merged so far (`YamlElemMatchResolver`,
+ported from `JsonElemMatchResolver`). One deliberate difference, recorded in the design before
+any code: conditions compare by text, not type, since an unquoted YAML scalar's type depends on
+the reader. Fixture-backed (`DotNetCore/ElemMatch`, `GenericYaml/ElemMatch`, each with golden
+expected output); the pilot's output is unchanged. See `docs/FIELD_AUTHORING_DESIGN.md`'s "YAML
+array-of-objects matching".
+
 ## Next up
 
-One item below is actionable purely within this repo (the first bullet); every other
-remaining item still either needs a solution repo that doesn't exist yet, or a decision only the
-repo owner can make. Not a "next slice" in the same sense as the ones before this section; pick
+No planned feature work remains within this repo itself: every item below either needs a solution
+repo that doesn't exist yet, needs a decision only the repo owner can make, or is optional cleanup
+(the `MANIFEST_SCHEMA.md` rename). Not a "next slice" in the same sense as the ones before this section; pick
 from below (or something new) when ready, rather than assuming the next item in this list is the
 default next step.
 
-- **Finish `set`** — XML's "update an existing element" case (including matching an existing
-  item among repeated siblings, and now `Insert` for a genuinely brand-new element — all closed,
-  see "Current state" above), JSON's single-key-path case and array-of-objects matching
-  (`$elemMatch`), `.env`'s single case, and YAML's single-key-path case all shipped; one gap
-  remains, actionable now without a solution repo or an owner decision:
-  1. **YAML's array-of-objects matching** — deliberately deferred out of YAML's first `set`
-     version, mirroring how JSON's own `$elemMatch` landed in a later PR than JSON's first `set`.
-     `JsonElemMatchResolver`'s `DeepEquals`/`DeepClone`/index-preserving-rewrite logic is tightly
-     coupled to `System.Text.Json.Nodes` types; porting it to YAML's `Dictionary<string, object>`/
-     `List<object>` object graph is real, separable work, not a design blocker. See
-     `docs/FIELD_AUTHORING_DESIGN.md`'s "JSON / YAML" section and "Open items".
 - **`docs/MANIFEST_SCHEMA.md`'s filename vs. its content** — now describes the
   `configtransform.json` schema in full (the self-describing-overlays implementation above), but
   kept its old filename to avoid a large cross-reference rename across `docs/`. Worth revisiting
@@ -792,8 +790,8 @@ default next step.
      repeated siblings) and `Insert` (the client-only-field case named above, via
      `--match parent=`/`tag=`) are both implemented for `ConfigTransform.Xml`, and JSON's `set`
      covers update, create, and array-of-objects matching (`$elemMatch`) — see "Current state"
-     above for all three. Only YAML's own array-of-objects matching remains — see
-     `docs/FIELD_AUTHORING_DESIGN.md` and this section's first "Next up" bullet.
+     above for all three. YAML's own array-of-objects matching is built too (2026-10-02), so
+     every format's `set` now covers update, create and array-of-objects matching.
   2. Same validation gap that deferred `init`, more so: designing a UI's workflows now would be
      guessing at real usage patterns from one synthetic pilot, not real per-repo variation.
      `--diff`/`--dry-run` already cover "see the merged result easily" without either UI.

@@ -367,18 +367,14 @@ author wrote, since an unquoted `no` may be a boolean on purpose. Whatever the t
 itself is safe: `set` always quotes string values, and secret substitution quotes any plain scalar
 it changes (`docs/FIELD_AUTHORING_DESIGN.md`'s "Value typing").
 
-`set` (`YamlFieldAuthor`) covers the plain-field path only — updating an existing key or creating
-a new one via `--match key=<path>`/`--match literal-key=<path>` (`:`-separated nested paths, same
-model as JSON's own, including the same nested-path-vs-literal-key collision detection). Matching
-an item inside an array of objects (YAML's equivalent of JSON's `$elemMatch`,
-`docs/FIELD_AUTHORING_DESIGN.md`) is **not** implemented — a `--match` shape with more than one
-coordinate is refused with a clear "not yet supported" error rather than guessed at, the same
-posture this tool took for XML's array-of-objects matching and `Insert` before both were
-implemented. `JsonElemMatchResolver` is ~200 lines
-tightly coupled to `System.Text.Json.Nodes` types; porting it to YAML's own object-graph shape is
-real, separable work, deliberately deferred rather than bundled into YAML's first version — this
-repo's own precedent for JSON itself, where `$elemMatch` landed in a later PR than JSON's first
-`set`.
+`set` (`YamlFieldAuthor`) updates an existing key or creates a new one via `--match key=<path>`/
+`--match literal-key=<path>` (`:`-separated nested paths, same model as JSON's own, including the
+same nested-path-vs-literal-key collision detection), and matches or creates an item inside an
+array of objects via the same `$elemMatch` overlay shape as JSON (`YamlElemMatchResolver`, ported
+from `JsonElemMatchResolver`), resolved at merge time against the document as merged so far. YAML
+conditions compare by text, not type — an unquoted YAML scalar's type depends on the reader. The
+array-of-objects half landed after YAML's first `set`, the same way JSON's own `$elemMatch` did
+(`docs/FIELD_AUTHORING_DESIGN.md`, "YAML array-of-objects matching").
 
 ## 6. Transform tool CLI
 
