@@ -1,5 +1,7 @@
 using System.Collections;
 using ConfigTransform.Core;
+using YamlDotNet.Core.Events;
+using YamlDotNet.RepresentationModel;
 using YamlDotNet.Serialization;
 
 namespace ConfigTransform.Yaml;
@@ -21,17 +23,21 @@ namespace ConfigTransform.Yaml;
 /// work. See docs/FIELD_AUTHORING_DESIGN.md's "Open items" for the same posture XML's own
 /// `Insert`/array-matching gaps already have.
 ///
-/// Operates on the plain `IDictionary`/`IList` object graph YamlDotNet's default (untyped)
-/// deserialization produces -- verified empirically that a nested untyped YAML mapping
-/// deserializes as `Dictionary&lt;object, object&gt;`, not `Dictionary&lt;string, object&gt;`,
-/// even when the top-level target type requests the latter, so all navigation here goes through
-/// the non-generic `System.Collections.IDictionary`/`IList` interfaces both shapes satisfy,
-/// rather than assuming one concrete generic type throughout.
+/// Reading the <i>preceding</i> document (to resolve and verify the key path) uses the plain
+/// `IDictionary`/`IList` object graph YamlDotNet's default (untyped) deserialization produces --
+/// verified empirically that a nested untyped YAML mapping deserializes as
+/// `Dictionary&lt;object, object&gt;`, not `Dictionary&lt;string, object&gt;`, so navigation goes
+/// through the non-generic interfaces both shapes satisfy.
+///
+/// Writing the <i>target</i> file edits its node tree directly (YamlDotNet's representation model,
+/// the same one <see cref="YamlLayerMerger"/> uses): only the one value being set changes, and
+/// every other line keeps its own quoting, order and layout. Re-serializing the whole file — what
+/// this did before — re-quoted values it never touched. The new value is typed by
+/// <see cref="YamlCliValue"/>: strings are always double-quoted (the "Norway problem").
 /// </summary>
 public static class YamlFieldAuthor
 {
     private static readonly IDeserializer Deserializer = new DeserializerBuilder().Build();
-    private static readonly ISerializer Serializer = new SerializerBuilder().Build();
 
     /// <exception cref="InvalidOperationException">
     /// The first --match isn't "key"/"literal-key"; more than one --match was given (the
@@ -68,12 +74,17 @@ public static class YamlFieldAuthor
         var segments = ResolveSegments(preceding, locationMatch);
         RejectCaseOnlyMismatch(preceding, segments);
 
-        var target = existingTargetYaml is null ? new Dictionary<string, object?>() : ParseMap(existingTargetYaml);
+        var existingRoot = existingTargetYaml is null ? null : YamlLayerMerger.Load(existingTargetYaml, "the file being written");
+        if (existingRoot is not null and not YamlMappingNode)
+            throw new InvalidOperationException("The file being written isn't a YAML map at its top level, so there's no key path to set.");
+
+        var target = existingRoot as YamlMappingNode ?? new YamlMappingNode();
+        var layout = existingRoot is null ? (Indent: 2, IndentSequences: false) : YamlLayerMerger.DetectLayout(existingRoot);
         SetAtPath(target, segments, setFields[0].Value);
 
         // The file being rewritten keeps its own line endings and final newline (see TextLayout).
-        var layout = existingTargetYaml is null ? TextLayout.Default : TextLayout.Of(existingTargetYaml);
-        return layout.Apply(Serializer.Serialize(target));
+        var textLayout = existingTargetYaml is null ? TextLayout.Default : TextLayout.Of(existingTargetYaml);
+        return textLayout.Apply(YamlLayerMerger.Save(target, layout));
     }
 
     private static IDictionary ParseMap(string yaml) =>
@@ -180,18 +191,43 @@ public static class YamlFieldAuthor
         return results;
     }
 
-    private static void SetAtPath(IDictionary target, IReadOnlyList<string> segments, string value)
+    /// <summary>
+    /// Walks (creating as needed) the maps along <paramref name="segments"/> and sets the last key's
+    /// value — in place, so an existing key keeps its position and every other node its style.
+    /// </summary>
+    private static void SetAtPath(YamlMappingNode target, IReadOnlyList<string> segments, string value)
     {
         var current = target;
         for (var i = 0; i < segments.Count - 1; i++)
         {
-            if (current[segments[i]] is not IDictionary child)
+            var key = FindKey(current, segments[i]);
+            if (key is not null && current.Children[key] is YamlMappingNode child)
             {
-                child = new Dictionary<string, object?>();
-                current[segments[i]] = child;
+                current = child;
+                continue;
             }
-            current = child;
+
+            var created = new YamlMappingNode();
+            if (key is not null)
+                current.Children[key] = created;
+            else
+                current.Children.Add(new YamlScalarNode(segments[i]), created);
+            current = created;
         }
-        current[segments[^1]] = YamlLayerMerger.ToYamlValue(value);
+
+        // A map that was written as an empty flow map ({}) gets its keys in block style instead.
+        if (current.Children.Count == 0)
+            current.Style = MappingStyle.Block;
+
+        var leafKey = FindKey(current, segments[^1]);
+        var leafValue = YamlCliValue.From(value);
+        if (leafKey is not null)
+            current.Children[leafKey] = leafValue;
+        else
+            current.Children.Add(new YamlScalarNode(segments[^1]), leafValue);
     }
+
+    /// <summary>The existing key spelled exactly <paramref name="name"/>, or null — keys are case-sensitive (docs/TREE_MERGE_DESIGN.md).</summary>
+    private static YamlNode? FindKey(YamlMappingNode map, string name) =>
+        map.Children.Keys.FirstOrDefault(k => k is YamlScalarNode { Value: { } text } && text == name);
 }

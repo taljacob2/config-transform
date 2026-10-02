@@ -705,6 +705,17 @@ mangled. `config-transform-pilot` is migrated onto it — every connection strin
 secret, one Firebase file is a whole-file secret, and only `*.secret.*` is encrypted — and verified
 via real CI dispatches (runs #34–#36) with no secret value in any log.
 
+**Implicit typing in `set` and secret substitution (2026-10-02).** A question about YAML's "Norway
+problem" (YAML 1.1 reading an unquoted `NO` as `false`) led to checking every place the tool
+*writes* a value. The merge was already safe (it carries an author's text over exactly). `set`
+was not: anything that parsed as a number was written as one (`02134` → `2134`, `1.10` → `1.1`,
+in JSON and YAML), YAML `set` wrote strings unquoted (`NO`, `yes`, `null` misread), and YAML `set`
+re-serialized the whole target file. Secret substitution could produce an unquoted `NO` too. Fixed:
+a value is a number/boolean only if it reads back exactly as typed, YAML strings the tool writes
+are always double-quoted, and YAML `set` edits only the value it sets. Repo owner's call: quote
+everything the tool writes, never re-quote what an author wrote. See
+`docs/FIELD_AUTHORING_DESIGN.md`'s "Value typing".
+
 ## Next up
 
 One item below is actionable purely within this repo (the first bullet); every other

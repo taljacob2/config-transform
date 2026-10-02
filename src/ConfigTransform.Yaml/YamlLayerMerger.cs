@@ -316,27 +316,4 @@ public static class YamlLayerMerger
 
         return (indent is > 0 ? indent.Value : 2, indentSequences ?? false);
     }
-
-    /// <summary>
-    /// Type inference for a value typed on the command line, which arrives as plain text: used by
-    /// <see cref="YamlFieldAuthor"/> (`set`), so <c>--set true</c> writes a YAML boolean rather than
-    /// the string "true". Never applied to values read from a file -- those keep exactly what was
-    /// written.
-    /// </summary>
-    internal static object? ToYamlValue(string? value)
-    {
-        if (value is null)
-            return null;
-
-        if (bool.TryParse(value, out var boolValue))
-            return boolValue;
-
-        if (long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var longValue))
-            return longValue;
-
-        if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var doubleValue))
-            return doubleValue;
-
-        return value;
-    }
 }

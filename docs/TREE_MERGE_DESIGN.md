@@ -148,6 +148,10 @@ more. JSON uses `System.Text.Json.Nodes` and YAML uses YamlDotNet's representati
 
 ## Open items
 
-- **`set`'s rewrite of an existing YAML overlay file** still goes through YamlDotNet's high-level
-  `Serializer` (`YamlFieldAuthor`). Key order in the overlay file survives, but its quoting style
-  doesn't. That's a separate code path from merging, not touched here.
+- ~~**`set`'s rewrite of an existing YAML overlay file** re-serializes it, losing its quoting
+  style.~~ Closed: YAML `set` now edits the file's node tree in place, changing only the value it
+  sets (`docs/FIELD_AUTHORING_DESIGN.md`'s "Value typing").
+- **The merge carries an author's unquoted YAML scalars over as written**, including ones a YAML
+  1.1 reader misreads (`NO` as a boolean — the "Norway problem"). Deliberate: an unquoted `no` may
+  be a boolean on purpose, and quoting it would change its meaning. The tool's own writes are
+  always safe (`set` quotes strings; secret substitution quotes changed plain scalars).

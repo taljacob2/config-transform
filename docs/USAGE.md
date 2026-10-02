@@ -515,6 +515,12 @@ full reasoning behind each:
   takes for its own unimplemented array-of-objects matching; see
   `docs/FIELD_AUTHORING_DESIGN.md`'s "JSON / YAML" section for why this is scoped out of YAML's
   first version specifically.
+- **Value typing (JSON and YAML):** a `--set` value is written as a number or boolean only when it
+  reads back exactly as typed — `5432`, `-12`, `1.5`, `true`, `false`. Anything else is a string:
+  `--set 02134` stays `"02134"`, `--set 1.10` stays `"1.10"`. In YAML, strings are always written
+  double-quoted, so a YAML 1.1 reader can't misread `--set NO` as a boolean (the "Norway problem")
+  or `--set null` as null. YAML `set` changes only the value it sets; every other line of the file
+  stays exactly as it was. See `docs/FIELD_AUTHORING_DESIGN.md`'s "Value typing".
 
 ```bash
 # XML, appSettings — the simple case: one identity attribute, one value attribute.

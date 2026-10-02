@@ -1,4 +1,5 @@
 using ConfigTransform.Core;
+using YamlDotNet.Core;
 using YamlDotNet.RepresentationModel;
 
 namespace ConfigTransform.Yaml;
@@ -6,8 +7,9 @@ namespace ConfigTransform.Yaml;
 /// <summary>
 /// Secret substitution for YAML (docs/SECRETS_DESIGN.md): <c>{{CFSECRET_…}}</c> placeholders are
 /// replaced inside scalar <i>values</i> — map values and sequence items, never map keys — and the
-/// document is written back with the same layout <see cref="YamlLayerMerger"/> uses. Each scalar
-/// keeps its style; YamlDotNet's emitter quotes a plain scalar whose new value can't stay plain.
+/// document is written back with the same layout <see cref="YamlLayerMerger"/> uses. A quoted
+/// scalar keeps its quoting; a plain one that a substitution changed becomes double-quoted, since a
+/// value that held a placeholder is a string and must not be misread as a boolean or number.
 /// </summary>
 public static class YamlSecretSubstitution
 {
@@ -30,7 +32,15 @@ public static class YamlSecretSubstitution
         switch (node)
         {
             case YamlScalarNode scalar when scalar.Value is not null:
-                scalar.Value = SecretPlaceholders.Replace(scalar.Value, resolve);
+                var substituted = SecretPlaceholders.Replace(scalar.Value, resolve);
+                if (substituted == scalar.Value)
+                    break;
+                scalar.Value = substituted;
+                // A scalar that held a placeholder was a string by construction, so it must stay one.
+                // Left plain, `Code: N{{CFSECRET_X}}` with X=O would come out as `Code: NO` -- a
+                // boolean to YAML 1.1 readers (the "Norway problem"). Quoted, it can't be misread.
+                if (scalar.Style is ScalarStyle.Plain or ScalarStyle.Any)
+                    scalar.Style = ScalarStyle.DoubleQuoted;
                 break;
             case YamlSequenceNode sequence:
                 foreach (var item in sequence.Children)

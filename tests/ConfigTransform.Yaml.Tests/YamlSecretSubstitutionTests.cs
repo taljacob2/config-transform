@@ -34,4 +34,13 @@ public class YamlSecretSubstitutionTests
 
         Assert.Same(content, YamlSecretSubstitution.Substitute(content, Resolve));
     }
+
+    [Fact]
+    public void A_plain_scalar_a_substitution_changed_is_quoted_so_it_cannot_become_a_boolean()
+    {
+        // Unquoted, `Code: NO` is a boolean to YAML 1.1 readers -- the Norway problem.
+        var result = YamlSecretSubstitution.Substitute("Code: N{{CFSECRET_SUFFIX}}\nOther: plain\n", _ => "O");
+
+        Assert.Equal("Code: \"NO\"\nOther: plain\n", result);
+    }
 }

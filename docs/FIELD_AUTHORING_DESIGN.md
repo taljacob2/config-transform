@@ -320,6 +320,32 @@ is ~200 lines tightly coupled to `System.Text.Json.Nodes` types (`JsonNode`/`Jso
 deferred rather than bundled into YAML's first version. This repo's own precedent is the same:
 JSON's own `$elemMatch` landed in a later PR than JSON's first `set`.
 
+#### Value typing
+
+A value typed on the command line arrives as text, so `set` decides its JSON/YAML type
+(`JsonCliValue`, `YamlCliValue` — ported, not shared). **A value is a number or boolean only when
+writing it that way reads back exactly as typed:** `5432`, `-12`, `1.5`, `true`, `false`.
+Everything else is a string — `02134` (a zip code), `007`, `1.10` (a version), `1e3`, `+5`,
+`True`, `NO`. The first rule ("anything that parses as a number is one") wrote `--set 02134` as
+`2134` and `--set 1.10` as `1.1`, in both formats.
+
+**YAML strings are always written double-quoted.** YAML 1.1 parsers (PyYAML among them, which
+`config-transform-pilot`'s Python project uses) read a long tail of unquoted text as something
+else: `NO` as boolean false — "the Norway problem", after the country code — and `yes`/`on`/`y`,
+`~`/`null` as null, `0123` as octal, `1:20` as the base-60 number 80, `.inf`, `0x1F`, `1_000`.
+Quoting every string the tool writes is correct for every YAML 1.1 and 1.2 reader, with no list
+of risky forms to keep complete; the cost is style only (`Country: "NO"` rather than
+`Country: NO`). Before, `--set NO` wrote an unquoted `NO`, and `--set null` wrote a real null.
+
+YAML `set` also edits the target file's node tree in place (the representation model the merge
+uses), changing only the value being set. It used to re-serialize the whole file, which would
+have re-quoted every untouched value under the always-quote rule — and already discarded the
+file's existing quoting style.
+
+What `set` doesn't do: re-quote values it isn't setting, or anything the merge carries over. An
+unquoted `Enabled: no` in a file may be a YAML 1.1 boolean on purpose; quoting it would change
+its meaning, so the tool never second-guesses what an author wrote (`docs/TREE_MERGE_DESIGN.md`).
+
 ### `.env`
 
 Same shape as XML's simple case, because the shapes really are the same: a `.env` line

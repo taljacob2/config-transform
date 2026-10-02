@@ -51,7 +51,7 @@ public class YamlSetCommandCliTests
 
         var patchPath = Path.Combine(workspace.RootPath, ".configtransform", "Clients", "Globex", "Production", "patch-Project-settings.yaml");
         Assert.True(File.Exists(patchPath));
-        Assert.Contains("ApiUrl: https://globex.example.com", File.ReadAllText(patchPath));
+        Assert.Contains("ApiUrl: \"https://globex.example.com\"", File.ReadAllText(patchPath));
 
         Assert.Contains("dev.example.com", stdout.ToString());
         Assert.Contains("globex.example.com", stdout.ToString());
@@ -120,7 +120,7 @@ public class YamlSetCommandCliTests
         }, stdout, stderr, FormatEngines.All, workspace.RootPath);
 
         Assert.Equal(0, exitCode);
-        Assert.Contains("ApiUrl: https://everyone.example.com", File.ReadAllText(basePath));
+        Assert.Contains("ApiUrl: \"https://everyone.example.com\"", File.ReadAllText(basePath));
     }
 
     [Fact]

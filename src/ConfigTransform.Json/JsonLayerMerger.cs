@@ -170,27 +170,4 @@ public static class JsonLayerMerger
         indexed.Sort((a, b) => a.Index.CompareTo(b.Index));
         return indexed.Count > 0;
     }
-
-    /// <summary>
-    /// Type inference for a value typed on the command line, which arrives as plain text: used by
-    /// <see cref="JsonFieldAuthor"/> (`set`) and <see cref="JsonElemMatchResolver"/>'s condition
-    /// parsing, so <c>--set true</c> writes a JSON <c>true</c> and <c>--match enabled=true</c>
-    /// compares against one. Never applied to values read from a file -- those keep their own type.
-    /// </summary>
-    internal static JsonNode? ToJsonValue(string? value)
-    {
-        if (value is null)
-            return null;
-
-        if (bool.TryParse(value, out var boolValue))
-            return JsonValue.Create(boolValue);
-
-        if (long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var longValue))
-            return JsonValue.Create(longValue);
-
-        if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var doubleValue))
-            return JsonValue.Create(doubleValue);
-
-        return JsonValue.Create(value);
-    }
 }

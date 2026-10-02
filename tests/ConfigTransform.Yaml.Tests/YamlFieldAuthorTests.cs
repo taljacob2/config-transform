@@ -26,7 +26,7 @@ public class YamlFieldAuthorTests
             matches: [new MatchSpec("key", "ApiUrl", WasDefaulted: false)],
             setFields: [new MatchSpec("value", "https://new.example.com", WasDefaulted: false)]);
 
-        Assert.Contains("ApiUrl: https://new.example.com", result);
+        Assert.Contains("ApiUrl: \"https://new.example.com\"", result);
     }
 
     [Fact]
@@ -37,7 +37,7 @@ public class YamlFieldAuthorTests
             matches: [new MatchSpec("key", "Logging:LogLevel:Default", WasDefaulted: false)],
             setFields: [new MatchSpec("value", "Warning", WasDefaulted: false)]);
 
-        Assert.Contains("Default: Warning", result);
+        Assert.Contains("Default: \"Warning\"", result);
     }
 
     [Fact]
@@ -53,7 +53,7 @@ public class YamlFieldAuthorTests
     }
 
     [Fact]
-    public void Infers_bool_type_the_same_way_a_merge_would()
+    public void True_or_false_is_written_as_a_boolean()
     {
         var result = YamlFieldAuthor.Author(
             DotNetCoreBase, existingTargetYaml: null, isBaseTarget: false,
@@ -77,7 +77,7 @@ public class YamlFieldAuthorTests
             matches: [new MatchSpec("key", "ApiUrl", WasDefaulted: false)],
             setFields: [new MatchSpec("value", "https://v2.example.com", WasDefaulted: false)]);
 
-        Assert.Contains("ApiUrl: https://v2.example.com", second);
+        Assert.Contains("ApiUrl: \"https://v2.example.com\"", second);
         Assert.DoesNotContain("v1.example.com", second);
     }
 
@@ -159,10 +159,53 @@ public class YamlFieldAuthorTests
     public void Rewriting_an_existing_overlay_keeps_its_line_endings()
     {
         var result = YamlFieldAuthor.Author(
-            DotNetCoreBase, existingTargetYaml: "ApiUrl: https://old.example.com\r\n", isBaseTarget: false,
+            DotNetCoreBase, existingTargetYaml: "ApiUrl: \"https://old.example.com\"\r\n", isBaseTarget: false,
             matches: [new MatchSpec("key", "ApiUrl", WasDefaulted: false)],
             setFields: [new MatchSpec("value", "https://new.example.com", WasDefaulted: false)]);
 
-        Assert.Equal("ApiUrl: https://new.example.com\r\n", result);
+        Assert.Equal("ApiUrl: \"https://new.example.com\"\r\n", result);
+    }
+
+    [Theory]
+    [InlineData("NO", "\"NO\"")]          // the Norway problem: a boolean to YAML 1.1 readers if unquoted
+    [InlineData("yes", "\"yes\"")]
+    [InlineData("on", "\"on\"")]
+    [InlineData("y", "\"y\"")]
+    [InlineData("null", "\"null\"")]      // a real null even in YAML 1.2 if unquoted
+    [InlineData("~", "\"~\"")]
+    [InlineData("1:20", "\"1:20\"")]      // base-60 80 to YAML 1.1 readers
+    [InlineData("0123", "\"0123\"")]      // octal to YAML 1.1 readers -- and 123 under the old rule
+    [InlineData("02134", "\"02134\"")]    // a zip code -- was written as 2134
+    [InlineData("007", "\"007\"")]
+    [InlineData("1.10", "\"1.10\"")]      // a version -- was written as 1.1
+    [InlineData("1e3", "\"1e3\"")]        // was written as 1000
+    [InlineData("True", "\"True\"")]
+    [InlineData("5432", "5432")]            // reads back exactly as typed: a number
+    [InlineData("-12", "-12")]
+    [InlineData("1.5", "1.5")]
+    [InlineData("true", "true")]
+    [InlineData("false", "false")]
+    public void A_value_is_a_number_or_boolean_only_if_it_reads_back_exactly_otherwise_a_quoted_string(string value, string written)
+    {
+        var result = YamlFieldAuthor.Author(
+            DotNetCoreBase, existingTargetYaml: null, isBaseTarget: false,
+            matches: [new MatchSpec("key", "Value", WasDefaulted: false)],
+            setFields: [new MatchSpec("value", value, WasDefaulted: false)]);
+
+        Assert.Equal($"Value: {written}\n", result.Replace("\r\n", "\n"));
+    }
+
+    [Fact]
+    public void Setting_a_value_leaves_every_other_line_of_the_file_exactly_as_it_was()
+    {
+        // The old implementation re-serialized the whole file, re-quoting values it never touched.
+        var existing = "Zeta: 'single'\nApiUrl: \"https://old.example.com\"\nPlain: text\nList:\n  - a\n  - b\n";
+
+        var result = YamlFieldAuthor.Author(
+            DotNetCoreBase, existingTargetYaml: existing, isBaseTarget: false,
+            matches: [new MatchSpec("key", "ApiUrl", WasDefaulted: false)],
+            setFields: [new MatchSpec("value", "https://new.example.com", WasDefaulted: false)]);
+
+        Assert.Equal("Zeta: 'single'\nApiUrl: \"https://new.example.com\"\nPlain: text\nList:\n  - a\n  - b\n", result);
     }
 }

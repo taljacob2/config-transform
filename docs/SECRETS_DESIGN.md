@@ -391,6 +391,13 @@ Found while implementing stage 2:
     rather than reporting them as skipped — whether a resource is replaced is read from the layer
     files alone, before any engine is asked for.
 
+Found after release (`0.24.1-alpha`):
+
+23. **YAML: a plain scalar that substitution changed is written double-quoted.** A scalar that held
+    a placeholder is a string by construction, but left plain, `Code: N{{CFSECRET_SUFFIX}}` with
+    the value `O` came out as `Code: NO` — a boolean to YAML 1.1 readers (the "Norway problem").
+    Already-quoted scalars keep their quoting.
+
 ## Open items
 
 - **A keyless "check every combination" command** for CI — resolve every client/environment/host

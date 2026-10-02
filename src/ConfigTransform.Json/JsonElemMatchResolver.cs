@@ -244,5 +244,5 @@ public static class JsonElemMatchResolver
     }
 
     public static List<Condition> ToConditions(IReadOnlyList<MatchSpec> specs) =>
-        specs.Select(s => new Condition(s.Attribute, JsonLayerMerger.ToJsonValue(s.Value))).ToList();
+        specs.Select(s => new Condition(s.Attribute, JsonCliValue.From(s.Value))).ToList();
 }

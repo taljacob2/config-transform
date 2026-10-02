@@ -66,7 +66,7 @@ public class JsonFieldAuthorTests
     }
 
     [Fact]
-    public void Infers_bool_type_the_same_way_a_merge_would()
+    public void True_or_false_is_written_as_a_boolean()
     {
         var result = JsonFieldAuthor.Author(
             DotNetCoreBase, existingTargetJson: null, isBaseTarget: false,
@@ -410,5 +410,27 @@ public class JsonFieldAuthorTests
 
         Assert.DoesNotContain("\r", result);
         Assert.EndsWith("}\n", result);
+    }
+
+    [Theory]
+    [InlineData("02134", "\"02134\"")]    // a zip code -- was written as 2134
+    [InlineData("007", "\"007\"")]        // was written as 7
+    [InlineData("1.10", "\"1.10\"")]      // a version -- was written as 1.1
+    [InlineData("1e3", "\"1e3\"")]        // was written as 1000
+    [InlineData("+5", "\"+5\"")]
+    [InlineData("True", "\"True\"")]
+    [InlineData("NO", "\"NO\"")]
+    [InlineData("5432", "5432")]            // reads back exactly as typed: a number
+    [InlineData("-12", "-12")]
+    [InlineData("1.5", "1.5")]
+    [InlineData("true", "true")]
+    public void A_value_is_a_number_or_boolean_only_if_it_reads_back_exactly_as_typed(string value, string written)
+    {
+        var result = JsonFieldAuthor.Author(
+            DotNetCoreBase, existingTargetJson: null, isBaseTarget: false,
+            matches: [new MatchSpec("key", "Value", WasDefaulted: false)],
+            setFields: [new MatchSpec("value", value, WasDefaulted: false)]);
+
+        Assert.Contains($"\"Value\": {written}", result);
     }
 }

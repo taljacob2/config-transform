@@ -6,6 +6,22 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+### Fixed
+
+- **`set` no longer reformats numbers it was given as text, and YAML `set` always quotes strings.**
+  Prompted by a question about YAML's "Norway problem" (YAML 1.1 reading an unquoted `NO` as
+  boolean false); checking every write path found three real issues. `set` (JSON and YAML) treated
+  anything that *parses* as a number as one, so `--set 02134` wrote `2134`, `007` wrote `7`,
+  `1.10` wrote `1.1` and `1e3` wrote `1000`; now a value is a number or boolean only when it reads
+  back exactly as typed (`5432`, `1.5`, `true`), and anything else stays a string. YAML `set`
+  wrote strings unquoted, so `--set NO`/`yes`/`on` became booleans to YAML 1.1 readers and
+  `--set null`/`~` a real null; strings are now always double-quoted. And YAML `set` re-serialized
+  the whole target file, losing its quoting style; it now edits only the value it sets, leaving
+  every other line exactly as it was. Secret substitution had the same gap: a plain YAML scalar it
+  changed could come out as an unquoted `NO`; such scalars are now written double-quoted. The merge
+  itself is unchanged — it carries over exactly what an author wrote. See
+  `docs/FIELD_AUTHORING_DESIGN.md`'s "Value typing".
+
 ## [0.24.0-alpha] - 2026-10-01
 
 ### Added

@@ -155,7 +155,7 @@ public static class JsonFieldAuthor
 
         var item = (JsonObject)array[index]!;
         foreach (var field in setFields)
-            item[field.Attribute] = JsonLayerMerger.ToJsonValue(field.Value);
+            item[field.Attribute] = JsonCliValue.From(field.Value);
     }
 
     /// <summary>Overlay-target element-match write: authors/updates one entry in the
@@ -207,17 +207,17 @@ public static class JsonFieldAuthor
         if (existingPatch is not null)
         {
             foreach (var field in setFields)
-                existingPatch[field.Attribute] = JsonLayerMerger.ToJsonValue(field.Value);
+                existingPatch[field.Attribute] = JsonCliValue.From(field.Value);
             return;
         }
 
         var patch = new JsonObject();
         var elemMatch = new JsonObject();
         foreach (var condition in elementConditions)
-            elemMatch[condition.Attribute] = JsonLayerMerger.ToJsonValue(condition.Value);
+            elemMatch[condition.Attribute] = JsonCliValue.From(condition.Value);
         patch["$elemMatch"] = elemMatch;
         foreach (var field in setFields)
-            patch[field.Attribute] = JsonLayerMerger.ToJsonValue(field.Value);
+            patch[field.Attribute] = JsonCliValue.From(field.Value);
         patchList.Add(patch);
     }
 
@@ -227,7 +227,7 @@ public static class JsonFieldAuthor
             return false;
         return conditions.All(c =>
             elemMatch.TryGetPropertyValue(c.Attribute, out var value) &&
-            JsonNode.DeepEquals(value, JsonLayerMerger.ToJsonValue(c.Value)));
+            JsonNode.DeepEquals(value, JsonCliValue.From(c.Value)));
     }
 
     private static JsonObject ParseObject(string json, string description) =>
@@ -355,6 +355,6 @@ public static class JsonFieldAuthor
             }
             current = child;
         }
-        current[segments[^1]] = JsonLayerMerger.ToJsonValue(value);
+        current[segments[^1]] = JsonCliValue.From(value);
     }
 }

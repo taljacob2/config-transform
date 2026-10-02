@@ -311,5 +311,8 @@ under `secrets` (`SecretResolver`/`SecretsStep` in Core, one `*SecretSubstitutio
 `--reveal-secrets`, a strict layer loader, and whole-file secrets via a resource's `replace`
 (`ReplaceStep` in Core — byte copy, no engine). The git-crypt docs now recommend secrets-only
 encryption (`.configtransform/**/*.secret.*`), and `config-transform-pilot` is migrated onto it
-(verified via real CI dispatches). Never let a secret value
+(verified via real CI dispatches). A follow-up fixed implicit typing in what the tool writes
+(the YAML "Norway problem"): `set` types a value as a number/boolean only if it reads back exactly
+as typed, and every YAML string the tool writes — via `set` or secret substitution — is
+double-quoted; the merge never re-quotes what an author wrote. Never let a secret value
 reach stdout, stderr or an exception message — two such leaks were found and fixed in stage 1.

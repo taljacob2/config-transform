@@ -360,6 +360,13 @@ comments, anchors/aliases (expanded into copies), and per-level indentation widt
 more than one YAML document (`---`) is refused. Keys differing only by case within one file are
 allowed (YAML is case-sensitive); the original NetEscapades-based engine threw on them.
 
+**Quote string values in your YAML files.** YAML 1.1 parsers — still common, PyYAML among them —
+read some unquoted text as other types: `NO` as boolean false (the "Norway problem"), `yes`/`on`,
+`~`/`null` as null, `0123` as octal, `1:20` as the number 80. The merge never re-quotes what an
+author wrote, since an unquoted `no` may be a boolean on purpose. Whatever the tool *writes*
+itself is safe: `set` always quotes string values, and secret substitution quotes any plain scalar
+it changes (`docs/FIELD_AUTHORING_DESIGN.md`'s "Value typing").
+
 `set` (`YamlFieldAuthor`) covers the plain-field path only — updating an existing key or creating
 a new one via `--match key=<path>`/`--match literal-key=<path>` (`:`-separated nested paths, same
 model as JSON's own, including the same nested-path-vs-literal-key collision detection). Matching
