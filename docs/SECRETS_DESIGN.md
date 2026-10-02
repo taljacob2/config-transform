@@ -168,21 +168,66 @@ deployed file.
 
 **Previews (`--dry-run`, `--diff`, `--diff-layers`) do not substitute by default.** The output keeps
 `{{CFSECRET_ADMIN_DB_PASSWORD}}` as written — that's more useful than a `****` mask, because it says
-*which* secret goes there. The resolution report printed above the output gains a secrets section:
+*which* secret goes there. The resolution report printed above the output gains a secrets tree
+after the resource's chain — one entry per placeholder name in the merged result, each read the
+same way as the resource's chain:
 
 ```
-secrets
-  CFSECRET_ADMIN_DB_PASSWORD   resolved   .configtransform/Clients/Acme/Production/sql.secret.env
-  CFSECRET_MONGO_PASSWORD      MISSING    no secrets file in this chain defines it
-  CFSECRET_SMTP_PASSWORD       unknown    .configtransform/Environments/Production/mail.secret.env is locked (git-crypt: run git-crypt unlock)
+    secrets
+      CFSECRET_ADMIN_DB_PASSWORD   resolved
+        used in: .configtransform/Environments/Production/patch-Web-AdminPortal.Web-Web.config.xml
+        .configtransform/Environments/Production/configtransform.json
+          patched in: .configtransform/Environments/Production/sql.secret.env
+          ↓
+        .configtransform/Clients/Acme/Production/configtransform.json
+          patched in: .configtransform/Clients/Acme/Production/sql.secret.env
+          ↓
+        environment variable
+          not patched in
+
+      CFSECRET_MONGO_PASSWORD      MISSING
+        used in: .configtransform/Clients/Acme/Production/patch-Web-AdminPortal.Web-Web.config.xml
+        .configtransform/Environments/Production/configtransform.json
+          not patched in
+          ↓
+        .configtransform/Clients/Acme/Production/configtransform.json
+          not patched in
+          ↓
+        environment variable
+          not patched in
+
+      CFSECRET_SMTP_PASSWORD       resolved
+        used in: .configtransform/Environments/Production/patch-Web-AdminPortal.Web-Web.config.xml
+        .configtransform/Environments/Production/configtransform.json
+          patched in: .configtransform/Environments/Production/mail.secret.env
+          ↓
+        .configtransform/Clients/Acme/Production/configtransform.json
+          not patched in
+          ↓
+        environment variable
+          patched in: $CFSECRET_SMTP_PASSWORD
 ```
 
-- `resolved` names the file the value came from, or says `environment variable` when the override
-  supplied it. The value itself is never printed.
-- `MISSING` — every secrets file in the chain is readable and none defines this name.
-- `unknown` — at least one secrets file in the chain is still git-crypt-encrypted, so the tool
+- `used in:` is where the secret is *used*: every file of this resource's chain (its base file or
+  a patch) that writes the placeholder, one line each. A secret can be used with no value set
+  anywhere — that's `MISSING`.
+- Below it is where the value is *set*: every layer of the chain, outermost first, then the
+  environment variable as the last step, since it overrides every file. Each step says
+  `patched in: <secrets file>`, `not patched in`, or, for a git-crypt-encrypted file that might
+  set it, `unknown: <file> is locked (run git-crypt unlock)`. As in a resource's chain, the last
+  `patched in:` wins, and a layer that could have overridden the value but didn't is still shown.
+- The environment variable step is shown even when the variable isn't set, so in CI a misspelled
+  variable reads `not patched in`. `patched in: $NAME` names the variable, never its value; one
+  set but empty counts as unset and says so: `not patched in ($NAME is set but empty, which counts
+  as unset)`.
+- The state after each name is the verdict. `resolved` — a value is set. `MISSING` — every secrets
+  file in the chain is readable and nothing sets this name. `unknown` — a secrets file that could
+  set it (or override it) is still git-crypt-encrypted, and no later step settles it, so the tool
   can't tell. Detected by git-crypt's own header (NUL + `GITCRYPT` + NUL), which
   `LayerManifestLoader` already recognizes for `configtransform.json`.
+- No value is ever printed — only names, files and variable names.
+- The every-resource preview (no `--resource`) prints the same tree under each `=== <path> ===`.
+  A real run's error for unresolved secrets keeps a compact one line per name, on stderr.
 
 **`--reveal-secrets`** opts in to real values in previews: `--dry-run`, `--diff` and
 `--diff-layers` show substituted output, and replaced files in full. For a key holder debugging
@@ -199,8 +244,15 @@ secrets report says which file each value came from.
 
 **`set`'s automatic diff** after a write never substitutes. `set` has no `--reveal-secrets`.
 
-**`--list`** shows each layer's `secrets` files (paths only) next to its patches, with or without
-`--reveal-secrets`.
+**`--list`** ends a layer's listing with the same secrets tree, after every resource's chain,
+covering every placeholder any of its resources uses — once per secret, however many resources
+use it. `used in:` names each file that writes the placeholder. `--list` merges nothing, so it
+finds placeholders by scanning each resource's base file and patches: a placeholder that a later
+patch overwrites still shows here, though it wouldn't in that resource's own report. Replaced
+resources and resources no format engine handles are left out, since neither is ever
+substituted. The header's `secrets:` line lists only the target layer's own `secrets` field, the
+way `extends:` shows only its own `extends`. `--list` never prints a value, and `--list
+--reveal-secrets` is an error.
 
 **Summary — when a value can appear:**
 
@@ -397,6 +449,26 @@ Found after release (`0.24.1-alpha`):
     a placeholder is a string by construction, but left plain, `Code: N{{CFSECRET_SUFFIX}}` with
     the value `O` came out as `Code: NO` — a boolean to YAML 1.1 readers (the "Norway problem").
     Already-quoted scalars keep their quoting.
+
+From a real user's review of the pilot's output (`0.27.0-alpha`):
+
+24. **Each secret gets its own tree, not lines inside each resource's chain.** A secret belongs to
+    the whole chain, not to one file: one value can serve several resources, and only the last
+    layer that sets it wins. Rejected: `secrets from:` lines under each layer of the resource
+    chain — that repeats one secret under every resource that uses it, and a name nothing sets has
+    no layer to appear under. The old one-line summary (`NAME   resolved   <file>`) showed only
+    the winner, so an override was invisible.
+25. **The tree uses a resource chain's vocabulary**: every layer shown, `patched in:` / `not
+    patched in`, `↓` between steps. The environment variable is always the last step, even when
+    unset, so a misspelled CI variable shows up.
+26. **Where a secret is used (`used in:`) is shown apart from where its value is set.** They're
+    different questions, and a name used with no value anywhere is exactly the `MISSING` case.
+27. **`--list` scans files rather than merging.** The scan is exact for every placeholder a file
+    writes, and its one gap — a placeholder a later patch overwrites — lists too much rather than
+    too little. Merging would make `--list` fail whenever a merge does. Two `--list` bugs fixed
+    alongside: its header listed every secrets file in the chain under the target layer, as if
+    the target declared them (now only the target's own `secrets`), and `--reveal-secrets` was
+    silently accepted (now an error).
 
 ## Open items
 

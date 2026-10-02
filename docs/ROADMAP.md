@@ -735,6 +735,15 @@ expected output); the pilot's output is unchanged, and `config-transform-pilot` 
 `0.26.0-alpha` and verified via run #38. See `docs/FIELD_AUTHORING_DESIGN.md`'s "YAML
 array-of-objects matching".
 
+**Secrets tree in the report and `--list` (2026-10-02) — designed, implementation next.** From a
+real user's review of the pilot's output: the report's one-line-per-secret summary showed only
+the winning file, so an override was invisible, and `--list` showed no secrets per resource at
+all (its header listed the whole chain's secrets files under the target layer, as if it declared
+them). Each secret now gets its own tree after the chain — `used in:` (where the placeholder is
+written), then every layer and the environment variable as `patched in:` / `not patched in` steps
+— in both the report and `--list`. The chain's first step is also relabelled `resource` (was
+`base`). See `docs/SECRETS_DESIGN.md`'s "What each mode does" and decisions #24–#27.
+
 ## Next up
 
 No planned feature work remains within this repo itself: every item below either needs a solution

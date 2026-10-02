@@ -179,12 +179,13 @@ The tool does not attempt to detect or guess typos (e.g. a `configtransform.json
 misspelled `Environments/Prodution/` folder) — it isn't in a position to know intent, and
 shouldn't try. What it does instead: every single-resource run (`--dry-run`, `--diff`, and real
 runs alike) prints a `Resolving '<resource path>'` report before the merged content/diff, showing
-the resource's full chain in real application order — `base` first, then every layer
-outermost-first, each labeled `patched in: <path>` or `not patched in`, connected by `↓`, every
+the resource's full chain in real application order — the resource's own file first (labelled
+`resource`; `base` before `0.27.0-alpha`, renamed since "base" was a second name for the same
+file), then every layer outermost-first, each labeled `patched in: <path>` or `not patched in`, connected by `↓`, every
 path repo-relative and never abbreviated or omitted:
 ```
 Resolving 'ProjectA.Framework/App.config'
-    base
+    resource
       ProjectA.Framework/App.config
       ↓
     .configtransform/Environments/Production/configtransform.json
@@ -196,7 +197,10 @@ Resolving 'ProjectA.Framework/App.config'
 This keeps a typo visible to a human reading the output — because the layer they expected to
 patch the resource is reported as not doing so — without the tool trying to be clever about
 whether an absence was intentional. A blank line always separates this report from the merged
-content or diff that follows it, so the two are never visually run together.
+content or diff that follows it, so the two are never visually run together. When the
+resource uses secrets, a per-secret tree follows the chain — where each is used and where its
+value is set, in the same `patched in:` vocabulary (`docs/SECRETS_DESIGN.md`, "What each mode
+does").
 
 `--list` (given `--client`/`--environment`) prints this exact same chain rendering — same real
 patch paths, same `↓` connectors — once per resource the layer touches
