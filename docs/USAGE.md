@@ -158,14 +158,14 @@ Two modes:
 
 - **Given `--client`/`--environment`[/`--host`]** (client optional, environment required, host
   optional and requires both): shows that layer's own `extends` and every resource it touches, as
-  its full chain in real application order — `base` first, then every layer outermost-first, each
+  its full chain in real application order — the resource's own file first (labelled `resource`), then every layer outermost-first, each
   one either `patched in: <path>` or `not patched in`, connected by `↓`. This is the exact same
   rendering the single-resource resolution report (`--dry-run`/`--diff`/a real run, below) prints
   for one resource — `--list` just does it for every resource a layer touches, so the two never
   show the chain two different ways:
   ```
     OrderProcessor.Framework/App.config
-      base
+      resource
         OrderProcessor.Framework/App.config
         ↓
       .configtransform/Environments/Production/configtransform.json
@@ -312,14 +312,19 @@ CFSECRET_ADMIN_DB_PASSWORD=Pa55+w&rd
   quoted (`Password: "{{CFSECRET_DB}}"`) — unquoted, YAML reads `{{…}}` as a map, and the tool
   stops with an error saying so.
 - **Previews** (`--dry-run`, `--diff`, `--diff-layers`) keep placeholders as written, and the report
-  above the output says, per secret, `resolved` (and from which file, or `environment variable`),
-  `MISSING`, or `unknown` (a secrets file in the chain is still git-crypt encrypted). Values are
-  never printed unless you pass `--reveal-secrets`; even then, never in the report, `--list` or
-  `set`'s automatic diff. In a revealed diff, every side resolves with the whole chain's secrets.
+  above the output ends with a tree per secret, read like the resource's chain: its state —
+  `resolved`, `MISSING`, or `unknown` (a secrets file that could set it is still git-crypt
+  encrypted) — then `used in:`, the files that write its placeholder, then every layer and finally
+  the environment variable, each `patched in: <file>` or `not patched in`. The last `patched in:`
+  wins, so an override is visible where it happens. Values are never printed unless you pass
+  `--reveal-secrets`; even then, never in the report, `--list` or `set`'s automatic diff. In a
+  revealed diff, every side resolves with the whole chain's secrets.
 - **A real run** (`-o`) always substitutes. If any secret in any resource of the call is missing or
   locked, or a placeholder is left outside a value (a key, an XML comment), it fails and **writes
   nothing**.
-- **`--list`** shows the chain's secrets files (paths only).
+- **`--list`** ends with the same tree, once per secret any of the layer's resources uses (found by
+  scanning their base files and patches), and its header's `secrets:` lists only the target
+  layer's own secrets files. It never shows a value, so `--list --reveal-secrets` is an error.
 
 **Whole-file secrets** — a Firebase service-account JSON, a certificate — use a resource entry's
 `replace` instead of placeholders:
@@ -347,9 +352,29 @@ CFSECRET_ADMIN_DB_PASSWORD=Pa55+w&rd
 $ configtransform -r Web/AdminPortal.Web/Web.config -c Acme -e Production --dry-run
 Resolving 'Web/AdminPortal.Web/Web.config'
     ...chain...
+
     secrets
-      CFSECRET_ADMIN_DB_PASSWORD   resolved   .configtransform/Clients/Acme/Production/sql.secret.env
-      CFSECRET_SMTP_PASSWORD       MISSING    no secrets file in this chain defines it
+      CFSECRET_ADMIN_DB_PASSWORD   resolved
+        used in: .configtransform/Environments/Production/patch-Web-AdminPortal.Web-Web.config.xml
+        .configtransform/Environments/Production/configtransform.json
+          patched in: .configtransform/Environments/Production/sql.secret.env
+          ↓
+        .configtransform/Clients/Acme/Production/configtransform.json
+          patched in: .configtransform/Clients/Acme/Production/sql.secret.env
+          ↓
+        environment variable
+          not patched in
+
+      CFSECRET_SMTP_PASSWORD       MISSING
+        used in: .configtransform/Clients/Acme/Production/patch-Web-AdminPortal.Web-Web.config.xml
+        .configtransform/Environments/Production/configtransform.json
+          not patched in
+          ↓
+        .configtransform/Clients/Acme/Production/configtransform.json
+          not patched in
+          ↓
+        environment variable
+          not patched in
 ```
 
 Pin a tool version that supports `secrets` before using it: from this version on, a

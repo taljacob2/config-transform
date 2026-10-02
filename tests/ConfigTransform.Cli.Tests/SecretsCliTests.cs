@@ -86,8 +86,11 @@ public class SecretsCliTests
         public void Dispose() => _dir.Dispose();
     }
 
+    /// <summary>Expected output lines, joined the way StringWriter.WriteLine ends them.</summary>
+    private static string Lines(params string[] lines) => string.Join(Environment.NewLine, lines);
+
     [Fact]
-    public void A_dry_run_keeps_placeholders_and_reports_each_secrets_status_but_never_its_value()
+    public void A_dry_run_keeps_placeholders_and_shows_each_secrets_tree_after_the_chain_but_never_its_value()
     {
         using var workspace = new Workspace();
 
@@ -95,9 +98,120 @@ public class SecretsCliTests
 
         Assert.Equal(0, exitCode);
         Assert.Contains("Password={{CFSECRET_DB}}", stdout);
-        Assert.Contains("secrets", stdout);
-        Assert.Contains("CFSECRET_DB   resolved   .configtransform/Environments/Production/db.secret.env", stdout);
+        Assert.Contains(Lines(
+            "      patched in: .configtransform/Environments/Production/patch-Project-App.config.xml",
+            "",
+            "    secrets",
+            "      CFSECRET_DB   resolved",
+            "        used in: Project/App.config",
+            "        .configtransform/Environments/Production/configtransform.json",
+            "          patched in: .configtransform/Environments/Production/db.secret.env",
+            "          ↓",
+            "        environment variable",
+            "          not patched in",
+            "",
+            "<?xml"), stdout);
         Assert.DoesNotContain("Pa5", stdout);
+    }
+
+    [Fact]
+    public void The_tree_shows_every_layer_that_sets_a_value_and_the_last_one_wins()
+    {
+        using var workspace = new Workspace();
+        WriteClientLayer(workspace, secretsFile: "CFSECRET_DB=client-value");
+
+        var (_, preview, _) = workspace.Run(null, "-r", "Project/App.config", "-c", "Acme", "-e", "Production", "--dry-run");
+        var (exitCode, _, _) = workspace.Run(null, "-r", "Project/App.config", "-c", "Acme", "-e", "Production", "-o", workspace.Out("App.config"));
+
+        Assert.Contains(Lines(
+            "      CFSECRET_DB   resolved",
+            "        used in: Project/App.config",
+            "        .configtransform/Environments/Production/configtransform.json",
+            "          patched in: .configtransform/Environments/Production/db.secret.env",
+            "          ↓",
+            "        .configtransform/Clients/Acme/Production/configtransform.json",
+            "          patched in: .configtransform/Clients/Acme/Production/db.secret.env",
+            "          ↓",
+            "        environment variable",
+            "          not patched in"), preview);
+        Assert.DoesNotContain("client-value", preview);
+        Assert.Equal(0, exitCode);
+        Assert.Contains("Password=client-value", File.ReadAllText(workspace.Out("App.config")));
+    }
+
+    [Fact]
+    public void Used_in_names_the_patch_that_writes_a_placeholder_and_a_layer_that_sets_nothing_says_so()
+    {
+        using var workspace = new Workspace();
+        WriteClientLayer(workspace, secretsFile: null, appsettingsPatch: """{ "Extra": "{{CFSECRET_DB}}" }""");
+
+        var (_, stdout, _) = workspace.Run(null, "-r", "Project/appsettings.json", "-c", "Acme", "-e", "Production", "--dry-run");
+
+        Assert.Contains(Lines(
+            "    secrets",
+            "      CFSECRET_API   MISSING",
+            "        used in: Project/appsettings.json",
+            "        .configtransform/Environments/Production/configtransform.json",
+            "          not patched in",
+            "          ↓",
+            "        .configtransform/Clients/Acme/Production/configtransform.json",
+            "          not patched in",
+            "          ↓",
+            "        environment variable",
+            "          not patched in",
+            "",
+            "      CFSECRET_DB    resolved",
+            "        used in: .configtransform/Clients/Acme/Production/patch-Project-appsettings.json",
+            "        .configtransform/Environments/Production/configtransform.json",
+            "          patched in: .configtransform/Environments/Production/db.secret.env",
+            "          ↓",
+            "        .configtransform/Clients/Acme/Production/configtransform.json",
+            "          not patched in",
+            "          ↓",
+            "        environment variable",
+            "          not patched in"), stdout);
+    }
+
+    [Fact]
+    public void The_every_resource_preview_shows_the_tree_under_each_resource()
+    {
+        using var workspace = new Workspace();
+
+        var (exitCode, stdout, _) = workspace.Run(null, "-e", "Production", "--dry-run");
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains(Lines(
+            "=== Project/App.config ===",
+            "secrets",
+            "  CFSECRET_DB   resolved",
+            "    used in: Project/App.config",
+            "    .configtransform/Environments/Production/configtransform.json",
+            "      patched in: .configtransform/Environments/Production/db.secret.env",
+            "      ↓",
+            "    environment variable",
+            "      not patched in",
+            "",
+            "<?xml"), stdout);
+        Assert.DoesNotContain("Pa5", stdout);
+    }
+
+    /// <summary>
+    /// Adds .configtransform/Clients/Acme/Production, extending the Environment layer: with a
+    /// db.secret.env of <paramref name="secretsFile"/> when given, and a patch for
+    /// Project/appsettings.json when <paramref name="appsettingsPatch"/> is given.
+    /// </summary>
+    private static void WriteClientLayer(Workspace workspace, string? secretsFile, string? appsettingsPatch = null)
+    {
+        const string Dir = ".configtransform/Clients/Acme/Production";
+        if (secretsFile is not null)
+            workspace.Write($"{Dir}/db.secret.env", secretsFile);
+        if (appsettingsPatch is not null)
+            workspace.Write($"{Dir}/patch-Project-appsettings.json", appsettingsPatch);
+
+        var secrets = secretsFile is null ? "" : $"\"secrets\": [ \"{Dir}/db.secret.env\" ],";
+        var resources = appsettingsPatch is null ? "" : $"{{ \"path\": \"Project/appsettings.json\", \"patch\": \"{Dir}/patch-Project-appsettings.json\" }}";
+        workspace.Write($"{Dir}/configtransform.json",
+            $"{{ \"extends\": \".configtransform/Environments/Production/configtransform.json\", {secrets} \"resources\": [ {resources} ] }}");
     }
 
     [Fact]
@@ -108,7 +222,14 @@ public class SecretsCliTests
         var (exitCode, stdout, _) = workspace.Run(null, "-r", "Project/appsettings.json", "-e", "Production", "--dry-run");
 
         Assert.Equal(0, exitCode); // a preview with a missing secret is still a preview, not an error
-        Assert.Contains("CFSECRET_API   MISSING", stdout);
+        Assert.Contains(Lines(
+            "      CFSECRET_API   MISSING",
+            "        used in: Project/appsettings.json",
+            "        .configtransform/Environments/Production/configtransform.json",
+            "          not patched in",
+            "          ↓",
+            "        environment variable",
+            "          not patched in"), stdout);
     }
 
     [Fact]
@@ -176,8 +297,14 @@ public class SecretsCliTests
         var (_, preview, _) = workspace.Run(null, "-r", "Project/App.config", "-e", "Production", "--dry-run");
         var (exitCode, _, stderr) = workspace.Run(null, "-r", "Project/App.config", "-e", "Production", "-o", workspace.Out("App.config"));
 
-        Assert.Contains("CFSECRET_DB   unknown", preview);
-        Assert.Contains("git-crypt unlock", preview);
+        Assert.Contains(Lines(
+            "      CFSECRET_DB   unknown",
+            "        used in: Project/App.config",
+            "        .configtransform/Environments/Production/configtransform.json",
+            "          unknown: .configtransform/Environments/Production/db.secret.env is locked (run git-crypt unlock)",
+            "          ↓",
+            "        environment variable",
+            "          not patched in"), preview);
         Assert.Equal(1, exitCode);
         Assert.Contains("git-crypt unlock", stderr);
         Assert.False(File.Exists(Path.Combine(workspace.Root, "out", "App.config")));
@@ -192,7 +319,15 @@ public class SecretsCliTests
         var (_, preview, _) = workspace.Run(environment, "-r", "Project/appsettings.json", "-e", "Production", "--dry-run");
         var (exitCode, _, _) = workspace.Run(environment, "-r", "Project/appsettings.json", "-e", "Production", "-o", workspace.Out("appsettings.json"));
 
-        Assert.Contains("CFSECRET_API   resolved   environment variable", preview);
+        Assert.Contains(Lines(
+            "      CFSECRET_API   resolved",
+            "        used in: Project/appsettings.json",
+            "        .configtransform/Environments/Production/configtransform.json",
+            "          not patched in",
+            "          ↓",
+            "        environment variable",
+            "          patched in: $CFSECRET_API"), preview);
+        Assert.DoesNotContain("from-ci", preview);
         Assert.Equal(0, exitCode);
         Assert.Contains("from-ci", File.ReadAllText(Path.Combine(workspace.Root, "out", "appsettings.json")));
     }
@@ -211,15 +346,109 @@ public class SecretsCliTests
     }
 
     [Fact]
-    public void List_shows_the_chains_secrets_files_but_never_their_contents()
+    public void An_empty_environment_variable_is_shown_as_not_setting_the_value()
+    {
+        using var workspace = new Workspace();
+        var environment = new Dictionary<string, string> { ["CFSECRET_API"] = "" };
+
+        var (_, preview, _) = workspace.Run(environment, "-r", "Project/appsettings.json", "-e", "Production", "--dry-run");
+
+        Assert.Contains("      CFSECRET_API   MISSING", preview);
+        Assert.Contains("          not patched in ($CFSECRET_API is set but empty, which counts as unset)", preview);
+    }
+
+    [Fact]
+    public void List_ends_with_each_secrets_tree_after_every_resources_chain_but_never_a_value()
     {
         using var workspace = new Workspace();
 
         var (exitCode, stdout, _) = workspace.Run(null, "--list", "-e", "Production");
 
         Assert.Equal(0, exitCode);
-        Assert.Contains("  secrets:", stdout);
-        Assert.Contains(".configtransform/Environments/Production/db.secret.env", stdout);
+        // The Environment layer is the target and lists the file itself, so its header shows it.
+        Assert.Contains(Lines(
+            "  secrets:",
+            "    .configtransform/Environments/Production/db.secret.env"), stdout);
+        Assert.EndsWith(Lines(
+            "  secrets",
+            "    CFSECRET_DB    resolved",
+            "      used in: Project/App.config",
+            "      .configtransform/Environments/Production/configtransform.json",
+            "        patched in: .configtransform/Environments/Production/db.secret.env",
+            "        ↓",
+            "      environment variable",
+            "        not patched in",
+            "",
+            "    CFSECRET_API   MISSING",
+            "      used in: Project/appsettings.json",
+            "      .configtransform/Environments/Production/configtransform.json",
+            "        not patched in",
+            "        ↓",
+            "      environment variable",
+            "        not patched in",
+            ""), stdout);
         Assert.DoesNotContain("Pa5", stdout);
+    }
+
+    [Fact]
+    public void List_shows_a_secret_once_however_many_resources_use_it_and_only_the_targets_own_secrets_in_its_header()
+    {
+        using var workspace = new Workspace();
+        workspace.Write("Project/appsettings.json", """{ "ApiKey": "{{CFSECRET_DB}}" }""");
+        WriteClientLayer(workspace, secretsFile: null, appsettingsPatch: """{ "Mode": "client" }""");
+
+        var (exitCode, stdout, _) = workspace.Run(null, "--list", "-c", "Acme", "-e", "Production");
+
+        Assert.Equal(0, exitCode);
+        // The Client layer lists no secrets itself; the Environment layer's file shows in the tree,
+        // at the layer that lists it.
+        Assert.DoesNotContain("  secrets:", stdout);
+        Assert.Contains(Lines(
+            "    CFSECRET_DB   resolved",
+            "      used in: Project/App.config",
+            "      used in: Project/appsettings.json",
+            "      .configtransform/Environments/Production/configtransform.json",
+            "        patched in: .configtransform/Environments/Production/db.secret.env",
+            "        ↓",
+            "      .configtransform/Clients/Acme/Production/configtransform.json",
+            "        not patched in"), stdout);
+        Assert.Single(stdout.Split(Environment.NewLine), line => line.TrimStart().StartsWith("CFSECRET_DB", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void List_leaves_out_placeholders_in_resources_that_are_never_substituted()
+    {
+        // No engine handles .txt, so a placeholder there is never substituted -- not a secret in use.
+        using var workspace = new Workspace(defineApi: true);
+        workspace.Write("Project/notes.txt", "{{CFSECRET_NOTES}}");
+        workspace.Write(".configtransform/Environments/Production/configtransform.json", """
+            {
+              "secrets": [ ".configtransform/Environments/Production/db.secret.env" ],
+              "resources": [
+                { "path": "Project/App.config" },
+                { "path": "Project/notes.txt" }
+              ]
+            }
+            """);
+
+        var (exitCode, stdout, _) = workspace.Run(null, "--list", "-e", "Production");
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("  Project/notes.txt", stdout);
+        Assert.Contains("    CFSECRET_DB   resolved", stdout);
+        Assert.DoesNotContain("CFSECRET_NOTES", stdout);
+    }
+
+    [Fact]
+    public void List_with_reveal_secrets_is_an_error_since_list_never_shows_a_value()
+    {
+        using var workspace = new Workspace();
+
+        var (exitCode, stdout, stderr) = workspace.Run(null, "--list", "-e", "Production", "--reveal-secrets");
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("--reveal-secrets doesn't apply to --list", stderr);
+        Assert.Contains("Try:", stderr);
+        Assert.Empty(stdout);
     }
 }

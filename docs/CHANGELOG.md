@@ -6,6 +6,32 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.27.0-alpha] - 2026-10-02
+
+### Changed
+
+- **Each secret gets its own tree in the resolution report**, after the resource's chain and read
+  the same way: its state (`resolved` / `MISSING` / `unknown`), `used in:` (each file of the chain
+  that writes its placeholder), then every layer and finally the environment variable, each
+  `patched in: <file>` or `not patched in`. The old one line per secret showed only the winning
+  file, so an override was invisible. A locked git-crypt file shows at its own layer
+  (`unknown: <file> is locked`), and the environment-variable step is shown even when unset, so a
+  misspelled CI variable is visible — one set but empty says it counts as unset. Names, files and
+  variable names only, never a value. From a real user's review of the pilot's output; see
+  `docs/SECRETS_DESIGN.md`'s "What each mode does" and decisions #24–#27.
+- **`--list` ends with the same tree**, once per secret any of the layer's resources uses, found by
+  scanning their base files and patches. Replaced resources and resources no engine handles are
+  left out (neither is ever substituted).
+- **The chain's first step is labelled `resource`**, not `base`, in both the report and `--list`.
+
+### Fixed
+
+- **`--list`'s header listed every secrets file in the chain under the target layer**, as if the
+  target declared them. It now lists only the target layer's own `secrets`; the rest appear in
+  the secrets tree, at the layer that lists them.
+- **`--list --reveal-secrets` was silently accepted** and did nothing; it's now an error with a
+  `Try:` hint, since `--list` never shows a value.
+
 ## [0.26.0-alpha] - 2026-10-02
 
 ### Added

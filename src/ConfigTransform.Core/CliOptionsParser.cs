@@ -241,6 +241,8 @@ public static class CliOptionsParser
                 throw new ArgumentException("--client requires --environment with --list (there is no client-only layer).\nTry: add --environment <E>, e.g. --list --client Acme --environment Production.");
             if (host is not null && (client is null || environment is null))
                 throw new ArgumentException("--host requires --client and --environment with --list.\nTry: add --client <C> --environment <E>, e.g. --list --host <H> --client Acme --environment Production.");
+            if (revealSecrets)
+                throw new ArgumentException("--reveal-secrets doesn't apply to --list, which never shows a secret's value -- only where it's used and where its value is set.\nTry: drop --reveal-secrets, or use --dry-run --reveal-secrets to see real values.");
         }
         else
         {

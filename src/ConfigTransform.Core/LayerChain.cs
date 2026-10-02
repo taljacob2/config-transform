@@ -174,7 +174,7 @@ public static class LayerChain
     /// </summary>
     public static void PrintChain(TextWriter stdout, string resourcePath, ResolvedResource resolved, string indent = "    ")
     {
-        stdout.WriteLine($"{indent}base");
+        stdout.WriteLine($"{indent}resource");
         stdout.WriteLine($"{indent}  {resourcePath}");
         if (resolved.Steps.Count > 0)
             stdout.WriteLine($"{indent}  ↓");

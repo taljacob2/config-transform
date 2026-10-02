@@ -62,7 +62,8 @@ public static class CliRunner
                 if (options.Resource is not null)
                     LayerLister.ListReverseLookup(root, options.Resource, stdout);
                 else
-                    LayerLister.ListLayer(root, LayerPathResolver.Resolve(root, options.Client, options.Environment, options.Host)!, stdout);
+                    LayerLister.ListLayer(root, LayerPathResolver.Resolve(root, options.Client, options.Environment, options.Host)!, stdout,
+                        engines, environmentVariables ?? Environment.GetEnvironmentVariable);
                 return 0;
             }
 
@@ -104,7 +105,7 @@ public static class CliRunner
         var merged = engine.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
         PrintResolutionReport(stdout, options.Resource!, resolved);
-        SecretsStep.PrintReport(stdout, merged, secrets);
+        SecretsStep.PrintReport(stdout, root, resolved, merged, secrets, blankLineBefore: true);
 
         // Previews: placeholders as written, unless --reveal-secrets. In a revealed diff every side
         // resolves with the whole chain's secrets, so a diff never shows a placeholder turning into
@@ -293,7 +294,8 @@ public static class CliRunner
             var merged = engine.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
             stdout.WriteLine($"=== {resourcePath} ===");
-            SecretsStep.PrintReport(stdout, merged, secrets, indent: "");
+            if (SecretsStep.PrintReport(stdout, root, resolved, merged, secrets, indent: ""))
+                stdout.WriteLine();
 
             string Preview(string content) => SecretsStep.ForPreview(engine, content, secrets, options.RevealSecrets);
 

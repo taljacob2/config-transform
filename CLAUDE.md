@@ -314,5 +314,8 @@ double-quoted; the merge never re-quotes what an author wrote. `init --template 
 opt-in, runnable secrets example — `docs/INIT_COMMAND_DESIGN.md`) is released as `0.25.0-alpha`.
 YAML `set` now matches or creates an item in an array of objects via `$elemMatch`
 (`YamlElemMatchResolver`), closing the last `set` gap across all four formats; released as `0.26.0-alpha`, with
-`config-transform-pilot` re-pinned to it. Never let a secret value
+`config-transform-pilot` re-pinned to it. `0.27.0-alpha` gives each secret its own tree in the
+resolution report and `--list` — where its placeholder is used, then every layer and the
+environment variable as `patched in:` / `not patched in` — and relabels the chain's first step
+`resource` (was `base`). Never let a secret value
 reach stdout, stderr or an exception message — two such leaks were found and fixed in stage 1.

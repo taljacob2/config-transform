@@ -37,27 +37,27 @@ result of every layer before it.
 $ configtransform --client Acme --environment Production --host 10.0.1.11 --diff-layers --resource Web/AdminPortal.Web/Web.config
 
 Resolving 'Web/AdminPortal.Web/Web.config'
-    base
+    resource
       Web/AdminPortal.Web/Web.config
       ↓
-    Environments/Production/configtransform.json
+    .configtransform/Environments/Production/configtransform.json
       patched in: .configtransform/Environments/Production/patch-Web-AdminPortal.Web-Web.config.xml
       ↓
-    Clients/Acme/Production/configtransform.json
+    .configtransform/Clients/Acme/Production/configtransform.json
       patched in: .configtransform/Clients/Acme/Production/patch-Web-AdminPortal.Web-Web.config.xml
       ↓
-    Clients/Acme/Production/Hosts/10.0.1.11/configtransform.json
+    .configtransform/Clients/Acme/Production/Hosts/10.0.1.11/configtransform.json
       patched in: .configtransform/Clients/Acme/Production/Hosts/10.0.1.11/patch-Web-AdminPortal.Web-Web.config.xml
 
-[Environments/Production/configtransform.json]
+[.configtransform/Environments/Production/configtransform.json]
 -  <add key="Timeout" value="30" />
 +  <add key="Timeout" value="60" />
 
-[Clients/Acme/Production/configtransform.json overrides Environments/Production/configtransform.json]
+[.configtransform/Clients/Acme/Production/configtransform.json overrides .configtransform/Environments/Production/configtransform.json]
 -  <add key="Timeout" value="60" />
 +  <add key="Timeout" value="90" />
 
-[Clients/Acme/Production/Hosts/10.0.1.11/configtransform.json]
+[.configtransform/Clients/Acme/Production/Hosts/10.0.1.11/configtransform.json]
 -  <add key="CacheNode" value="redis-a" />
 +  <add key="CacheNode" value="redis-a.internal:6379" />
 ```
@@ -84,9 +84,9 @@ only the current layer, and each changed line whose prior owner differs from "th
 header already names" gets its own trailing `(overrides <label>)` note:
 
 ```
-[Clients/Acme/Production/Hosts/10.0.1.11/configtransform.json]
--  <add key="CacheNode" value="redis-a" />                    (overrides Clients/Acme/Production/configtransform.json)
--  <add key="Region" value="us-east" />                       (overrides Environments/Production/configtransform.json)
+[.configtransform/Clients/Acme/Production/Hosts/10.0.1.11/configtransform.json]
+-  <add key="CacheNode" value="redis-a" />                    (overrides .configtransform/Clients/Acme/Production/configtransform.json)
+-  <add key="Region" value="us-east" />                       (overrides .configtransform/Environments/Production/configtransform.json)
 +  <add key="CacheNode" value="redis-a.internal:6379" />
 +  <add key="Region" value="us-east-1" />
 ```

@@ -90,6 +90,32 @@ public class SecretResolverTests
     }
 
     [Fact]
+    public void Trace_gives_every_layers_say_on_a_name_and_the_variables_state_but_no_value()
+    {
+        using var dir = new TempDirectory();
+        var chain = Chain(dir,
+            ("Environments/Production", [("db.secret.env", "CFSECRET_DB=env")]),
+            ("Clients/Acme/Production", [("other.secret.env", "CFSECRET_OTHER=x")]),
+            ("Clients/Acme/Production/Hosts/H1", [("db.secret.env", null)])); // locked
+        var environment = new Dictionary<string, string> { ["CFSECRET_DB"] = "" };
+
+        var trace = SecretResolver.Build(dir.Path, chain, name => environment.GetValueOrDefault(name)).Trace("CFSECRET_DB");
+
+        Assert.Equal(
+            [
+                ".configtransform/Environments/Production/configtransform.json",
+                ".configtransform/Clients/Acme/Production/configtransform.json",
+                ".configtransform/Clients/Acme/Production/Hosts/H1/configtransform.json",
+            ],
+            trace.Layers.Select(step => step.Layer));
+        Assert.Equal([".configtransform/Environments/Production/db.secret.env", null, null], trace.Layers.Select(step => step.File));
+        Assert.Empty(trace.Layers[0].LockedFiles);
+        Assert.Equal([".configtransform/Clients/Acme/Production/Hosts/H1/db.secret.env"], trace.Layers[2].LockedFiles);
+        Assert.Equal(SecretVariableState.Empty, trace.Variable);
+        Assert.Equal(SecretVariableState.Unset, SecretResolver.Build(dir.Path, chain, NoEnvironment).Trace("CFSECRET_DB").Variable);
+    }
+
+    [Fact]
     public void The_same_name_in_two_files_of_one_layer_is_an_error()
     {
         using var dir = new TempDirectory();

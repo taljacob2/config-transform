@@ -58,7 +58,7 @@ public class CliRunnerTests
         var output = stdout.ToString();
 
         Assert.Contains($"Resolving '{resource}'", output);
-        Assert.Contains("base", output);
+        Assert.Contains("    resource", output);
 
         var environmentIndex = output.IndexOf("Environments/Production/configtransform.json", StringComparison.Ordinal);
         var clientIndex = output.IndexOf("Clients/ClientA/Production/configtransform.json", StringComparison.Ordinal);
@@ -517,7 +517,7 @@ public class CliRunnerTests
     }
 
     [Fact]
-    public void List_shows_the_chain_in_real_application_order_base_then_environment_then_client()
+    public void List_shows_the_chain_in_real_application_order_resource_then_environment_then_client()
     {
         using var workspace = new TempCliWorkspace();
 
@@ -533,7 +533,7 @@ public class CliRunnerTests
 
         // Skip past the layer-level "extends:" header line, which names the Environment layer
         // too -- the ordering under test is within a resource's own chain block, not the header.
-        var baseIndex = output.IndexOf("    base", StringComparison.Ordinal);
+        var baseIndex = output.IndexOf("    resource", StringComparison.Ordinal);
         var environmentIndex = output.IndexOf("Environments/Production/configtransform.json", baseIndex, StringComparison.Ordinal);
         var clientIndex = output.IndexOf("Clients/ClientA/Production/configtransform.json", baseIndex, StringComparison.Ordinal);
 
@@ -590,7 +590,7 @@ public class CliRunnerTests
         // text must join on that too, not a hardcoded '\n'.
         var expectedChain = string.Join(Environment.NewLine,
         [
-            "    base",
+            "    resource",
             $"      {workspace.XmlResourcePath}",
             "      ↓",
             "    .configtransform/Environments/Production/configtransform.json",
