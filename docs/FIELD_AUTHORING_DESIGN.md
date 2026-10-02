@@ -22,9 +22,8 @@ objects matching — matching an *existing* item among repeated siblings — is 
 zero new production code (the existing element-matching machinery already handled it; see "Open
 items" below). XML's `Insert` case (a genuinely brand-new element) is also now closed, via a new
 reserved `parent=` `--match` coordinate (see "Reserved coordinate: `parent=`" above and "Open
-items" below). **Not yet implemented**: YAML's own array-of-objects matching (see "Open items"
-below — JSON's version of the same gap, once a real, previously-undesigned problem found during
-implementation, is now closed, and so is XML's). This document otherwise still reflects the original completed
+items" below). **Being implemented**: YAML's own array-of-objects matching, a port of JSON's
+`$elemMatch` (see "YAML array-of-objects matching" under "JSON / YAML"). This document otherwise still reflects the original completed
 design from a product-brainstorming session; treat any specific claim about *current* behavior as
 superseded by `docs/CHANGELOG.md` where the two differ.
 
@@ -306,19 +305,55 @@ a second patch in the same overlay, progressive layering across Environment/Clie
 YAML is implemented (`YamlFieldAuthor`, `docs/CONFIG_MANAGEMENT.md` §5.6) and, as predicted here,
 needed no separate design: same tree-of-maps/lists/scalars data model as JSON, same `:`-separated
 nested-path grammar, same `key=`/`literal-key=` disambiguation for a literal key that happens to
-contain a colon. The one real difference from JSON's `set` is scope, not model: YAML's first
-version covers the plain-field path only (update an existing key, or create a new one) — matching
-an item inside an array of objects (the `$elemMatch` case above) is **not** ported for YAML.
-A `--match` shape with more than one coordinate is refused with a clear "not yet supported"
-error rather than guessed at, mirroring how XML's own `Insert` (creating a brand-new array item)
-is refused today — XML's *matching an existing* array item, by contrast, already works, the same
-way an ordinary XML element match does. This is a genuine, named scope gap, not an oversight:
-`JsonElemMatchResolver`
-is ~200 lines tightly coupled to `System.Text.Json.Nodes` types (`JsonNode`/`JsonObject`/
-`JsonArray`) — porting its `DeepEquals`/`DeepClone`/index-preserving-rewrite logic to YAML's own
-`Dictionary<string, object>`/`List<object>` object graph is real, separable work, deliberately
-deferred rather than bundled into YAML's first version. This repo's own precedent is the same:
-JSON's own `$elemMatch` landed in a later PR than JSON's first `set`.
+contain a colon. YAML's first version covered the plain-field path only; matching an item inside
+an array of objects was deferred, the same way JSON's own `$elemMatch` landed after JSON's first
+`set`.
+
+#### YAML array-of-objects matching (`$elemMatch`)
+
+**Status: designed 2026-10-02, being implemented.** A port of JSON's `$elemMatch` above, with the
+same command, the same overlay shape and the same resolution rules — `YamlElemMatchResolver`,
+ported from (not shared with) `JsonElemMatchResolver`, working on YamlDotNet's node tree (the
+representation model the YAML merge already uses):
+
+```bash
+configtransform set --resource services/api/config.yaml --client Acme --environment Production \
+  --match key=Rules --match role=Admin --set enabled=true
+```
+
+```yaml
+# what lands in the overlay -- never an array position
+Rules:
+  - $elemMatch:
+      role: "Admin"
+    enabled: true
+```
+
+The same as JSON, rule for rule: a patch list under the array's key, one patch per condition set;
+re-running with the same conditions updates that patch; no match is an upsert (the conditions
+become the new item's identity fields); more than one match is an error listing every candidate;
+resolution happens at real merge time against the document as merged so far (base for an
+Environment patch, base + Environment for a Client patch); a base-file write edits the real array
+directly, with no `$elemMatch` syntax; a key that already holds non-patch-list content in the
+overlay is refused.
+
+**Two deliberate differences from JSON:**
+
+1. **Conditions compare by text, not type.** JSON compares typed values: `--match enabled=true`
+   matches a JSON `true`, not the string `"true"`. YAML can't do that soundly — an unquoted
+   scalar's type depends on the reader (YAML 1.1 reads `yes` and `NO` as booleans, YAML 1.2
+   doesn't; see "Value typing" below), so the tool has no single type to compare against. A
+   condition matches a scalar whose text is exactly equal, whatever its quoting:
+   `--match enabled=true` matches both `enabled: true` and `enabled: "true"`. Nested maps and
+   sequences (possible in a hand-written `$elemMatch`) compare structurally, by the same rule.
+2. **Values `set` writes follow YAML's "Value typing" rule** — canonical numbers and
+   `true`/`false` plain, every other string double-quoted (`role: "Admin"` above) — the same rule
+   as YAML's plain-field `set`. Matching is unaffected, since it compares text.
+
+Merge-time resolution writes an existing array's resolved positions as an index-keyed map
+(`"1": {...}`), which `YamlLayerMerger` already merges item by item (`docs/TREE_MERGE_DESIGN.md`),
+and a brand-new array as a real sequence — the same two shapes JSON's `Rewrite` produces, for the
+same reasons.
 
 #### Value typing
 
@@ -472,7 +507,7 @@ No case needed a bespoke resolution; each was the same rule applied once more.
 | Single-segment JSON key vs. the nested/literal collision check | Skip the collision check entirely when the key has no `:` at all | Apply the same nested-vs-literal check uniformly to every key length | A colon-free key (e.g. `ApiUrl`) has only one possible reading — "nested" and "literal" are the same thing for it. Applying the check anyway made the single most common shape a JSON `set` will see (`--match ApiUrl`) always report as ambiguous, a real bug caught by manual smoke-testing, not a design choice. |
 | JSON array-of-objects overlay syntax (closing the row above) | `$elemMatch` — MongoDB's own operator name for "match an array element by field conditions" | Inventing a new name (e.g. `$match`); padding an overlay array with `{}` placeholders up to the target index; addressing the item by a plain numeric index in the overlay file | The user explicitly required that no array index ever be visible anywhere, including in the persisted overlay file — ruling out index-based and padding-based approaches outright. `$elemMatch` is a real, already-known convention (this project's own "prefer a known convention over inventing one" principle, same reasoning as `:` over `.` above) — closer in spirit to XDT's `Locator` than any index-shaped alternative. |
 | Canonical shape for the `$elemMatch` overlay: always a list of patches, even for one condition set | A list under the array's key (`{"Rules": [{"$elemMatch": {...}, ...}]}`), never a bare single object | A bare `{"$elemMatch": {...}, ...}` object for the single-condition-set case, promoted to a list only when a second patch is added | One shape to parse everywhere (set-authoring, merge-time rewrite, hand-editing) beats two; a bare-object shape has nowhere to put a second `set` call against the same array in the same overlay file (different conditions) without either colliding or silently changing shape between the first and second write. |
-| YAML `set` scope for its first version | Plain-field path only (update/create a key); array-of-objects matching refused with a named "not yet supported" error | Port `$elemMatch` to YAML in the same PR | `JsonElemMatchResolver` is tightly coupled to `System.Text.Json.Nodes` types; porting it to a `Dictionary<string, object>`/`List<object>` graph is real, separable work. Matches this repo's own precedent — JSON's own `$elemMatch` landed in a later PR than JSON's first `set` — and keeps YAML's first PR reviewable. |
+| YAML `set` scope for its first version (superseded 2026-10-02: array-of-objects matching ported — see "YAML array-of-objects matching") | Plain-field path only (update/create a key); array-of-objects matching refused with a named "not yet supported" error | Port `$elemMatch` to YAML in the same PR | `JsonElemMatchResolver` is tightly coupled to `System.Text.Json.Nodes` types; porting it to a `Dictionary<string, object>`/`List<object>` graph is real, separable work. Matches this repo's own precedent — JSON's own `$elemMatch` landed in a later PR than JSON's first `set` — and keeps YAML's first PR reviewable. |
 | YAML dependency shape (merge side superseded 2026-10-01: `YamlDotNet`'s representation model only, see docs/TREE_MERGE_DESIGN.md) | `NetEscapades.Configuration.Yaml` (read, via `AddYamlFile`) + `YamlDotNet` directly (write, via `ISerializer`) | A single library for both directions; a lower-level YamlDotNet node-tree API for writing | No single maintained library does both `Microsoft.Extensions.Configuration` integration and serialization; `YamlDotNet`'s high-level `SerializerBuilder` already makes sensible block/flow-style and quoting choices for a plain object graph, so there's no need to hand-manage YAML tags or emitter state the way the lower-level node-tree API would require. |
 | Where `$elemMatch` conditions resolve to a real position | At real merge time (`JsonLayerMerger.Merge`, via a new pre-processing pass), re-run on every merge, progressively per layer (Environment resolves against base; Client resolves against base+Environment-merged) | Resolve once, at `set`-authoring time only, and bake the resolved position into the overlay file | The "no index in the persisted file" requirement rules out baking anything in. A hand-written overlay (never touched by `set`) still needs to resolve correctly, and a later merge can see a different array shape than the one `set` saw when it wrote the file (e.g. another layer inserted an item first) — only a fresh, real merge-time resolution is correct in general. `set` still does the same resolution eagerly too, for immediate UX (ambiguous/not-found errors surface right away) — but that check is advisory, not authoritative. |
 | Rewritten-position representation inside `Merge`'s pre-processing pass | A `JsonObject` keyed by numeric-string index (`{"1": {...}}`), fed to `Microsoft.Extensions.Configuration` via `AddJsonStream` (since 2026-10-01: fed to the tree merge instead, and a real array when the target array doesn't exist yet — docs/TREE_MERGE_DESIGN.md) | A `JsonArray` literal with placeholder entries for skipped indices | A real array can't express "touch only index 1, leave 0 and 2+ alone" without placeholder nulls at the skipped positions, and those nulls would themselves flatten to real `IConfiguration` keys and clobber the base layer's actual values there — the same hazard `JsonLayerMerger`'s own doc comment already warns about for plain overlay arrays. A numeric-string object key has no such constraint, and empirically flattens to the identical `IConfiguration` path as a real array index (verified for both `AddJsonFile` and, since this design switches overlay layers to in-memory streams, `AddJsonStream` specifically — not just inferred from the file case). |
@@ -530,8 +565,8 @@ No case needed a bespoke resolution; each was the same rule applied once more.
   XDT vocabulary `XmlLayerMerger.Merge` already hands straight to `XmlTransformation.Apply`.
   **Creating** a brand-new array item remains the `Insert` gap above — scoped separately, since
   it's the one that actually needs new code and a real design decision.
-- **YAML's own array-of-objects matching is not implemented** — the same named, deferred gap as
-  XML's, described in the "JSON / YAML" section above alongside YAML's own plain-field `set`.
+- **YAML's own array-of-objects matching** — designed and being implemented: see "YAML
+  array-of-objects matching" under "JSON / YAML" above.
 - `.env` and YAML support have both since shipped; their sections above now describe real,
   implemented behavior rather than a forward-looking design.
 - One deliberate deviation from the design above, decided during implementation: the verified
