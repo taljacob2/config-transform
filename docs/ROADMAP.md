@@ -719,12 +719,17 @@ everything the tool writes, never re-quote what an author wrote. Released as `0.
 
 ## Next up
 
-One item below is actionable purely within this repo (the first bullet); every other
+Two items below are actionable purely within this repo (the first two bullets); every other
 remaining item still either needs a solution repo that doesn't exist yet, or a decision only the
 repo owner can make. Not a "next slice" in the same sense as the ones before this section; pick
 from below (or something new) when ready, rather than assuming the next item in this list is the
 default next step.
 
+- **`init --template secrets`** (designed 2026-10-02 with the repo owner, not yet implemented) — an
+  opt-in starter-tree variant demonstrating secrets: an environment-level and a client-level
+  `*.secret.env`, a placeholder in each Environment patch, and one whole-file `replace`. Never in
+  the default template, and `init` never writes `.gitattributes`. Full design and tests to write:
+  `docs/INIT_COMMAND_DESIGN.md`'s "The `secrets` variant".
 - **Finish `set`** — XML's "update an existing element" case (including matching an existing
   item among repeated siblings, and now `Insert` for a genuinely brand-new element — all closed,
   see "Current state" above), JSON's single-key-path case and array-of-objects matching
