@@ -744,7 +744,7 @@ written), then every layer and the environment variable as `patched in:` / `not 
 — in both the report and `--list`. The chain's first step is also relabelled `resource` (was
 `base`). `--list --reveal-secrets`, silently accepted before, is now an error. Checked against the
 pilot's real tree: three secrets, each shown once with its file and layer, and no value in the
-output. See `docs/SECRETS_DESIGN.md`'s "What each mode does" and decisions #24–#27.
+output. `config-transform-pilot` is re-pinned to `0.27.0-alpha` and verified via run #39. See `docs/SECRETS_DESIGN.md`'s "What each mode does" and decisions #24–#27.
 
 ## Next up
 

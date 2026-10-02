@@ -317,5 +317,5 @@ YAML `set` now matches or creates an item in an array of objects via `$elemMatch
 `config-transform-pilot` re-pinned to it. `0.27.0-alpha` gives each secret its own tree in the
 resolution report and `--list` — where its placeholder is used, then every layer and the
 environment variable as `patched in:` / `not patched in` — and relabels the chain's first step
-`resource` (was `base`). Never let a secret value
+`resource` (was `base`); `config-transform-pilot` is re-pinned to it. Never let a secret value
 reach stdout, stderr or an exception message — two such leaks were found and fixed in stage 1.
