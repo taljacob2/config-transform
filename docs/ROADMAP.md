@@ -725,7 +725,7 @@ writes `.gitattributes`. The `default` and `hosts` variants are byte-for-byte un
 against a build of the previous `main`). Designed first: `docs/INIT_COMMAND_DESIGN.md`'s "The
 `secrets` variant".
 
-**YAML array-of-objects matching (2026-10-02) — done, unreleased.** The last `set` gap: YAML now
+**YAML array-of-objects matching (2026-10-02) — done, released as `0.26.0-alpha`.** The last `set` gap: YAML now
 matches or creates an item in an array of objects through the same `$elemMatch` overlay shape as
 JSON, resolved at merge time against the document as merged so far (`YamlElemMatchResolver`,
 ported from `JsonElemMatchResolver`). One deliberate difference, recorded in the design before

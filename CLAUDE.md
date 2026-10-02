@@ -313,5 +313,5 @@ as typed, and every YAML string the tool writes — via `set` or secret substitu
 double-quoted; the merge never re-quotes what an author wrote. `init --template secrets` (an
 opt-in, runnable secrets example — `docs/INIT_COMMAND_DESIGN.md`) is released as `0.25.0-alpha`.
 YAML `set` now matches or creates an item in an array of objects via `$elemMatch`
-(`YamlElemMatchResolver`), closing the last `set` gap across all four formats; not yet tagged. Never let a secret value
+(`YamlElemMatchResolver`), closing the last `set` gap across all four formats; released as `0.26.0-alpha`. Never let a secret value
 reach stdout, stderr or an exception message — two such leaks were found and fixed in stage 1.
