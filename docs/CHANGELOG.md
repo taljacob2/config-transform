@@ -6,6 +6,8 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.24.1-alpha] - 2026-10-02
+
 ### Fixed
 
 - **`set` no longer reformats numbers it was given as text, and YAML `set` always quotes strings.**

@@ -713,7 +713,7 @@ in JSON and YAML), YAML `set` wrote strings unquoted (`NO`, `yes`, `null` misrea
 re-serialized the whole target file. Secret substitution could produce an unquoted `NO` too. Fixed:
 a value is a number/boolean only if it reads back exactly as typed, YAML strings the tool writes
 are always double-quoted, and YAML `set` edits only the value it sets. Repo owner's call: quote
-everything the tool writes, never re-quote what an author wrote. See
+everything the tool writes, never re-quote what an author wrote. Released as `0.24.1-alpha`. See
 `docs/FIELD_AUTHORING_DESIGN.md`'s "Value typing".
 
 ## Next up

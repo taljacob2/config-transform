@@ -305,14 +305,13 @@ only by case is an error (it would otherwise deploy a file .NET refuses to load)
 Then `0.23.1-alpha`: JSON/YAML output (and every file `set` rewrites) keeps the base or
 existing file's line endings and final newline (`TextLayout` in Core), as XML always did;
 `config-transform-pilot` is re-pinned to it and verified via a real CI dispatch. Secrets
-(`docs/SECRETS_DESIGN.md`) are being implemented in three stages; stages 1–2 are done and released
-as `0.24.0-alpha`: `{{CFSECRET_NAME}}` placeholders filled from encrypted `*.secret.env` files a layer lists
+(`docs/SECRETS_DESIGN.md`) are implemented — all three stages — and released as `0.24.0-alpha`: `{{CFSECRET_NAME}}` placeholders filled from encrypted `*.secret.env` files a layer lists
 under `secrets` (`SecretResolver`/`SecretsStep` in Core, one `*SecretSubstitution` per engine),
 `--reveal-secrets`, a strict layer loader, and whole-file secrets via a resource's `replace`
 (`ReplaceStep` in Core — byte copy, no engine). The git-crypt docs now recommend secrets-only
 encryption (`.configtransform/**/*.secret.*`), and `config-transform-pilot` is migrated onto it
-(verified via real CI dispatches). A follow-up fixed implicit typing in what the tool writes
-(the YAML "Norway problem"): `set` types a value as a number/boolean only if it reads back exactly
+(verified via real CI dispatches). A follow-up, `0.24.1-alpha`, fixed implicit typing in what the tool
+writes (the YAML "Norway problem"): `set` types a value as a number/boolean only if it reads back exactly
 as typed, and every YAML string the tool writes — via `set` or secret substitution — is
 double-quoted; the merge never re-quotes what an author wrote. Never let a secret value
 reach stdout, stderr or an exception message — two such leaks were found and fixed in stage 1.
