@@ -1,0 +1,18 @@
+{
+  "endpoints": {
+    "primary": {
+      "url": "https://clienta.example.com/api",
+      "timeoutSeconds": 60
+    }
+  },
+  "flags": {
+    "betaEnabled": true
+  },
+  "labels": {
+    "greeting": "héllo <world> & 'friends' +1",
+    "farewell": "להתראות & bye+"
+  },
+  "version": "2.10",
+  "retired": [],
+  "owner": null
+}

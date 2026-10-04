@@ -31,6 +31,18 @@ public class JsonFieldAuthorTests
     }
 
     [Fact]
+    public void Writes_non_ascii_and_html_sensitive_characters_literally_not_as_escapes()
+    {
+        var result = JsonFieldAuthor.Author(
+            DotNetCoreBase, existingTargetJson: null, isBaseTarget: false,
+            matches: [new MatchSpec("key", "ApiUrl", WasDefaulted: false)],
+            setFields: [new MatchSpec("value", "https://שלום.example.com/?a=1&b=2+3", WasDefaulted: false)]);
+
+        Assert.Contains("\"ApiUrl\": \"https://שלום.example.com/?a=1&b=2+3\"", result);
+        Assert.DoesNotContain(@"\u", result);
+    }
+
+    [Fact]
     public void Updates_an_existing_nested_key_via_colon_separated_path()
     {
         var result = JsonFieldAuthor.Author(
@@ -54,7 +66,7 @@ public class JsonFieldAuthorTests
     }
 
     [Fact]
-    public void Infers_bool_type_the_same_way_a_merge_would()
+    public void True_or_false_is_written_as_a_boolean()
     {
         var result = JsonFieldAuthor.Author(
             DotNetCoreBase, existingTargetJson: null, isBaseTarget: false,
@@ -348,5 +360,77 @@ public class JsonFieldAuthorTests
             setFields: [new MatchSpec("value", "premium", WasDefaulted: false)]);
 
         Assert.Contains("\"tier\": \"premium\"", result);
+    }
+
+    [Fact]
+    public void A_key_path_existing_only_with_different_casing_is_refused_with_the_real_spelling()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => JsonFieldAuthor.Author(
+            DotNetCoreBase, existingTargetJson: null, isBaseTarget: false,
+            matches: [new MatchSpec("key", "logging:LogLevel:Default", WasDefaulted: false)],
+            setFields: [new MatchSpec("value", "Warning", WasDefaulted: false)]));
+
+        Assert.Contains("\"Logging\" does", ex.Message);
+        Assert.Contains("Try: --match key=Logging:LogLevel:Default", ex.Message);
+    }
+
+    [Fact]
+    public void A_brand_new_key_with_no_case_variant_is_still_created()
+    {
+        var result = JsonFieldAuthor.Author(
+            DotNetCoreBase, existingTargetJson: null, isBaseTarget: false,
+            matches: [new MatchSpec("key", "Logging:Console:Enabled", WasDefaulted: false)],
+            setFields: [new MatchSpec("value", "true", WasDefaulted: false)]);
+
+        Assert.Contains("\"Console\"", result);
+    }
+
+    [Fact]
+    public void Rewriting_an_existing_file_keeps_its_line_endings_and_final_newline()
+    {
+        // A base-target write rewrites a committed source file -- it must not strip the final
+        // newline or flip LF to CRLF (which the platform default did on Windows).
+        var existing = "{\n  \"ApiUrl\": \"https://dev.example.com\"\n}\n";
+
+        var result = JsonFieldAuthor.Author(
+            existing, existingTargetJson: existing, isBaseTarget: true,
+            matches: [new MatchSpec("key", "ApiUrl", WasDefaulted: false)],
+            setFields: [new MatchSpec("value", "https://new.example.com", WasDefaulted: false)]);
+
+        Assert.Equal("{\n  \"ApiUrl\": \"https://new.example.com\"\n}\n", result);
+    }
+
+    [Fact]
+    public void A_brand_new_overlay_uses_lf_and_ends_with_a_newline()
+    {
+        var result = JsonFieldAuthor.Author(
+            DotNetCoreBase, existingTargetJson: null, isBaseTarget: false,
+            matches: [new MatchSpec("key", "ApiUrl", WasDefaulted: false)],
+            setFields: [new MatchSpec("value", "https://new.example.com", WasDefaulted: false)]);
+
+        Assert.DoesNotContain("\r", result);
+        Assert.EndsWith("}\n", result);
+    }
+
+    [Theory]
+    [InlineData("02134", "\"02134\"")]    // a zip code -- was written as 2134
+    [InlineData("007", "\"007\"")]        // was written as 7
+    [InlineData("1.10", "\"1.10\"")]      // a version -- was written as 1.1
+    [InlineData("1e3", "\"1e3\"")]        // was written as 1000
+    [InlineData("+5", "\"+5\"")]
+    [InlineData("True", "\"True\"")]
+    [InlineData("NO", "\"NO\"")]
+    [InlineData("5432", "5432")]            // reads back exactly as typed: a number
+    [InlineData("-12", "-12")]
+    [InlineData("1.5", "1.5")]
+    [InlineData("true", "true")]
+    public void A_value_is_a_number_or_boolean_only_if_it_reads_back_exactly_as_typed(string value, string written)
+    {
+        var result = JsonFieldAuthor.Author(
+            DotNetCoreBase, existingTargetJson: null, isBaseTarget: false,
+            matches: [new MatchSpec("key", "Value", WasDefaulted: false)],
+            setFields: [new MatchSpec("value", value, WasDefaulted: false)]);
+
+        Assert.Contains($"\"Value\": {written}", result);
     }
 }

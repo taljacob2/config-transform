@@ -34,7 +34,8 @@ public static class LayerDiffAttribution
     /// display (<see cref="LayerChain.PrintChain"/>), not a path <c>Merge</c> can open.
     /// </param>
     /// <param name="merge">The resource's format engine's own merge delegate (e.g. <c>XmlLayerMerger.Merge</c>).</param>
-    public static IReadOnlyList<LayerDiffSection> Compute(ResolvedResource resolved, LayerMerge merge)
+    /// <param name="color">Whether each hop's diff keeps ANSI colour — see <see cref="GitDiff.Render"/>.</param>
+    public static IReadOnlyList<LayerDiffSection> Compute(ResolvedResource resolved, LayerMerge merge, bool color = false)
     {
         var sections = new List<LayerDiffSection>();
         var appliedPatches = new List<string>();
@@ -57,7 +58,7 @@ public static class LayerDiffAttribution
             if (currentContent == previousContent)
                 continue; // a declared patch that happened to change nothing observable.
 
-            var rawDiff = GitDiff.Render(previousContent, currentContent);
+            var rawDiff = GitDiff.Render(previousContent, currentContent, color);
             var (annotated, newOwnerByLine) = Annotate(rawDiff, ownerByLine, step.Label);
 
             sections.Add(new LayerDiffSection(step.Label, annotated));
@@ -104,6 +105,10 @@ public static class LayerDiffAttribution
             // owner at all (genuinely new content), or more than one -- gets a plain header,
             // with per-line notes added below only in the "more than one" case (see docs/
             // DIFF_LAYERS_DESIGN.md "The overrides annotation" for both examples).
+            // A blank line before every hunk after the first, so a layer's second hunk is spaced
+            // the same as the next layer's section (CliRunner joins sections with one blank line).
+            if (output.Count > 0)
+                output.Add("");
             output.Add(removedOwners.Count == 1
                 ? $"[{currentLabel} overrides {removedOwners[0]}]"
                 : $"[{currentLabel}]");

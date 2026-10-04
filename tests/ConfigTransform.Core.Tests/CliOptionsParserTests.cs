@@ -711,4 +711,72 @@ public class CliOptionsParserTests
         Assert.False(options.Init);
         Assert.Equal("init", options.Resource);
     }
+
+
+    [Fact]
+    public void Color_defaults_to_auto()
+    {
+        var options = CliOptionsParser.Parse(["--environment", "Production", "--diff"]);
+
+        Assert.Equal(ColorMode.Auto, options.Color);
+    }
+
+    [Theory]
+    [InlineData("auto", ColorMode.Auto)]
+    [InlineData("always", ColorMode.Always)]
+    [InlineData("never", ColorMode.Never)]
+    public void Color_accepts_auto_always_and_never_spaced_or_with_an_equals_sign(string value, ColorMode expected)
+    {
+        var spaced = CliOptionsParser.Parse(["--environment", "Production", "--diff", "--color", value]);
+        var equals = CliOptionsParser.Parse(["--environment", "Production", "--diff", $"--color={value}"]);
+
+        Assert.Equal(expected, spaced.Color);
+        Assert.Equal(expected, equals.Color);
+    }
+
+    [Fact]
+    public void Color_is_accepted_with_set_whose_auto_diff_it_controls()
+    {
+        var options = CliOptionsParser.Parse(
+            ["set", "--resource", "Project/App.config", "--match", "ApiUrl", "--set", "x", "--color", "never"]);
+
+        Assert.Equal(ColorMode.Never, options.Color);
+    }
+
+    [Fact]
+    public void Color_rejects_an_unknown_value_and_lists_the_valid_ones()
+    {
+        var spaced = Assert.Throws<ArgumentException>(() =>
+            CliOptionsParser.Parse(["--environment", "Production", "--diff", "--color", "sometimes"]));
+        var equals = Assert.Throws<ArgumentException>(() =>
+            CliOptionsParser.Parse(["--environment", "Production", "--diff", "--color=sometimes"]));
+
+        foreach (var ex in new[] { spaced, equals })
+        {
+            Assert.Contains("'sometimes'", ex.Message);
+            Assert.Contains("--color always", ex.Message);
+        }
+    }
+
+    [Fact]
+    public void Color_missing_its_value_throws()
+    {
+        var ex = Assert.Throws<ArgumentException>(() =>
+            CliOptionsParser.Parse(["--environment", "Production", "--diff", "--color"]));
+
+        Assert.Contains("--color requires a value", ex.Message);
+    }
+
+    [Fact]
+    public void Reveal_secrets_is_off_unless_given()
+    {
+        Assert.False(CliOptionsParser.Parse(["--environment", "Production", "--dry-run"]).RevealSecrets);
+        Assert.True(CliOptionsParser.Parse(["--environment", "Production", "--dry-run", "--reveal-secrets"]).RevealSecrets);
+    }
+
+    [Fact]
+    public void Template_accepts_the_secrets_variant()
+    {
+        Assert.Equal("secrets", CliOptionsParser.Parse(["init", "--template", "secrets"]).Template);
+    }
 }

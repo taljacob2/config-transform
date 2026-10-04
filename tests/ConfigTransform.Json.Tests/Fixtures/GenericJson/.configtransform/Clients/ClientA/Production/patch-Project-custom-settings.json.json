@@ -4,5 +4,8 @@
   },
   "flags": {
     "betaEnabled": true
+  },
+  "labels": {
+    "farewell": "להתראות & bye+"
   }
 }

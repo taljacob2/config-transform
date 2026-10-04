@@ -1,0 +1,12 @@
+endpoints:
+  primary:
+    url: https://clienta.example.com/api
+    timeoutSeconds: 60
+flags:
+  betaEnabled: true
+  newFlag: false
+version: "2.10"
+notes: |
+  first line
+  second line
+owner: ~

@@ -9,6 +9,9 @@ namespace ConfigTransform.Core;
 /// it's optional for a resolve/dry-run/diff/real-run (omitting it means "every resource this layer
 /// touches") and for --list (omitting it lists the whole target layer instead of a reverse
 /// lookup), but always required for 'set', which can only ever target one resource at a time.
+/// --color auto|always|never (also accepted as --color=&lt;mode&gt;, git's own spelling) controls
+/// ANSI colour in diff output and is valid in every mode, since it's purely presentational — it
+/// changes nothing when the mode prints no diff.
 /// --host/-H is a further optional third axis (docs/HOST_LAYER_DESIGN.md) — always requires both
 /// --client and --environment, the same "requires the level above it" rule --client already
 /// follows for --environment, and is never valid with --list --resource's reverse lookup.
@@ -35,7 +38,7 @@ public static class CliOptionsParser
         null, null, null, null, null, DryRun: false, Diff: false, DiffLayers: false, List: false, Set: false,
         Help: true, [], [], Init: false, [], [], [], [], null, Yes: false, NoScan: false, Template: null);
 
-    private static readonly string[] TemplateVariants = ["default", "hosts"];
+    private static readonly string[] TemplateVariants = ["default", "hosts", "secrets"];
 
     // Every token the switch below recognizes as a flag (or the bare "help" verb it also
     // accepts) — used only to power the "did you mean" suggestion on an unrecognized argument,
@@ -45,8 +48,10 @@ public static class CliOptionsParser
     [
         "--help", "-h", "help", "--resource", "-r", "--client", "-c", "--environment", "-e",
         "--host", "-H", "--output", "-o", "--dry-run", "--diff", "--diff-layers", "--list", "--match", "--set",
-        "--scan-root", "--yes", "--no-scan", "--template"
+        "--scan-root", "--yes", "--no-scan", "--template", "--color", "--reveal-secrets"
     ];
+
+    private const string ColorFlagPrefix = "--color=";
 
     private const int MaxSuggestionDistance = 2;
 
@@ -78,6 +83,8 @@ public static class CliOptionsParser
         var yes = false;
         var noScan = false;
         string? template = null;
+        var color = ColorMode.Auto;
+        var revealSecrets = false;
 
         for (var i = 0; i < rest.Length; i++)
         {
@@ -157,6 +164,15 @@ public static class CliOptionsParser
                         ? rest[++i]
                         : "default";
                     break;
+                case "--color":
+                    color = ParseColorMode(RequireValue(rest, ref i, rest[i]));
+                    break;
+                case "--reveal-secrets":
+                    revealSecrets = true;
+                    break;
+                case var arg when arg.StartsWith(ColorFlagPrefix, StringComparison.Ordinal):
+                    color = ParseColorMode(arg[ColorFlagPrefix.Length..]);
+                    break;
                 default:
                     var suggestion = FindClosestFlag(rest[i]);
                     throw new ArgumentException(suggestion is null
@@ -203,7 +219,7 @@ public static class CliOptionsParser
                     initResources.Count > 0 || initHosts.Count > 0 || noScan || yes)
                     throw new ArgumentException("--template is mutually exclusive with every other 'init' flag.\nTry: configtransform init --template on its own, or drop --template to scaffold a custom tree.");
                 if (!TemplateVariants.Contains(template))
-                    throw new ArgumentException($"Unrecognized --template variant: '{template}'.\nTry: configtransform init --template (the default tree), or configtransform init --template hosts.");
+                    throw new ArgumentException($"Unrecognized --template variant: '{template}'.\nTry: configtransform init --template (the default tree), configtransform init --template hosts, or configtransform init --template secrets.");
             }
             else
             {
@@ -225,6 +241,8 @@ public static class CliOptionsParser
                 throw new ArgumentException("--client requires --environment with --list (there is no client-only layer).\nTry: add --environment <E>, e.g. --list --client Acme --environment Production.");
             if (host is not null && (client is null || environment is null))
                 throw new ArgumentException("--host requires --client and --environment with --list.\nTry: add --client <C> --environment <E>, e.g. --list --host <H> --client Acme --environment Production.");
+            if (revealSecrets)
+                throw new ArgumentException("--reveal-secrets doesn't apply to --list, which never shows a secret's value -- only where it's used and where its value is set.\nTry: drop --reveal-secrets, or use --dry-run --reveal-secrets to see real values.");
         }
         else
         {
@@ -240,8 +258,18 @@ public static class CliOptionsParser
 
         return new CliOptions(
             resource, client, environment, host, output, dryRun, diff, diffLayers, list, set, Help: false, match,
-            setFields, init, initEnvironments, initClients, initResources, initHosts, scanRoot, yes, noScan, template);
+            setFields, init, initEnvironments, initClients, initResources, initHosts, scanRoot, yes, noScan, template, color,
+            revealSecrets);
     }
+
+    private static ColorMode ParseColorMode(string value) => value switch
+    {
+        "auto" => ColorMode.Auto,
+        "always" => ColorMode.Always,
+        "never" => ColorMode.Never,
+        _ => throw new ArgumentException(
+            $"Unrecognized --color value: '{value}'.\nTry: --color auto (the default), --color always, or --color never."),
+    };
 
     private static string RequireValue(string[] args, ref int i, string flag)
     {

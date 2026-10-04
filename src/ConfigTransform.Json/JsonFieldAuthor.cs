@@ -13,8 +13,6 @@ namespace ConfigTransform.Json;
 /// </summary>
 public static class JsonFieldAuthor
 {
-    private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true };
-
     /// <param name="precedingJson">
     /// The document that exists immediately before this write's own layer would apply — same
     /// meaning as in <c>XmlFieldAuthor.Author</c> — used to verify a bare/defaulted --match
@@ -56,6 +54,7 @@ public static class JsonFieldAuthor
 
         var preceding = ParseObject(precedingJson, "preceding document");
         var segments = ResolveSegments(preceding, locationMatch);
+        RejectCaseOnlyMismatch(preceding, segments);
         var elementConditions = matches.Skip(1).ToList();
 
         if (elementConditions.Count == 0)
@@ -67,7 +66,7 @@ public static class JsonFieldAuthor
 
             var target = existingTargetJson is null ? new JsonObject() : ParseObject(existingTargetJson, "existing overlay");
             SetAtPath(target, segments, setFields[0].Value);
-            return target.ToJsonString(Indented);
+            return OutputLayout(existingTargetJson).Apply(target.ToJsonString(JsonWriteOptions.Indented));
         }
 
         foreach (var condition in elementConditions)
@@ -85,15 +84,23 @@ public static class JsonFieldAuthor
         {
             var baseDoc = existingTargetJson is null ? new JsonObject() : ParseObject(existingTargetJson, "existing overlay");
             MutateRealArrayItem(baseDoc, segments, elementConditions, setFields);
-            return baseDoc.ToJsonString(Indented);
+            return OutputLayout(existingTargetJson).Apply(baseDoc.ToJsonString(JsonWriteOptions.Indented));
         }
 
         JsonElemMatchResolver.Probe(preceding, segments, elementConditions);
 
         var overlay = existingTargetJson is null ? new JsonObject() : ParseObject(existingTargetJson, "existing overlay");
         SetElemMatchAtPath(overlay, segments, elementConditions, setFields);
-        return overlay.ToJsonString(Indented);
+        return OutputLayout(existingTargetJson).Apply(overlay.ToJsonString(JsonWriteOptions.Indented));
     }
+
+    /// <summary>
+    /// The file being rewritten keeps its own line endings and final newline; a brand-new overlay
+    /// gets <see cref="TextLayout.Default"/>. A base-target write in particular must not strip the
+    /// base file's final newline or flip its line endings -- that's churn in a committed file.
+    /// </summary>
+    private static TextLayout OutputLayout(string? existingTargetJson) =>
+        existingTargetJson is null ? TextLayout.Default : TextLayout.Of(existingTargetJson);
 
     /// <summary>Base-target element-match write: walks to the real array and writes into it
     /// directly -- no <c>$elemMatch</c> syntax, since the base file isn't an overlay.</summary>
@@ -148,7 +155,7 @@ public static class JsonFieldAuthor
 
         var item = (JsonObject)array[index]!;
         foreach (var field in setFields)
-            item[field.Attribute] = JsonLayerMerger.ToJsonValue(field.Value);
+            item[field.Attribute] = JsonCliValue.From(field.Value);
     }
 
     /// <summary>Overlay-target element-match write: authors/updates one entry in the
@@ -200,17 +207,17 @@ public static class JsonFieldAuthor
         if (existingPatch is not null)
         {
             foreach (var field in setFields)
-                existingPatch[field.Attribute] = JsonLayerMerger.ToJsonValue(field.Value);
+                existingPatch[field.Attribute] = JsonCliValue.From(field.Value);
             return;
         }
 
         var patch = new JsonObject();
         var elemMatch = new JsonObject();
         foreach (var condition in elementConditions)
-            elemMatch[condition.Attribute] = JsonLayerMerger.ToJsonValue(condition.Value);
+            elemMatch[condition.Attribute] = JsonCliValue.From(condition.Value);
         patch["$elemMatch"] = elemMatch;
         foreach (var field in setFields)
-            patch[field.Attribute] = JsonLayerMerger.ToJsonValue(field.Value);
+            patch[field.Attribute] = JsonCliValue.From(field.Value);
         patchList.Add(patch);
     }
 
@@ -220,7 +227,7 @@ public static class JsonFieldAuthor
             return false;
         return conditions.All(c =>
             elemMatch.TryGetPropertyValue(c.Attribute, out var value) &&
-            JsonNode.DeepEquals(value, JsonLayerMerger.ToJsonValue(c.Value)));
+            JsonNode.DeepEquals(value, JsonCliValue.From(c.Value)));
     }
 
     private static JsonObject ParseObject(string json, string description) =>
@@ -265,6 +272,36 @@ public static class JsonFieldAuthor
         // nested -- there's no evidence to check for a brand-new key either way, and nested is
         // the convention every example in docs/GETTING_STARTED.md already uses.
         return nestedSegments;
+    }
+
+    /// <summary>
+    /// Refuses a key path that exists in the document only with different casing (e.g.
+    /// <c>logging:loglevel</c> when the document has <c>Logging:LogLevel</c>) -- keys are
+    /// case-sensitive, so writing it would add a second key that the merge then rejects
+    /// (<c>JsonLayerMerger</c>'s own case-only-mismatch check). Caught here first so `set` can name
+    /// the real spelling before anything is written.
+    /// </summary>
+    private static void RejectCaseOnlyMismatch(JsonObject preceding, IReadOnlyList<string> segments)
+    {
+        JsonObject? current = preceding;
+        for (var i = 0; i < segments.Count && current is not null; i++)
+        {
+            if (current.TryGetPropertyValue(segments[i], out var next))
+            {
+                current = next as JsonObject;
+                continue;
+            }
+
+            var caseVariant = current.Select(kvp => kvp.Key)
+                .FirstOrDefault(existing => string.Equals(existing, segments[i], StringComparison.OrdinalIgnoreCase));
+            if (caseVariant is null)
+                return; // a genuinely new key from here on
+
+            var suggested = string.Join(":", segments.Take(i).Append(caseVariant).Concat(segments.Skip(i + 1)));
+            throw new InvalidOperationException(
+                $"No key \"{segments[i]}\" exists at that level, but \"{caseVariant}\" does -- keys are case-sensitive.\n" +
+                $"Try: --match key={suggested}");
+        }
     }
 
     private static bool TryNavigate(JsonObject obj, IReadOnlyList<string> segments)
@@ -318,6 +355,6 @@ public static class JsonFieldAuthor
             }
             current = child;
         }
-        current[segments[^1]] = JsonLayerMerger.ToJsonValue(value);
+        current[segments[^1]] = JsonCliValue.From(value);
     }
 }

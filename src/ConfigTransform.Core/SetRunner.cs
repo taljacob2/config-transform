@@ -11,7 +11,7 @@ namespace ConfigTransform.Core;
 /// </summary>
 public static class SetRunner
 {
-    public static void Run(CliOptions options, string root, FormatEngineRegistry engines, TextWriter stdout)
+    public static void Run(CliOptions options, string root, FormatEngineRegistry engines, TextWriter stdout, bool color = false)
     {
         var engine = engines.Require(options.Resource!);
 
@@ -42,6 +42,12 @@ public static class SetRunner
             return;
         }
 
+        // Merge the new overlay content *before* writing it, so a write the merge would reject (a
+        // key differing from an existing one only by case, an index gap, ...) leaves nothing
+        // behind on disk -- previously the overlay was written first and only merged afterwards,
+        // for the diff. Merge takes paths, so the candidate content goes through a temp file.
+        var mergedAfterWrite = target.IsBaseTarget ? null : MergeWithCandidatePatch(engine, target, newContent);
+
         if (target.IsBaseTarget)
         {
             File.WriteAllText(target.ResourceBasePath, newContent);
@@ -61,12 +67,24 @@ public static class SetRunner
         // Auto-diff (docs/FIELD_AUTHORING_DESIGN.md): show the effective change at whichever
         // granularity was just written, not a diff of the overlay snippet's own raw text.
         var baseOnly = engine.Merge(target.ResourceBasePath, []);
-        var mergedAfterWrite = target.IsBaseTarget
-            ? engine.Merge(target.ResourceBasePath, [])
-            : engine.Merge(target.ResourceBasePath, [.. target.PrecedingPatchPathsInOrder, target.PatchPath!]);
+        mergedAfterWrite ??= engine.Merge(target.ResourceBasePath, []);
 
         var diffBase = target.IsBaseTarget ? preceding : baseOnly;
-        var diff = GitDiff.Render(diffBase, mergedAfterWrite);
+        var diff = GitDiff.Render(diffBase, mergedAfterWrite, color);
         stdout.WriteLine(string.IsNullOrWhiteSpace(diff) ? "(no changes)" : diff);
+    }
+
+    private static string MergeWithCandidatePatch(FormatEngine engine, SetTarget target, string candidateContent)
+    {
+        var candidatePath = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(candidatePath, candidateContent);
+            return engine.Merge(target.ResourceBasePath, [.. target.PrecedingPatchPathsInOrder, candidatePath]);
+        }
+        finally
+        {
+            File.Delete(candidatePath);
+        }
     }
 }

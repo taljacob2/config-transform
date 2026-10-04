@@ -38,6 +38,10 @@ namespace ConfigTransform.Core;
 /// (docs/DIFF_LAYERS_DESIGN.md) is <c>--diff</c>'s per-layer sibling: instead of one base-vs-merged
 /// diff, one diff per layer that actually changes the resource, tagged with which earlier layer it
 /// overrides when relevant — mutually exclusive with <see cref="Diff"/>, not valid with `init`.
+/// <see cref="Color"/> is <c>--color auto|always|never</c> — whether diff output (<c>--diff</c>,
+/// <c>--diff-layers</c>, `set`'s auto-diff) carries ANSI colour; see <see cref="ColorMode"/>.
+/// <see cref="RevealSecrets"/> is <c>--reveal-secrets</c> (docs/SECRETS_DESIGN.md): previews
+/// substitute real secret values instead of leaving <c>{{CFSECRET_…}}</c> placeholders as written.
 /// </summary>
 public sealed record CliOptions(
     string? Resource,
@@ -61,4 +65,21 @@ public sealed record CliOptions(
     string? ScanRoot,
     bool Yes,
     bool NoScan,
-    string? Template);
+    string? Template,
+    ColorMode Color = ColorMode.Auto,
+    bool RevealSecrets = false);
+
+/// <summary>
+/// <c>--color</c>'s value — the git/ls convention. <see cref="Auto"/> colours diff output only when
+/// stdout is a terminal and the <c>NO_COLOR</c> environment variable isn't set (decided by the CLI
+/// entry point, which is the only place that knows; see <see cref="CliRunner.Run"/>'s
+/// <c>autoColor</c>), so a redirect or pipe never captures raw escape codes by default.
+/// <see cref="Always"/> forces colour anyway — e.g. for CI logs that render ANSI but aren't a
+/// terminal; <see cref="Never"/> turns it off even on a terminal.
+/// </summary>
+public enum ColorMode
+{
+    Auto,
+    Always,
+    Never,
+}

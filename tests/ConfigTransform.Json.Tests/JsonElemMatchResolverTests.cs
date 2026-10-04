@@ -175,4 +175,23 @@ public class JsonElemMatchResolverTests
         Assert.Equal("z", (string?)rewritten!["Tags"]![0]);
         Assert.Single(rewritten["Tags"]!.AsArray());
     }
+
+    [Fact]
+    public void Rewrite_onto_a_missing_array_returns_a_real_array_of_the_created_items()
+    {
+        // Every patch is an append when there's no array yet, so there's nothing to leave alone --
+        // an index-keyed object here would just be written as an object by JsonLayerMerger.
+        var preceding = JsonNode.Parse("""{ "Other": 1 }""");
+        var overlay = JsonNode.Parse("""
+            { "Rules": [ { "$elemMatch": { "role": "Admin" }, "enabled": true }, { "$elemMatch": { "role": "Viewer" } } ] }
+            """);
+
+        var rewritten = JsonElemMatchResolver.Rewrite(overlay, preceding);
+
+        var rules = Assert.IsType<JsonArray>(rewritten!["Rules"]);
+        Assert.Equal(2, rules.Count);
+        Assert.Equal("Admin", (string?)rules[0]!["role"]);
+        Assert.True((bool)rules[0]!["enabled"]!);
+        Assert.Equal("Viewer", (string?)rules[1]!["role"]);
+    }
 }

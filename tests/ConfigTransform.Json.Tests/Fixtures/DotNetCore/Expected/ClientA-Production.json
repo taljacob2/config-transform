@@ -1,0 +1,26 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Warning"
+    }
+  },
+  "ApiUrl": "https://clienta.example.com",
+  "RetryCount": 5,
+  "Features": {
+    "EnableBeta": true
+  },
+  "AllowedOrigins": [
+    "https://prod.example.com",
+    "https://b.example.com"
+  ],
+  "AllowedHosts": "*",
+  "ConnectionStrings": {
+    "Main": "Server=devdb;User=app;Password=a+b'c&d<e>"
+  },
+  "BuildTag": "0042",
+  "Threshold": 0.50,
+  "ProxyUrl": null,
+  "Plugins": {},
+  "BlockedIps": [],
+  "SiteTitle": "שלום café"
+}

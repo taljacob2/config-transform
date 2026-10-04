@@ -60,20 +60,35 @@ public static class InitRunner
 
     private static void RunTemplate(string root, string variant, bool dryRun, TextWriter stdout)
     {
-        var resourceFullPath = Path.Combine(root, InitTemplate.ResourcePath);
-        if (File.Exists(resourceFullPath))
-        {
-            var existing = File.ReadAllText(resourceFullPath);
-            if (!string.Equals(existing, InitTemplate.BaseContent, StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    $"init --template: '{InitTemplate.ResourcePath}' already exists with different " +
-                    "content — refusing to overwrite it.");
-            }
-        }
+        // The root files a variant owns are written only if absent or already exactly the
+        // template's own -- never over a user's file of the same name.
+        RefuseToOverwrite(root, InitTemplate.ResourcePath, InitTemplate.BaseContent);
+        if (variant == "secrets")
+            RefuseToOverwrite(root, InitTemplate.CredentialsResourcePath, InitTemplate.CredentialsBaseContent);
 
-        var files = variant == "hosts" ? InitTemplate.BuildHostsPlan(root) : InitTemplate.BuildPlan(root);
+        var files = variant switch
+        {
+            "hosts" => InitTemplate.BuildHostsPlan(root),
+            "secrets" => InitTemplate.BuildSecretsPlan(root),
+            _ => InitTemplate.BuildPlan(root),
+        };
         WriteFiles(files, dryRun, stdout);
+
+        // The secrets variant's *.secret.* files are plaintext until git-crypt covers them, and init
+        // deliberately never writes .gitattributes (docs/INIT_COMMAND_DESIGN.md "The `secrets` variant").
+        if (variant == "secrets")
+        {
+            stdout.WriteLine();
+            stdout.WriteLine(InitTemplate.SecretsNotice);
+        }
+    }
+
+    private static void RefuseToOverwrite(string root, string repoRelativePath, string templateContent)
+    {
+        var fullPath = Path.Combine(root, repoRelativePath);
+        if (File.Exists(fullPath) && !string.Equals(File.ReadAllText(fullPath), templateContent, StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                $"init --template: '{repoRelativePath}' already exists with different content — refusing to overwrite it.");
     }
 
     private static (IReadOnlyList<string> Resources, IReadOnlyList<string> Environments, IReadOnlyList<string> Clients, IReadOnlyList<string> Hosts)

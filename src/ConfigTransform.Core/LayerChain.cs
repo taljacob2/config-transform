@@ -12,16 +12,22 @@ public sealed record ResolvedLayer(string Path, LayerManifest Manifest);
 /// structured form for display (docs on the "clearer chain output" change) — collapses "not
 /// listed" and "listed with no patch" into one `PatchPath: null`, since the CLI only ever shows
 /// "not patched in" for either; the fine-grained distinction still lives in <see cref="Report"/>.
+/// <see cref="ReplacePath"/> is the absolute path of the whole-file secret that replaces this
+/// resource (docs/SECRETS_DESIGN.md), or null; when set, nothing is merged.
 /// </summary>
 public sealed record ResolvedResource(
     string BasePath, IReadOnlyList<string> PatchPathsInOrder, IReadOnlyList<string> Report,
-    IReadOnlyList<ChainStep> Steps);
+    IReadOnlyList<ChainStep> Steps, string? ReplacePath = null);
 
-/// <summary>One layer's display row in a resolved chain — see <see cref="ResolvedResource.Steps"/>.</summary>
-public sealed record ChainStep(string Label, string? PatchPath);
+/// <summary>
+/// One layer's display row in a resolved chain — see <see cref="ResolvedResource.Steps"/>.
+/// <see cref="ReplacePath"/> is set on the layer that replaces the resource with a whole-file secret;
+/// <see cref="Superseded"/> marks an earlier layer's patch that a later replace makes irrelevant.
+/// </summary>
+public sealed record ChainStep(string Label, string? PatchPath, string? ReplacePath = null, bool Superseded = false);
 
 /// <summary>One layer's entry for a resource, found by scanning the whole tree — see <see cref="LayerChain.ReverseLookup"/>.</summary>
-public sealed record ReverseLookupEntry(string LayerPath, string? Patch, string? Extends);
+public sealed record ReverseLookupEntry(string LayerPath, string? Patch, string? Extends, string? Replace = null);
 
 /// <summary>
 /// Walks a layer's `extends` chain (docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md) and resolves
@@ -86,11 +92,40 @@ public static class LayerChain
         var report = new List<string> { $"base: '{resourcePath}' found at '{basePath}'" };
         var patches = new List<string>();
         var steps = new List<ChainStep>();
+        string? replacePath = null;
+        string? replacingLayer = null;
 
         foreach (var layer in chain)
         {
             var label = ToRepoRelative(root, layer.Path);
             var entry = layer.Manifest.Resources.FirstOrDefault(r => PathsEqual(root, r.Path, resourcePath));
+
+            // A whole-file secret (docs/SECRETS_DESIGN.md): the resource becomes exactly this file.
+            // Earlier layers' patches no longer matter; a later layer's patch would merge onto a
+            // secret file, which is exactly what replace exists to prevent.
+            if (entry?.Replace is not null)
+            {
+                var fullReplacePath = Path.GetFullPath(entry.Replace, root);
+                if (!File.Exists(fullReplacePath))
+                    throw new FileNotFoundException(
+                        $"{label} declares replace '{entry.Replace}' for '{resourcePath}', but no file exists at '{fullReplacePath}'.");
+
+                for (var i = 0; i < steps.Count; i++)
+                    if (steps[i].PatchPath is not null || steps[i].ReplacePath is not null)
+                        steps[i] = steps[i] with { Superseded = true };
+
+                report.Add($"{label}: '{resourcePath}' replaced by '{fullReplacePath}'");
+                steps.Add(new ChainStep(label, null, ToRepoRelative(root, fullReplacePath)));
+                replacePath = fullReplacePath;
+                replacingLayer = label;
+                continue;
+            }
+
+            if (entry?.Patch is not null && replacingLayer is not null)
+                throw new InvalidOperationException(
+                    $"{label} patches '{resourcePath}', but {replacingLayer} already replaces it with a whole-file secret -- " +
+                    "a patch can't merge onto a replaced file (docs/SECRETS_DESIGN.md).\n" +
+                    "Try: remove the patch, or put the change into the replace file itself.");
 
             if (entry is null)
             {
@@ -116,8 +151,16 @@ public static class LayerChain
             steps.Add(new ChainStep(label, ToRepoRelative(root, patchPath)));
         }
 
-        return new ResolvedResource(basePath, patches, report, steps);
+        return new ResolvedResource(basePath, patches, report, steps, replacePath);
     }
+
+    /// <summary>
+    /// Whether any layer in the chain replaces this resource with a whole-file secret — answered from
+    /// the layer files alone, without resolving the base file. Lets the every-resource mode include a
+    /// replaced resource whose extension no format engine handles (a .p12 certificate, say).
+    /// </summary>
+    public static bool IsReplaced(string root, IReadOnlyList<ResolvedLayer> chain, string resourcePath) =>
+        chain.Any(layer => layer.Manifest.Resources.Any(r => r.Replace is not null && PathsEqual(root, r.Path, resourcePath)));
 
     /// <summary>
     /// Prints the base→arrow→layer chain for one already-resolved resource: a two-line entry per
@@ -131,7 +174,7 @@ public static class LayerChain
     /// </summary>
     public static void PrintChain(TextWriter stdout, string resourcePath, ResolvedResource resolved, string indent = "    ")
     {
-        stdout.WriteLine($"{indent}base");
+        stdout.WriteLine($"{indent}resource");
         stdout.WriteLine($"{indent}  {resourcePath}");
         if (resolved.Steps.Count > 0)
             stdout.WriteLine($"{indent}  ↓");
@@ -140,7 +183,11 @@ public static class LayerChain
         {
             var step = resolved.Steps[i];
             stdout.WriteLine($"{indent}{step.Label}");
-            stdout.WriteLine(step.PatchPath is null ? $"{indent}  not patched in" : $"{indent}  patched in: {step.PatchPath}");
+            var superseded = step.Superseded ? " (superseded by a later replace)" : "";
+            stdout.WriteLine(
+                step.ReplacePath is not null ? $"{indent}  replaced by: {step.ReplacePath}{superseded}"
+                : step.PatchPath is not null ? $"{indent}  patched in: {step.PatchPath}{superseded}"
+                : $"{indent}  not patched in");
             if (i < resolved.Steps.Count - 1)
                 stdout.WriteLine($"{indent}  ↓");
         }
@@ -170,7 +217,7 @@ public static class LayerChain
             var manifest = LayerManifestLoader.Load(layerPath);
             var entry = manifest.Resources.FirstOrDefault(r => PathsEqual(root, r.Path, resourcePath));
             if (entry is not null)
-                results.Add(new ReverseLookupEntry(ToRepoRelative(root, layerPath), entry.Patch, manifest.Extends));
+                results.Add(new ReverseLookupEntry(ToRepoRelative(root, layerPath), entry.Patch, manifest.Extends, entry.Replace));
         }
 
         return results.OrderBy(r => r.LayerPath, StringComparer.OrdinalIgnoreCase).ToList();

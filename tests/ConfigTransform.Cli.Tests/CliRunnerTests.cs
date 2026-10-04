@@ -58,7 +58,7 @@ public class CliRunnerTests
         var output = stdout.ToString();
 
         Assert.Contains($"Resolving '{resource}'", output);
-        Assert.Contains("base", output);
+        Assert.Contains("    resource", output);
 
         var environmentIndex = output.IndexOf("Environments/Production/configtransform.json", StringComparison.Ordinal);
         var clientIndex = output.IndexOf("Clients/ClientA/Production/configtransform.json", StringComparison.Ordinal);
@@ -517,7 +517,7 @@ public class CliRunnerTests
     }
 
     [Fact]
-    public void List_shows_the_chain_in_real_application_order_base_then_environment_then_client()
+    public void List_shows_the_chain_in_real_application_order_resource_then_environment_then_client()
     {
         using var workspace = new TempCliWorkspace();
 
@@ -533,7 +533,7 @@ public class CliRunnerTests
 
         // Skip past the layer-level "extends:" header line, which names the Environment layer
         // too -- the ordering under test is within a resource's own chain block, not the header.
-        var baseIndex = output.IndexOf("    base", StringComparison.Ordinal);
+        var baseIndex = output.IndexOf("    resource", StringComparison.Ordinal);
         var environmentIndex = output.IndexOf("Environments/Production/configtransform.json", baseIndex, StringComparison.Ordinal);
         var clientIndex = output.IndexOf("Clients/ClientA/Production/configtransform.json", baseIndex, StringComparison.Ordinal);
 
@@ -590,7 +590,7 @@ public class CliRunnerTests
         // text must join on that too, not a hardcoded '\n'.
         var expectedChain = string.Join(Environment.NewLine,
         [
-            "    base",
+            "    resource",
             $"      {workspace.XmlResourcePath}",
             "      ↓",
             "    .configtransform/Environments/Production/configtransform.json",
@@ -665,4 +665,56 @@ public class CliRunnerTests
     private static Dictionary<string, DateTime> Snapshot(string root) =>
         Directory.GetFiles(root, "*", SearchOption.AllDirectories)
             .ToDictionary(f => f, File.GetLastWriteTimeUtc);
+
+
+    [Theory]
+    [InlineData("--diff", null, false, false)]        // auto, redirected/no terminal -> plain
+    [InlineData("--diff", null, true, true)]          // auto, terminal -> colour
+    [InlineData("--diff", "always", false, true)]     // e.g. CI logs that render ANSI
+    [InlineData("--diff", "never", true, false)]
+    [InlineData("--diff-layers", null, false, false)]
+    [InlineData("--diff-layers", null, true, true)]
+    [InlineData("--diff-layers", "always", false, true)]
+    [InlineData("--diff-layers", "never", true, false)]
+    public void Diff_output_is_coloured_only_as_color_and_the_terminal_allow(
+        string diffFlag, string? colorMode, bool autoColor, bool expectColour)
+    {
+        using var workspace = new TempCliWorkspace();
+        var args = new List<string>
+        {
+            "--resource", workspace.JsonResourcePath, "--client", "ClientA", "--environment", "Production", diffFlag
+        };
+        if (colorMode is not null)
+            args.AddRange(["--color", colorMode]);
+
+        var stdout = new StringWriter();
+        var exitCode = CliRunner.Run(
+            args.ToArray(), stdout, new StringWriter(), FormatEngines.All, workspace.RootPath, autoColor: autoColor);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(expectColour, stdout.ToString().Contains((char)27));
+        Assert.Contains("clienta.example.com", stdout.ToString());
+    }
+
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("always", true)]
+    public void Set_auto_diff_follows_color_too(string? colorMode, bool expectColour)
+    {
+        using var workspace = new TempCliWorkspace();
+        var args = new List<string>
+        {
+            "set", "--resource", workspace.JsonResourcePath, "--client", "Globex", "--environment", "Production",
+            "--match", "ApiUrl", "--set", "https://globex.example.com"
+        };
+        if (colorMode is not null)
+            args.AddRange(["--color", colorMode]);
+
+        var stdout = new StringWriter();
+        var exitCode = CliRunner.Run(args.ToArray(), stdout, new StringWriter(), FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(expectColour, stdout.ToString().Contains((char)27));
+        Assert.Contains("globex.example.com", stdout.ToString());
+    }
 }

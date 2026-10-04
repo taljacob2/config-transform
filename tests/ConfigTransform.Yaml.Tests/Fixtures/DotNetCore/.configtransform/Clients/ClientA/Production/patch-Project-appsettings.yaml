@@ -1,3 +1,4 @@
 ApiUrl: https://clienta.example.com
+SiteTitle: "Client A"
 Features:
   EnableBeta: true

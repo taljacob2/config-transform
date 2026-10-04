@@ -5,10 +5,10 @@ result, built around self-describing `configtransform.json` layers
 (`docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`) — one per layer directory under `.configtransform/`,
 addressed by `--client`/`--environment`, spanning every resource (project config file) that layer
 touches, in **any** registered format, in one call. Each resource is dispatched to the right merge
-engine by its own file extension — `.config`/`.xml` via `Microsoft.Web.Xdt`, `.json` via
-`Microsoft.Extensions.Configuration`, `.env` via a dependency-free flat `KEY=VALUE` merge
-(`ConfigTransform.Env`), `.yaml`/`.yml` via `NetEscapades.Configuration.Yaml`/`YamlDotNet`
-(`ConfigTransform.Yaml`) — so a mixed-format layer resolves with no skipping and no separate tool
+engine by its own file extension — `.config`/`.xml` via `Microsoft.Web.Xdt`, `.json` via a tree
+merge over `System.Text.Json.Nodes`, `.env` via a dependency-free flat `KEY=VALUE` merge
+(`ConfigTransform.Env`), `.yaml`/`.yml` via a tree merge over `YamlDotNet` (`ConfigTransform.Yaml`)
+— so a mixed-format layer resolves with no skipping and no separate tool
 invocation per format; a resource whose extension no registered engine handles is reported, not
 silently dropped (see "Single resource vs. every resource" below). The `set` verb
 (below) works the same way, dispatching by the *target* resource's own extension; what it actually
@@ -23,6 +23,8 @@ supports differs by format for reasons that come from the format itself, not an 
 --dry-run                                  print the fully merged result to stdout; nothing written to disk
 --diff                                     print a unified diff (unpatched vs. merged) via `git diff --no-index`; nothing written to disk
 --diff-layers                              like --diff, but one diff per layer that actually changes the resource, tagged with which earlier layer it overrides (docs/DIFF_LAYERS_DESIGN.md); mutually exclusive with --diff
+--color <auto|always|never>                ANSI colour in diff output (--diff, --diff-layers, set's auto-diff); default auto — colour only on a terminal with NO_COLOR unset. Also accepted as --color=<mode>
+--reveal-secrets                           previews (--dry-run/--diff/--diff-layers) show real secret values instead of {{CFSECRET_…}} placeholders, and replaced files' content — see "Secrets" below
 --list                                     show a layer's resources (--client/--environment[/--host]), or a tree-wide reverse lookup (--resource) — see below
 help, --help, -h                           print the help page (see "Getting help" below) — also the default with no arguments at all
 init                                       scaffold a .configtransform/ tree — a different verb, see "init" below
@@ -156,14 +158,14 @@ Two modes:
 
 - **Given `--client`/`--environment`[/`--host`]** (client optional, environment required, host
   optional and requires both): shows that layer's own `extends` and every resource it touches, as
-  its full chain in real application order — `base` first, then every layer outermost-first, each
+  its full chain in real application order — the resource's own file first (labelled `resource`), then every layer outermost-first, each
   one either `patched in: <path>` or `not patched in`, connected by `↓`. This is the exact same
   rendering the single-resource resolution report (`--dry-run`/`--diff`/a real run, below) prints
   for one resource — `--list` just does it for every resource a layer touches, so the two never
   show the chain two different ways:
   ```
     OrderProcessor.Framework/App.config
-      base
+      resource
         OrderProcessor.Framework/App.config
         ↓
       .configtransform/Environments/Production/configtransform.json
@@ -258,9 +260,126 @@ applied each time (no format-engine changes needed for this — every merge engi
 an arbitrary prefix of the patch list). Each section is tagged `[<layer>]`, or
 `[<layer> overrides <earlier layer>]` when every line it changes was last touched by that one
 earlier layer; a hunk that re-touches lines with *different* prior owners gets a plain `[<layer>]`
-tag instead, with a `(overrides <layer>)` note on each individual changed line that has one. Like
-`--diff`, nothing is written to disk, and it prints `(no changes)` when there's nothing to show.
-Mutually exclusive with `--diff` — use one or the other.
+tag instead, with a `(overrides <layer>)` note on each individual changed line that has one. A
+layer whose changes land in more than one hunk gets one tag per hunk, each set off by a blank
+line, the same spacing as between two layers. Like `--diff`, nothing is written to disk, and it
+prints `(no changes)` when there's nothing to show. Mutually exclusive with `--diff` — use one or
+the other.
+
+`--color auto|always|never` controls ANSI colour in every diff the tool prints (`--diff`,
+`--diff-layers`, and `set`'s automatic diff after a write); it's accepted in every mode and simply
+has no effect where nothing is diffed. The default, `auto`, colours only when stdout is a terminal
+and the `NO_COLOR` environment variable (https://no-color.org) is unset — so `--diff > change.diff`
+or a pipe gets plain text with no escape codes. `always` forces colour anyway, e.g. for a CI log
+viewer that renders ANSI even though the job's stdout isn't a terminal (GitHub Actions does);
+`never` turns it off on a terminal too. An explicit `always`/`never` wins over `NO_COLOR`.
+
+## Secrets
+
+Secrets live outside the configuration: a config file or patch holds a `{{CFSECRET_NAME}}`
+placeholder, and the value lives in an encrypted `*.secret.env` file that a layer lists under
+`secrets` (`docs/SECRETS_DESIGN.md` has the full design and every decision behind it):
+
+```xml
+<add name="AdminDb" connectionString="Server=proddb;Password={{CFSECRET_ADMIN_DB_PASSWORD}}" />
+```
+
+```json
+// .configtransform/Clients/Acme/Production/configtransform.json
+{
+  "extends": ".configtransform/Environments/Production/configtransform.json",
+  "secrets": [ ".configtransform/Clients/Acme/Production/sql.secret.env" ],
+  "resources": [ ... ]
+}
+```
+
+```
+# .configtransform/Clients/Acme/Production/sql.secret.env -- encrypted by .configtransform/**/*.secret.* filter=git-crypt
+CFSECRET_ADMIN_DB_PASSWORD=Pa55+w&rd
+```
+
+- **Names** are `CFSECRET_` + letters, digits and `_`, and the same full name is used everywhere: the
+  placeholder, the key in the `*.secret.env` file, and the environment-variable override. A
+  secrets-file key without the prefix is an error.
+- **Secrets files** must end in `.secret.env` and live inside `.configtransform/`, so the
+  `.configtransform/**/*.secret.*` git-crypt rule always covers them.
+- **Resolution** follows the layer chain: later layers override earlier ones, name by name. The
+  same name twice in one file, or in two files of one layer, is an error (naming the file and key,
+  never a value). An environment variable with the secret's exact
+  name overrides every file; an empty one counts as unset.
+- **Substitution** happens inside values, by each format's own writer, so a value containing `"`,
+  `&`, `<` or `: ` comes out correctly escaped. In YAML, a placeholder that starts a value must be
+  quoted (`Password: "{{CFSECRET_DB}}"`) — unquoted, YAML reads `{{…}}` as a map, and the tool
+  stops with an error saying so.
+- **Previews** (`--dry-run`, `--diff`, `--diff-layers`) keep placeholders as written, and the report
+  above the output ends with a tree per secret, read like the resource's chain: its state —
+  `resolved`, `MISSING`, or `unknown` (a secrets file that could set it is still git-crypt
+  encrypted) — then `used in:`, the files that write its placeholder, then every layer and finally
+  the environment variable, each `patched in: <file>` or `not patched in`. The last `patched in:`
+  wins, so an override is visible where it happens. Values are never printed unless you pass
+  `--reveal-secrets`; even then, never in the report, `--list` or `set`'s automatic diff. In a
+  revealed diff, every side resolves with the whole chain's secrets.
+- **A real run** (`-o`) always substitutes. If any secret in any resource of the call is missing or
+  locked, or a placeholder is left outside a value (a key, an XML comment), it fails and **writes
+  nothing**.
+- **`--list`** ends with the same tree, once per secret any of the layer's resources uses (found by
+  scanning their base files and patches), and its header's `secrets:` lists only the target
+  layer's own secrets files. It never shows a value, so `--list --reveal-secrets` is an error.
+
+**Whole-file secrets** — a Firebase service-account JSON, a certificate — use a resource entry's
+`replace` instead of placeholders:
+
+```json
+{ "path": "code/src/firebase.json", "replace": ".configtransform/Clients/Acme/Production/firebase.secret.json" }
+```
+
+- `path` is the real file the app uses, committed with harmless content (empty, `{}`, or dev
+  credentials). `replace` is the real file, encrypted at rest; its name must contain `.secret.` and
+  it must be inside `.configtransform/`.
+- A real run writes the replace file's **exact bytes** — no merging, no parsing — so any format
+  works, binary included, whether or not a format engine handles the extension.
+- A later layer's `replace` overrides an earlier one, and supersedes earlier layers' patches (the
+  chain report marks them). A `patch` for the same resource in the same entry, or in any later
+  layer, is an error, and so is `set` targeting a replaced resource.
+- Previews print a one-line note instead of the content —
+  `(replaced by …/firebase.secret.json, 2310 bytes, not shown -- pass --reveal-secrets to see it)`.
+  With `--reveal-secrets`, `--dry-run` prints the content and `--diff` diffs it against the base (a
+  binary file is described, not printed).
+- A replace file that's still git-crypt encrypted is noted in previews and stops a real run before
+  anything is written.
+
+```
+$ configtransform -r Web/AdminPortal.Web/Web.config -c Acme -e Production --dry-run
+Resolving 'Web/AdminPortal.Web/Web.config'
+    ...chain...
+
+    secrets
+      CFSECRET_ADMIN_DB_PASSWORD   resolved
+        used in: .configtransform/Environments/Production/patch-Web-AdminPortal.Web-Web.config.xml
+        .configtransform/Environments/Production/configtransform.json
+          patched in: .configtransform/Environments/Production/sql.secret.env
+          ↓
+        .configtransform/Clients/Acme/Production/configtransform.json
+          patched in: .configtransform/Clients/Acme/Production/sql.secret.env
+          ↓
+        environment variable
+          not patched in
+
+      CFSECRET_SMTP_PASSWORD       MISSING
+        used in: .configtransform/Clients/Acme/Production/patch-Web-AdminPortal.Web-Web.config.xml
+        .configtransform/Environments/Production/configtransform.json
+          not patched in
+          ↓
+        .configtransform/Clients/Acme/Production/configtransform.json
+          not patched in
+          ↓
+        environment variable
+          not patched in
+```
+
+Pin a tool version that supports `secrets` before using it: from this version on, a
+`configtransform.json` field the tool doesn't recognize is an error, but older versions silently
+ignored unknown fields and would deploy unresolved placeholders.
 
 ## `init` — scaffold a tree
 
@@ -277,7 +396,7 @@ init --environment, -e <EnvName>           repeatable — every environment to c
      --scan-root <dir>                     where to scan for candidate resources (default: repo root)
      --yes                                 accept every scanned candidate without asking
      --no-scan                             don't scan — requires at least one --resource
-     --template [default|hosts]            a canned starter tree — mutually exclusive with every flag above; bare --template (or --template default) is the plain tree, --template hosts adds one worked Hosts/ layer example
+     --template [default|hosts|secrets]    a canned starter tree — mutually exclusive with every flag above; bare --template (or --template default) is the plain tree, --template hosts adds one worked Hosts/ layer example, --template secrets adds a runnable secrets example
      --dry-run                             print what would be written; nothing written to disk
 ```
 
@@ -329,6 +448,12 @@ dotnet run --project src/ConfigTransform.Cli -- init --template --dry-run
 
 # Same starter tree, plus one worked Hosts/Host-1/ layer under Client-A/Production
 dotnet run --project src/ConfigTransform.Cli -- init --template hosts
+
+# Same starter tree, plus a runnable secrets example: a {{CFSECRET_DEMO_API_KEY}} placeholder in each
+# Environment patch, demo.secret.env files (environment-level, and a Client-A/Production override),
+# and one whole-file secret via "replace". Every value is fake; the *.secret.* files are plaintext
+# until git-crypt covers them -- init prints how, and never writes .gitattributes itself.
+dotnet run --project src/ConfigTransform.Cli -- init --template secrets
 
 dotnet run --project src/ConfigTransform.Cli -- \
   --client Client-A --environment Production --host Host-1 \
@@ -403,9 +528,9 @@ full reasoning behind each:
   existing key *and* creating a brand-new one, since JSON has no XDT-style Transform/Locator
   distinction to make (any layer can introduce a key; `set` just writes it) — **and matching or
   creating an item inside an array of objects**, via a `$elemMatch`-style overlay (below).
-  `Microsoft.Extensions.Configuration`'s JSON provider merges arrays purely by index, with no
-  native concept of matching a field's value the way XDT's `Locator` does for XML, so this isn't a
-  direct port of XML's mechanism — see `docs/FIELD_AUTHORING_DESIGN.md`'s "JSON / YAML" section
+  JSON arrays merge purely by index (the same rule `Microsoft.Extensions.Configuration`'s own
+  layering uses), with no native concept of matching a field's value the way XDT's `Locator` does
+  for XML, so this isn't a direct port of XML's mechanism — see `docs/FIELD_AUTHORING_DESIGN.md`'s "JSON / YAML" section
   and decision log for the full reasoning.
 - **`.env`** (`.env` resources): the simplest of the four — a `.env` file is always flat, so
   there's no nested-path disambiguation to make (unlike JSON) and no update-vs-insert branch
@@ -415,12 +540,18 @@ full reasoning behind each:
 - **YAML** (`.yaml`/`.yml` resources): covers a single key path (nested or top-level) — both
   updating an existing key and creating a brand-new one — the same model as JSON's own plain-field
   case, since YAML shares JSON's exact `:`-separated nesting and the same `key=`/`literal-key=`
-  disambiguation for a literal key that happens to contain a colon. **Matching an item inside an
-  array of objects is not implemented for YAML** — a `--match` with more than one coordinate
-  refuses with a clear "not yet supported" message rather than guessing, the same posture XML
-  takes for its own unimplemented array-of-objects matching; see
-  `docs/FIELD_AUTHORING_DESIGN.md`'s "JSON / YAML" section for why this is scoped out of YAML's
-  first version specifically.
+  disambiguation for a literal key that happens to contain a colon — **and matching or creating an
+  item inside an array of objects**, via the same `$elemMatch` overlay shape as JSON (written in
+  YAML syntax). One deliberate difference: YAML conditions compare by text, not type, so
+  `--match enabled=true` matches both `enabled: true` and `enabled: "true"` — an unquoted YAML
+  scalar's type depends on the reader. See `docs/FIELD_AUTHORING_DESIGN.md`'s "YAML array-of-objects
+  matching".
+- **Value typing (JSON and YAML):** a `--set` value is written as a number or boolean only when it
+  reads back exactly as typed — `5432`, `-12`, `1.5`, `true`, `false`. Anything else is a string:
+  `--set 02134` stays `"02134"`, `--set 1.10` stays `"1.10"`. In YAML, strings are always written
+  double-quoted, so a YAML 1.1 reader can't misread `--set NO` as a boolean (the "Norway problem")
+  or `--set null` as null. YAML `set` changes only the value it sets; every other line of the file
+  stays exactly as it was. See `docs/FIELD_AUTHORING_DESIGN.md`'s "Value typing".
 
 ```bash
 # XML, appSettings — the simple case: one identity attribute, one value attribute.
@@ -515,12 +646,16 @@ dotnet run --project src/ConfigTransform.Cli -- set \
   --client Acme --environment Production \
   --match key=Logging:LogLevel:Default --set value=Warning
 
-# YAML -- an array of objects: refused as not yet supported, rather than guessed at.
+# YAML -- an array of objects: matches (or creates) the item whose role is Admin, the same
+# $elemMatch mechanism as JSON. The overlay gets a patch, never an array position:
+#   Rules:
+#   - $elemMatch:
+#       role: "Admin"
+#     enabled: true
 dotnet run --project src/ConfigTransform.Cli -- set \
   --resource NotificationWorker/settings.yaml \
   --client Acme --environment Production \
   --match key=Rules --match role=Admin --set enabled=true
-# Error: matching an item inside a YAML array of objects is not yet supported...
 ```
 
 Zero matching fields fails rather than guessing: for XML, with a suggested
@@ -546,20 +681,30 @@ registration in `src/ConfigTransform.Cli/FormatEngines.cs`.
 first), applied via `Microsoft.Web.Xdt` to that same document. See
 `src/ConfigTransform.Xml/XmlLayerMerger.cs`.
 
-**JSON**: base + every patch in the resolved chain, in order, loaded as layered sources via
-`Microsoft.Extensions.Configuration`'s own `ConfigurationBuilder`, then flattened back to a
-single JSON document. Two things worth knowing, both inherent to how `IConfiguration` works,
-documented in full in `src/ConfigTransform.Json/JsonLayerMerger.cs`:
+**JSON and YAML**: the base file, then every patch in the resolved chain, in order, merged into
+the base document's own tree (`docs/TREE_MERGE_DESIGN.md`; `src/ConfigTransform.Json/JsonLayerMerger.cs`,
+`src/ConfigTransform.Yaml/YamlLayerMerger.cs`). The merge rules are the ones
+`Microsoft.Extensions.Configuration`'s own layering applies; what's written out is the base file's
+own shape:
+- Objects merge key by key. Keys match exactly (case-sensitively); a matched key keeps its
+  position, and a new key is appended at the end of its object. A patch key that matches an
+  existing key only by case (`apiUrl` vs `ApiUrl`) is an error naming the real spelling: it would
+  otherwise add a second key, which .NET's configuration loader refuses to load. `set` checks its
+  `--match key=` path the same way before writing anything.
 - An overlay array does not replace the base array wholesale — it overrides by index, so any
-  base-layer indices beyond what the overlay specifies survive untouched.
-- Types (bool/number/string) are inferred from the flattened value to avoid turning
-  `"enabled": false` into `"enabled": "false"`.
-- A patch containing a `set`-written (or hand-written) `$elemMatch` array-of-objects patch (see
-  the `set` section above) is resolved to a real position and rewritten *before* it reaches
-  `Microsoft.Extensions.Configuration` — a pre-processing pass (`JsonElemMatchResolver.Rewrite`)
-  that only runs when a patch in the chain actually contains one, resolving each patch's
-  `$elemMatch` entries against the *accumulated* merge of every prior patch (not the base alone);
-  every other merge takes the original, unmodified code path.
+  base-layer indices beyond what the overlay specifies survive untouched. An object keyed by
+  index (`{"1": ...}`) updates one item of an existing array.
+- Anything else (a scalar, `null`, or a different kind of value) replaces what was there.
+- Every value keeps the type and text it was written with — `"007"` stays a string, `1.50` stays
+  `1.50`, YAML quoting and block scalars are kept — and `null`, `{}` and `[]` survive. Comments
+  are not carried into the output.
+- The output uses the base file's line endings (LF or CRLF) and ends with a newline exactly when
+  the base does — as XML output always has. `set` keeps the same conventions in any file it
+  rewrites; a file it creates gets LF and a final newline.
+- A JSON patch containing a `set`-written (or hand-written) `$elemMatch` array-of-objects patch
+  (see the `set` section above) is resolved to a real position first
+  (`JsonElemMatchResolver.Rewrite`), against the document as merged through every prior patch
+  (not the base alone).
 
 **Dispatch, for both the read path and `set`**: `ConfigTransform.Cli/FormatEngines.cs` registers
 one `FormatEngine` per format (extensions owned, merge function, field-author function, patch-file

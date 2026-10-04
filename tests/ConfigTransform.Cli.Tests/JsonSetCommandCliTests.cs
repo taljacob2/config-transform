@@ -49,6 +49,26 @@ public class JsonSetCommandCliTests
     }
 
     [Fact]
+    public void Set_writes_a_new_layer_file_with_special_characters_in_its_paths_unescaped()
+    {
+        // LayerManifestSerializer's default System.Text.Json encoder used to write `&` as
+        // \u0026 and `+` as \u002B inside `extends`/`patch` -- valid, but unreadable.
+        using var workspace = new TempCliWorkspace();
+        var exitCode = CliRunner.Run(new[]
+        {
+            "set", "--resource", workspace.JsonResourcePath,
+            "--client", "Acme & Co", "--environment", "Prod+1",
+            "--match", "ApiUrl", "--set", "https://acme.example.com"
+        }, new StringWriter(), new StringWriter(), FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(0, exitCode);
+        var layerText = File.ReadAllText(Path.Combine(workspace.RootPath, ".configtransform", "Clients", "Acme & Co", "Prod+1", "configtransform.json"));
+        Assert.Contains("\"extends\": \".configtransform/Environments/Prod+1/configtransform.json\"", layerText);
+        Assert.Contains(".configtransform/Clients/Acme & Co/Prod+1/", layerText);
+        Assert.DoesNotContain(@"\u", layerText);
+    }
+
+    [Fact]
     public void Set_dry_run_prints_the_would_be_overlay_content_and_writes_nothing()
     {
         using var workspace = new TempCliWorkspace();
@@ -265,4 +285,51 @@ public class JsonSetCommandCliTests
     private static Dictionary<string, DateTime> Snapshot(string root) =>
         Directory.GetFiles(root, "*", SearchOption.AllDirectories)
             .ToDictionary(f => f, File.GetLastWriteTimeUtc);
+
+    [Fact]
+    public void Set_writes_nothing_when_the_merge_would_reject_the_new_overlay()
+    {
+        // The field name inside an $elemMatch item isn't checked against the array's real items
+        // when the overlay is authored -- only when it's merged. `set` now merges the new overlay
+        // before writing it, so a case-only mismatch there leaves no file behind.
+        using var workspace = new TempCliWorkspace();
+        File.WriteAllText(Path.Combine(workspace.RootPath, "Project", "rules.json"), """
+            { "Rules": [ { "role": "Admin", "enabled": false } ] }
+            """);
+        var layerPath = Path.Combine(workspace.RootPath, ".configtransform", "Environments", "Production", "configtransform.json");
+        var layerBefore = File.ReadAllText(layerPath);
+        var stderr = new StringWriter();
+
+        var exitCode = CliRunner.Run(new[]
+        {
+            "set", "--resource", "Project/rules.json", "--environment", "Production",
+            "--match", "key=Rules", "--match", "role=Admin", "--set", "Enabled=true"
+        }, new StringWriter(), stderr, FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("differ only by case", stderr.ToString());
+        Assert.False(File.Exists(Path.Combine(workspace.RootPath, ".configtransform", "Environments", "Production", "patch-Project-rules.json")));
+        Assert.Equal(layerBefore, File.ReadAllText(layerPath));
+    }
+
+    [Fact]
+    public void Set_writes_a_new_layer_file_with_lf_line_endings_and_a_final_newline()
+    {
+        using var workspace = new TempCliWorkspace();
+
+        var exitCode = CliRunner.Run(new[]
+        {
+            "set", "--resource", workspace.JsonResourcePath, "--client", "Globex", "--environment", "Production",
+            "--match", "ApiUrl", "--set", "https://globex.example.com"
+        }, new StringWriter(), new StringWriter(), FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(0, exitCode);
+        var layerText = File.ReadAllText(Path.Combine(workspace.RootPath, ".configtransform", "Clients", "Globex", "Production", "configtransform.json"));
+        var patchText = File.ReadAllText(Path.Combine(workspace.RootPath, ".configtransform", "Clients", "Globex", "Production", "patch-Project-appsettings.json"));
+        foreach (var text in new[] { layerText, patchText })
+        {
+            Assert.DoesNotContain("\r", text);
+            Assert.EndsWith("}\n", text);
+        }
+    }
 }

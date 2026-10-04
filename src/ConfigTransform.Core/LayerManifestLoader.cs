@@ -1,31 +1,39 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace ConfigTransform.Core;
 
 /// <summary>
 /// Loads a single configtransform.json (docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md) — the
-/// per-layer-directory replacement for <c>manifest.json</c>. Mirrors the old
-/// <c>ManifestLoader</c>'s git-crypt-locked-file detection exactly: the same encrypted tree
-/// this file lives under (<c>.configtransform/**</c>, CONFIG_MANAGEMENT.md §7.1) can just as
-/// easily leave a configtransform.json still git-crypt ciphertext on disk.
+/// per-layer-directory replacement for <c>manifest.json</c>. Recognizes a configtransform.json that
+/// is still git-crypt ciphertext (<see cref="GitCrypt"/>), since the same encrypted tree this file
+/// can live under (<c>.configtransform/**</c>, CONFIG_MANAGEMENT.md §7.1) can just as easily leave
+/// it locked on disk.
+///
+/// Strict about unknown fields: a field this version doesn't know is an error, not silently
+/// skipped. Before this, a layer using a newer field (e.g. <c>secrets</c>, docs/SECRETS_DESIGN.md)
+/// read by an older tool had that field ignored — deploying unresolved placeholders without a word.
+/// Rejecting unknown fields means any future addition fails loudly on a too-old tool instead.
 /// </summary>
 public static class LayerManifestLoader
 {
-    /// <summary>
-    /// git-crypt's own magic header for an encrypted file: 10 bytes, NUL + "GITCRYPT" + NUL.
-    /// A configtransform.json under a git-crypt'd `.configtransform/**` tree that hasn't been
-    /// `git-crypt unlock`ed still has this ciphertext on disk, which fails JSON parsing with a
-    /// confusing "'0x00' is an invalid start of a value" error unless callers special-case it.
-    /// </summary>
-    private static readonly byte[] GitCryptHeader =
-        [0x00, (byte)'G', (byte)'I', (byte)'T', (byte)'C', (byte)'R', (byte)'Y', (byte)'P', (byte)'T', 0x00];
+    private static readonly JsonSerializerOptions ReadOptions = new()
+    {
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
+    };
+
+    /// <summary>The suffix every <c>secrets</c> entry must have, so the <c>*.secret.*</c> git-crypt rule always covers it.</summary>
+    public const string SecretFileSuffix = ".secret.env";
+
+    /// <summary>What every <c>replace</c> file's name must contain, for the same reason.</summary>
+    public const string SecretFileMarker = ".secret.";
 
     public static LayerManifest Load(string layerManifestPath)
     {
         if (!File.Exists(layerManifestPath))
             throw new FileNotFoundException($"configtransform.json not found: '{layerManifestPath}'");
 
-        if (StartsWithGitCryptHeader(layerManifestPath))
+        if (GitCrypt.IsLocked(layerManifestPath))
         {
             throw new InvalidOperationException(
                 $"'{layerManifestPath}' is still git-crypt encrypted (this is git-crypt's own " +
@@ -39,25 +47,66 @@ public static class LayerManifestLoader
         LayerManifest? manifest;
         try
         {
-            manifest = JsonSerializer.Deserialize<LayerManifest>(json);
+            manifest = JsonSerializer.Deserialize<LayerManifest>(json, ReadOptions);
+        }
+        catch (JsonException ex) when (ex.Message.Contains("could not be mapped", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"'{layerManifestPath}' has a field this version of configtransform doesn't recognize: {ex.Message}\n" +
+                "Try: check the field name for a typo -- or, if this layer was written for a newer version, " +
+                "update configtransform.cli's version in .config/dotnet-tools.json.", ex);
         }
         catch (JsonException ex)
         {
             throw new InvalidOperationException($"Failed to parse '{layerManifestPath}': {ex.Message}", ex);
         }
 
-        return manifest ?? throw new InvalidOperationException($"'{layerManifestPath}' deserialized to null.");
+        manifest = manifest ?? throw new InvalidOperationException($"'{layerManifestPath}' deserialized to null.");
+
+        foreach (var secretsFile in manifest.Secrets ?? [])
+        {
+            if (!secretsFile.EndsWith(SecretFileSuffix, StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    $"'{layerManifestPath}' lists secrets file '{secretsFile}', which doesn't end in '{SecretFileSuffix}'. " +
+                    "Every secrets file must, so the '.configtransform/**/*.secret.*' git-crypt rule always covers it " +
+                    $"(docs/SECRETS_DESIGN.md).\nTry: rename it to end in '{SecretFileSuffix}'.");
+            RequireInsideConfigTransform(layerManifestPath, "secrets file", secretsFile);
+        }
+
+        foreach (var resource in manifest.Resources)
+        {
+            if (resource.Replace is null)
+                continue;
+
+            if (resource.Patch is not null)
+                throw new InvalidOperationException(
+                    $"'{layerManifestPath}' gives '{resource.Path}' both a patch and a replace. A replace is the whole " +
+                    "file, so there's nothing for a patch to merge into -- merging onto a secret file is exactly what " +
+                    "replace exists to prevent (docs/SECRETS_DESIGN.md).\nTry: keep one of them.");
+            if (!System.IO.Path.GetFileName(resource.Replace).Contains(SecretFileMarker, StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    $"'{layerManifestPath}' replaces '{resource.Path}' with '{resource.Replace}', whose name doesn't contain " +
+                    $"'{SecretFileMarker}'. A replace file must be named *.secret.* so the '.configtransform/**/*.secret.*' " +
+                    "git-crypt rule covers it (docs/SECRETS_DESIGN.md).\nTry: e.g. firebase.secret.json.");
+            RequireInsideConfigTransform(layerManifestPath, "replace file", resource.Replace);
+        }
+
+        return manifest;
     }
 
-    private static bool StartsWithGitCryptHeader(string path)
+    /// <summary>
+    /// The '.configtransform/**/*.secret.*' git-crypt rule only covers files under .configtransform/
+    /// -- a correctly named secret file anywhere else would be committed in plaintext. Paths here are
+    /// repo-root-relative, so "inside" means the first segment is .configtransform and no segment
+    /// climbs back out with "..".
+    /// </summary>
+    private static void RequireInsideConfigTransform(string layerManifestPath, string what, string path)
     {
-        using var stream = File.OpenRead(path);
-        var buffer = new byte[GitCryptHeader.Length];
-        var totalRead = 0;
-        int read;
-        while (totalRead < buffer.Length && (read = stream.Read(buffer, totalRead, buffer.Length - totalRead)) > 0)
-            totalRead += read;
-
-        return totalRead == buffer.Length && buffer.AsSpan().SequenceEqual(GitCryptHeader);
+        var segments = path.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length < 2 || segments[0] != ".configtransform" || segments.Contains(".."))
+            throw new InvalidOperationException(
+                $"'{layerManifestPath}' lists {what} '{path}', which isn't inside .configtransform/ -- the " +
+                "'.configtransform/**/*.secret.*' git-crypt rule wouldn't cover it, so it would be committed in plaintext " +
+                "(docs/SECRETS_DESIGN.md).\nTry: move it next to this configtransform.json and list it by its repo-root-relative path.");
     }
 }

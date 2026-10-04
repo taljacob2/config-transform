@@ -4,5 +4,11 @@
   },
   "flags": {
     "betaEnabled": false
-  }
+  },
+  "labels": {
+    "greeting": "héllo <world> & 'friends' +1"
+  },
+  "version": "2.10",
+  "retired": [],
+  "owner": null
 }

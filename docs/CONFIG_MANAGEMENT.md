@@ -51,12 +51,12 @@ needs a different mechanism — not an assumption that this design already cover
 
 | Decision | Chosen | Rejected alternative(s) | Why |
 |---|---|---|---|
-| Config variant management | Base file + layered transform/overlay files (XDT for XML, `Microsoft.Extensions.Configuration`-based merge for JSON) | Full flat config file per (client, environment) | Avoids duplicating shared settings across every client; a shared value change is a one-line edit, not an N-file edit. (Flat remains legitimate if a given project's settings are mostly client-specific with little sharing — decide per project, not globally.) |
+| Config variant management | Base file + layered transform/overlay files (XDT for XML, a tree merge with `Microsoft.Extensions.Configuration`'s layering rules for JSON/YAML) | Full flat config file per (client, environment) | Avoids duplicating shared settings across every client; a shared value change is a one-line edit, not an N-file edit. (Flat remains legitimate if a given project's settings are mostly client-specific with little sharing — decide per project, not globally.) |
 | XML transform engine | `Microsoft.Web.Xdt` called directly | SlowCheetah | SlowCheetah is unmaintained tooling glue around the same engine; `Microsoft.Web.Xdt` itself is the actively maintained piece (.NET Foundation). |
 | Encryption mechanism | git-crypt, whole-file encryption | SOPS + age/KMS | SOPS only understands JSON/YAML/etc., not XML, and requires secrets to be split out of App.config first — a refactor the team cannot do right now. git-crypt encrypts whole files regardless of format, requiring zero restructuring of existing mixed App.config files. |
 | git-crypt key model | Single default symmetric key | Per-user GPG keys | GPG gives an auditable grant history but **not** free revocation — revoking access still requires generating a new content key and re-encrypting everything, the same cost as symmetric-key rotation. Given the team's time constraints, the operational overhead of GPG (per-dev keypairs, key exchange/trust, a CI GPG identity) isn't worth it for a benefit (audit trail of grants) that's thin relative to its cost. |
 | Per-client key segmentation | Not implemented now; kept as an explicit future escape hatch | Per-client keys/filters from day one | Adds bookkeeping with no current benefit while everything shares one key. Revisit only if a specific client has an actual isolation requirement. |
-| `.gitattributes` scope | One glob: `.configtransform/** filter=git-crypt diff=git-crypt` | Per-client filter names | Per-client filter names only matter once a client is actually split onto its own key (a distinct key collection). Until then it's pure ceremony. |
+| `.gitattributes` scope | One glob. Recommended: `.configtransform/**/*.secret.* filter=git-crypt diff=git-crypt` (secrets only, with `{{CFSECRET_NAME}}` placeholders — `docs/SECRETS_DESIGN.md`); the original `.configtransform/**` (whole tree) stays supported | Per-client filter names | Per-client filter names only matter once a client is actually split onto its own key (a distinct key collection). Until then it's pure ceremony. |
 | Config file location assumption | None — each project's location is declared explicitly via `resources[].path` in a `configtransform.json` layer, pointing directly at wherever the real config file actually is (not specifically a `.csproj`'s directory — see §4) | Assuming a `src/<Project>/` convention | Source layout is not guaranteed to be consistent (flat at root, arbitrarily nested). `resources[].path` decouples the `.configtransform/` tree from wherever code actually lives — and, as a consequence of that decoupling, from any particular language ecosystem too. (Originally a separate `manifest.json` `directory` field added this indirection; `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md` later replaced it with `resources[].path` naming the file directly, an even flatter decoupling — see that document's "Settled decisions" #5.) |
 | Client/environment directory naming | Nested: `Clients/<Client>/<Environment>/configtransform.json` | Flat: `Clients/<Client>-<Environment>/configtransform.json` | Nested scales better for browsing once client count grows past a handful, avoids any hyphen-in-name ambiguity for humans reading the tree, and keeps the door open for future per-client git-crypt key scoping via a directory glob. |
 | Environment-wide layer | Included: `Environments/<Environment>/configtransform.json`, which a Client layer typically `extends` | Skipping straight to `Clients/<Client>/<Environment>/configtransform.json` | Exists specifically to avoid duplicating settings that are identical across all clients within one environment (e.g. `debug=false` in Production). If a given project turns out to have nothing genuinely shared across clients, the Environment layer simply doesn't list it in its own `resources` — decide per project based on actual content, not globally (see `docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md`'s "The Environment layer stays optional, per project" — unchanged by the `extends` redesign). |
@@ -179,12 +179,13 @@ The tool does not attempt to detect or guess typos (e.g. a `configtransform.json
 misspelled `Environments/Prodution/` folder) — it isn't in a position to know intent, and
 shouldn't try. What it does instead: every single-resource run (`--dry-run`, `--diff`, and real
 runs alike) prints a `Resolving '<resource path>'` report before the merged content/diff, showing
-the resource's full chain in real application order — `base` first, then every layer
-outermost-first, each labeled `patched in: <path>` or `not patched in`, connected by `↓`, every
+the resource's full chain in real application order — the resource's own file first (labelled
+`resource`; `base` before `0.27.0-alpha`, renamed since "base" was a second name for the same
+file), then every layer outermost-first, each labeled `patched in: <path>` or `not patched in`, connected by `↓`, every
 path repo-relative and never abbreviated or omitted:
 ```
 Resolving 'ProjectA.Framework/App.config'
-    base
+    resource
       ProjectA.Framework/App.config
       ↓
     .configtransform/Environments/Production/configtransform.json
@@ -196,7 +197,10 @@ Resolving 'ProjectA.Framework/App.config'
 This keeps a typo visible to a human reading the output — because the layer they expected to
 patch the resource is reported as not doing so — without the tool trying to be clever about
 whether an absence was intentional. A blank line always separates this report from the merged
-content or diff that follows it, so the two are never visually run together.
+content or diff that follows it, so the two are never visually run together. When the
+resource uses secrets, a per-secret tree follows the chain — where each is used and where its
+value is set, in the same `patched in:` vocabulary (`docs/SECRETS_DESIGN.md`, "What each mode
+does").
 
 `--list` (given `--client`/`--environment`) prints this exact same chain rendering — same real
 patch paths, same `↓` connectors — once per resource the layer touches
@@ -236,17 +240,34 @@ during the real inventory pass (§11).
 
 ### 5.3 JSON (.NET 6/8)
 
-Uses `Microsoft.Extensions.Configuration`'s own `ConfigurationBuilder` as the merge engine at
-**build time** (`AddJsonFile` for the base file, then each patch in the resolved chain, in
-`extends` order), then flattens the resulting `IConfigurationRoot` back out to a single
-`appsettings.json` written
-into the publish output. This is Option B from our discussion (build-time resolution) chosen
+Merges at **build time**: the base file, then each patch in the resolved chain, in `extends`
+order, merged into the base document's own tree, and the result written into the publish output as
+a single `appsettings.json` (`docs/TREE_MERGE_DESIGN.md`). The merge rules are
+`Microsoft.Extensions.Configuration`'s own layering rules (key-by-key, arrays by index), so the
+file deployed is what the app would have seen layering the same files at runtime — with one
+deliberate difference: keys match case-sensitively, and a patch key that matches an existing key
+only by case is an error rather than a silent override (`docs/TREE_MERGE_DESIGN.md`'s "Key matching
+is case-sensitive"). Until the output-fidelity pass this literally ran through a `ConfigurationBuilder` and
+rebuilt the document from flattened string keys, which reordered keys, guessed value types back
+(`"007"` became `7`) and dropped `null`/`{}`/`[]`; the tree merge keeps all of them as written. This is Option B from our discussion (build-time resolution) chosen
 over Option A (runtime layering via `AddJsonFile` at app startup, selecting the client via an
 environment variable) — Option A is more "cloud-native idiomatic" (build once, deploy many)
 but would mean every client's secrets potentially ship inside every artifact/image
 (since the client isn't known until runtime), widening blast radius and requiring runtime
 decryption. Option B keeps one consistent build-time resolution model across both project
 types and keeps each deployed artifact scoped to exactly the client it's for.
+
+**Characters are written literally, not escaped.** Every JSON the tool writes (merged output,
+`set`'s overlay and base writes, and `configtransform.json` layer files) uses
+`JavaScriptEncoder.UnsafeRelaxedJsonEscaping` (`JsonWriteOptions` in `ConfigTransform.Json`;
+`LayerManifestSerializer` in Core for layer files). System.Text.Json's default encoder escapes every
+non-ASCII character and the HTML-sensitive `< > & ' +`, so a password `a+b` was written as
+`a\u002Bb` and a Hebrew value as a run of `\u05XX` escapes. That's valid JSON, but unreadable in a
+deployed file or a `--diff`. The encoder's "unsafe" only matters when output is embedded in
+HTML/script, which config files never are; it still escapes `"`, `\` and control characters. One
+quirk remains, and it comes from System.Text.Json itself: a character outside the Basic
+Multilingual Plane (an emoji, say) is always written as an escaped surrogate pair, whatever
+encoder is used.
 
 ### 5.4 Case-insensitive file resolution
 
@@ -282,8 +303,7 @@ registered as a third `FormatEngine` in `ConfigTransform.Cli`'s `FormatEngineReg
 orchestration changes were needed at all, confirming the "register a new engine, nothing else
 changes" claim `CLAUDE.md`/`SELF_DESCRIBING_OVERLAYS_DESIGN.md` make for the dispatcher, for a
 third format and not just two. Needs **no NuGet package at all** — parsing/serializing flat
-`KEY=VALUE` text needs nothing beyond the BCL, unlike JSON's `Microsoft.Extensions.Configuration`
-dependency.
+`KEY=VALUE` text needs nothing beyond the BCL.
 
 Merge semantics mirror JSON's flat key-override, simpler still since there's no nesting or
 arrays to disambiguate: the base file parses into an ordered `KEY→VALUE` map, and each patch in
@@ -293,9 +313,8 @@ deliberately (`EnvFile.cs` carries the authoritative rule list; see
 `docs/FIELD_AUTHORING_DESIGN.md`'s decision log for the reasoning behind each one):
 
 - Blank lines and whole-line `#` comments are dropped on parse and never reappear on
-  serialize — this matches JSON's own existing behavior (`Microsoft.Extensions.Configuration`'s
-  JSON provider already drops comments/formatting on rebuild too), not a new gap this format
-  introduces.
+  serialize — this matches the JSON and YAML engines, which also drop comments on output
+  (`docs/TREE_MERGE_DESIGN.md`), not a new gap this format introduces.
 - An optional leading `export ` is stripped before parsing the key, supporting Bash-sourceable
   files (a common real `.env` convention, e.g. `direnv`/Docker `env_file`).
 - A key must match the real POSIX env-var-name grammar (`[A-Za-z_][A-Za-z0-9_]*`); an invalid key
@@ -322,14 +341,13 @@ one real file, matched by extension the same way as every other format.
 ### 5.6 YAML
 
 Implemented (`ConfigTransform.Yaml`). Structurally the same as JSON — hierarchical, keyed — so it
-reuses the exact same build-time flatten-and-merge *architecture* as `ConfigTransform.Json`
-(§5.3): `Microsoft.Extensions.Configuration`, but with `NetEscapades.Configuration.Yaml`'s
-`AddYamlFile` in place of `AddJsonFile`. Per this repo's own per-format independent-library
-convention (`CLAUDE.md`'s "Repo structure"), `ConfigTransform.Yaml` shares no code with
-`ConfigTransform.Json` — the merge/serialize logic is ported, not reused, and the read side
-(`NetEscapades.Configuration.Yaml`) and write side (`YamlDotNet`'s high-level `ISerializer`,
-needed directly since NetEscapades only reads) are both real NuGet dependencies, unlike `.env`
-(§5.5), which needed none.
+uses the same tree merge and the same merge rules as `ConfigTransform.Json` (§5.3,
+`docs/TREE_MERGE_DESIGN.md`), over YamlDotNet's representation model (`YamlStream`). Per this
+repo's own per-format independent-library convention (`CLAUDE.md`'s "Repo structure"),
+`ConfigTransform.Yaml` shares no code with `ConfigTransform.Json` — the merge is ported, not
+reused. `YamlDotNet` is its one NuGet dependency (the engine originally also used
+`NetEscapades.Configuration.Yaml` to feed `Microsoft.Extensions.Configuration`; the tree merge
+needs neither).
 
 Recognized by `resources[].path`'s own `.yaml`/`.yml` extension — both map to the same engine
 (a two-extension `FormatEngine`, the same pattern XML already uses for `[".config", ".xml"]`).
@@ -337,47 +355,65 @@ Registered as the fourth `FormatEngine` in `ConfigTransform.Cli`'s `FormatEngine
 zero orchestration changes needed — the dispatcher generalizing to a fourth engine (after `.env`
 already proved a third) with no changes outside the new registration and merge engine itself.
 
-Merge semantics: array-override-by-index and empty-map/empty-sequence-round-trips-as-absent
-behavior are inherited from `IConfiguration`'s own flattening, identically to JSON (§5.3) — not
-YAML-specific, and not new gaps this format introduces.
+Merge semantics are JSON's (§5.3): maps key by key with exact (case-sensitive) key matching and
+an error on a case-only mismatch, sequences by index, anything else replaced as written. Scalars are never interpreted, only
+carried over, so quoting (`"..."`, `'...'`, plain), block scalars and flow collections come through
+exactly as written, and `{}`/`[]`/`null`/`~` survive. The base file's indentation width and
+sequence style (indented under the key, or flush with it) are detected and reused. Not preserved:
+comments, anchors/aliases (expanded into copies), and per-level indentation widths. A file with
+more than one YAML document (`---`) is refused. Keys differing only by case within one file are
+allowed (YAML is case-sensitive); the original NetEscapades-based engine threw on them.
 
-Known, real limitation (verified empirically, not assumed): YAML itself is case-sensitive, but
-`Microsoft.Extensions.Configuration` is not. Two sibling keys differing only in case (e.g. `Foo:`
-and `foo:` at the same level) throw a duplicate-key exception at parse time via
-`NetEscapades.Configuration.Yaml`. Accepted as a known quirk of the underlying library, the same
-way JSON's array-index-override and `.env`'s comment-dropping are documented rather than "fixed."
+**Quote string values in your YAML files.** YAML 1.1 parsers — still common, PyYAML among them —
+read some unquoted text as other types: `NO` as boolean false (the "Norway problem"), `yes`/`on`,
+`~`/`null` as null, `0123` as octal, `1:20` as the number 80. The merge never re-quotes what an
+author wrote, since an unquoted `no` may be a boolean on purpose. Whatever the tool *writes*
+itself is safe: `set` always quotes string values, and secret substitution quotes any plain scalar
+it changes (`docs/FIELD_AUTHORING_DESIGN.md`'s "Value typing").
 
-`set` (`YamlFieldAuthor`) covers the plain-field path only — updating an existing key or creating
-a new one via `--match key=<path>`/`--match literal-key=<path>` (`:`-separated nested paths, same
-model as JSON's own, including the same nested-path-vs-literal-key collision detection). Matching
-an item inside an array of objects (YAML's equivalent of JSON's `$elemMatch`, §7) is **not**
-implemented — a `--match` shape with more than one coordinate is refused with a clear "not yet
-supported" error rather than guessed at, the same posture this tool already takes for XML's own
-unimplemented array-of-objects matching and `Insert`. `JsonElemMatchResolver` (§7) is ~200 lines
-tightly coupled to `System.Text.Json.Nodes` types; porting it to YAML's own object-graph shape is
-real, separable work, deliberately deferred rather than bundled into YAML's first version — this
-repo's own precedent for JSON itself, where `$elemMatch` landed in a later PR than JSON's first
-`set`.
+`set` (`YamlFieldAuthor`) updates an existing key or creates a new one via `--match key=<path>`/
+`--match literal-key=<path>` (`:`-separated nested paths, same model as JSON's own, including the
+same nested-path-vs-literal-key collision detection), and matches or creates an item inside an
+array of objects via the same `$elemMatch` overlay shape as JSON (`YamlElemMatchResolver`, ported
+from `JsonElemMatchResolver`), resolved at merge time against the document as merged so far. YAML
+conditions compare by text, not type — an unquoted YAML scalar's type depends on the reader. The
+array-of-objects half landed after YAML's first `set`, the same way JSON's own `$elemMatch` did
+(`docs/FIELD_AUTHORING_DESIGN.md`, "YAML array-of-objects matching").
 
 ## 6. Transform tool CLI
 
-One tool, `configtransform` (`ConfigTransform.Cli`), shares the same CLI shape across both
-formats — it dispatches each resource to the right merge engine by its own file extension, so a
+One tool, `configtransform` (`ConfigTransform.Cli`), shares the same CLI shape across every
+format — it dispatches each resource to the right merge engine by its own file extension, so a
 mixed-format layer resolves in a single call:
 
 ```
 --resource <repo-root-relative path>   optional — omit for every resource the layer touches
 --client <ClientName>                  optional — requires --environment (no client-only layer)
 --environment <EnvironmentName>        optional — targets that Environment layer alone; neither given targets the base file directly
+--host <HostName>                      optional — requires --client and --environment; one load-balanced server's layer (docs/HOST_LAYER_DESIGN.md)
 --output <path>                        real runs only — where the merged result is written (CI passes the publish dir path; a directory when --resource is omitted)
 --dry-run                              print the fully merged result to stdout; nothing is written to disk
 --diff                                 print a unified diff (unpatched vs. fully merged) using `git diff --no-index`; nothing is written to disk except throwaway temp files, cleaned up immediately
+--diff-layers                          like --diff, but one diff per layer that changes the resource (docs/DIFF_LAYERS_DESIGN.md)
+--color <auto|always|never>            ANSI colour in diff output; default auto — only on a terminal, and never with NO_COLOR set
 ```
 
 `--dry-run` and `--diff` never write to the base file's own location — real runs only ever
 write to an explicitly passed `--output` path, which CI always points at the build/publish
 output directory, never at the source tree. Full flag reference, including `--list` and `set`:
 `docs/USAGE.md`.
+
+**Console output is always UTF-8** (`Utf8Console`, in `ConfigTransform.Cli`), whatever the
+console's own code page. Before this, .NET on Windows encoded stdout/stderr in the console's code
+page (437 by default in cmd.exe and Git Bash), so a pipe or file redirect silently lost every
+character outside it — the resolution report's `↓` came out as the control byte `0x19`, and a
+non-ASCII config value printed by `--dry-run` became `?`. That's real data loss for
+`--dry-run > file`, not just cosmetics (`--output` was never affected — files are always written as
+UTF-8). Redirected output is written as UTF-8 bytes with no BOM, so `--dry-run > out.json` matches
+what `--output` writes byte for byte. On a real console the tool switches the console's output
+code page to UTF-8 for the duration of the run and restores the original on exit, rather than
+leaving the user's shell changed; if the code page can't be changed (no console attached), it
+falls back silently to the default.
 
 Example:
 
@@ -401,14 +437,40 @@ dotnet tool run configtransform -- \
 
 ## 7. Encryption at rest (git-crypt)
 
+git-crypt can cover one of two scopes. Pick one per repo:
+
+- **Secrets only — recommended** (`docs/SECRETS_DESIGN.md`). Configuration stays plaintext, with
+  `{{CFSECRET_NAME}}` placeholders where secret values go. The values live in `*.secret.env` files a
+  layer lists under `secrets`; whole-file secrets (a Firebase JSON, a certificate) live in
+  `*.secret.*` files a resource `replace`s itself with. git-crypt covers only those files, so every
+  other overlay is readable and reviewable on GitHub, and `--list`/`--diff`/`--dry-run` work without
+  the key (secrets show as placeholders, with a status report).
+- **The whole `.configtransform/**` tree** — this architecture's original choice. Simpler to start
+  with (secret values can sit in overlays as-is), but it treats all configuration as one secret:
+  nobody without the key can read or review any overlay, on GitHub or locally. Still fully
+  supported; a repo can migrate to secrets-only later (§7.2).
+
+Either way the tool itself needs nothing from git-crypt: it reads plaintext files, and only
+recognizes a still-locked file to say "run git-crypt unlock" instead of failing confusingly.
+
 ### 7.1 Setup
 
 ```bash
 git-crypt init
-echo ".configtransform/** filter=git-crypt diff=git-crypt" >> .gitattributes
+
+# Secrets only (recommended):
+echo ".configtransform/**/*.secret.* filter=git-crypt diff=git-crypt" >> .gitattributes
+# ...or the whole tree:
+# echo ".configtransform/** filter=git-crypt diff=git-crypt" >> .gitattributes
+
 git add .gitattributes
 git commit -m "Add git-crypt attributes for .configtransform/"
 ```
+
+The tool enforces the secrets-only rule's coverage from its side: every `secrets` file must end in
+`.secret.env`, every `replace` file's name must contain `.secret.`, and both must be inside
+`.configtransform/` — a layer that breaks any of these is rejected, so no secrets file can sit
+outside the rule by accident.
 
 Key distribution: `git-crypt export-key ./git-crypt-key`, shared out-of-band (never via git)
 with authorized developers and pasted (base64) into a CI secret. Developers run
@@ -416,7 +478,7 @@ with authorized developers and pasted (base64) into a CI secret. Developers run
 `config-transform`) for the concrete, platform-by-platform commands (Windows included) this
 summary skips over.
 
-This `.gitattributes` glob is unconditional and has nothing to do with any resource's
+Either glob is unconditional and has nothing to do with any resource's
 `resources[].path` value — every layer's `.configtransform/Environments/<Env>/`/
 `.configtransform/Clients/<Client>/<Env>/` tree is covered the same way, regardless of where in
 the repo the resources it patches actually live, including a resource whose own base file sits
@@ -424,7 +486,7 @@ at the repo root itself (`resources[].path` is just `"appsettings.json"`, no spe
 needed — see `MANIFEST_SCHEMA.md`).
 
 > **Disclaimer for whoever runs this the first time:** losing this key, with no backup, means
-> everything under `.configtransform/**` becomes **permanently unrecoverable** — this is not a
+> every file the rule covers becomes **permanently unrecoverable** — this is not a
 > bug, it's what encryption without a backdoor means. This is intentional and accepted as part
 > of the design (§2), but it means the key must be stored somewhere durable with more than one
 > person able to retrieve it (e.g. a team password manager/vault entry) — not solely on the
@@ -439,8 +501,21 @@ git commit -m "Encrypt .configtransform/ with git-crypt"
 git push
 ```
 
-This encrypts everything under `.configtransform/**` from this commit forward. It does **not** remove
+This encrypts every file the rule covers from this commit forward. It does **not** remove
 plaintext from prior commits — that is handled separately (§7.4).
+
+**Moving an existing whole-tree repo to secrets-only** is the reverse direction — files that were
+encrypted become plaintext from the next commit on. Do it in this order (full steps:
+`docs/SECRETS_DESIGN.md`'s "Migrating a repo off whole-tree encryption"):
+
+1. Pin a tool version that supports secrets.
+2. Move every secret value into a `*.secret.env` file and replace it with its `{{CFSECRET_NAME}}`
+   placeholder; turn every whole-file secret into a `replace`.
+3. Verify with the key: every combination's `--dry-run` reports every secret `resolved`, and `-o`
+   output is byte-identical to before.
+4. Remove or mask any CI step that prints resolved output (a `cat` of an `-o` file).
+5. **Only then** narrow `.gitattributes` and, with the repo unlocked,
+   `git add --renormalize .configtransform`. Earlier history stays encrypted.
 
 ### 7.3 Diffing encrypted files, and the PR review workflow
 
@@ -451,7 +526,9 @@ arbitrary command to execute). Consequences:
 
 - Anyone with the key and an unlocked clone gets normal, readable `git diff`/`git log -p`
   locally.
-- **GitHub's PR web UI shows only a blob-level diff for these files** ("binary file changed" /
+- With the **secrets-only** rule, this applies only to `*.secret.*` files — every other overlay
+  is plaintext and diffs normally on GitHub, including inline review comments.
+- **GitHub's PR web UI shows only a blob-level diff for encrypted files** ("binary file changed" /
   no line-level content) — GitHub's servers don't have the key and can't run a local
   `textconv` command. This is not a defect to work around; it is the correct and intended
   behavior. Anyone without the key seeing "content changed, values not shown" is git-crypt
@@ -461,9 +538,10 @@ arbitrary command to execute). Consequences:
   semantic difference between a project's base config and what a specific client actually
   ends up with, at the current state, independent of history.
 
-**Review policy: local-only, by design.** Reviewers who hold the git-crypt key review changes
-under `.configtransform/**` by pulling the branch, unlocking, and running `git diff`/`--diff`
-themselves, then approving on GitHub without GitHub itself ever rendering the content. GitHub's
+**Review policy for encrypted files: local-only, by design.** Under the whole-tree rule that means
+every change under `.configtransform/**`; under the secrets-only rule, only `*.secret.*` files.
+Reviewers who hold the git-crypt key review those by pulling the branch, unlocking, and running
+`git diff`/`--diff` themselves, then approving on GitHub without GitHub itself ever rendering the content. GitHub's
 inline line-comment UI is not available for these specific files as a result — an accepted UX
 cost, not a bug to fix.
 
@@ -477,6 +555,12 @@ which is strictly less protected than the file was before, not a review-convenie
 making. The only scenario where this would be safe is if a repo's read-access list is already
 identical to its key-holder list, which is a fact about that specific repo's permissions that
 would need explicit verification, not something to assume as a default behavior.
+
+**Under the secrets-only rule this changes**, with one condition. `--diff` without
+`--reveal-secrets` prints placeholders, never values, so posting it on a PR exposes nothing — *as
+long as every secret in the repo really is behind a placeholder or a `replace`*. A secret value
+someone left directly in an overlay would be posted in plaintext. Treat it as safe only after the
+migration in §7.2 is complete, and never pass `--reveal-secrets` in such a step.
 
 ### 7.4 Handling secrets already exposed in history
 

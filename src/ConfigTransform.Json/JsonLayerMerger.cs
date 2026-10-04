@@ -1,169 +1,173 @@
 using System.Globalization;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Microsoft.Extensions.Configuration;
+using ConfigTransform.Core;
 
 namespace ConfigTransform.Json;
 
 /// <summary>
-/// Applies an arbitrary-length chain of JSON overlays, in order, to a JSON config file using
-/// Microsoft.Extensions.Configuration's own ConfigurationBuilder as the merge engine (base then
-/// each patch in turn via AddJsonFile), then flattens the resulting configuration back out to a
-/// single JSON document. Under docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md a chain's length varies
-/// with how deep its `extends` nesting goes (no longer a fixed two-slot base→Environment→Client
-/// rule). Format-generic by design: no appsettings.json-specific logic here (see CLAUDE.md).
+/// Applies an arbitrary-length chain of JSON overlays, in order, to a JSON config file by merging
+/// each one into the base document's own tree (docs/TREE_MERGE_DESIGN.md). Under
+/// docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md a chain's length varies with how deep its `extends`
+/// nesting goes. Format-generic by design: no appsettings.json-specific logic here (see CLAUDE.md).
 ///
-/// Two things worth knowing, both inherent to IConfiguration's flat string-keyed model, not
-/// specific to this tool:
-/// - IConfiguration stores every leaf value as a plain string. A naive round-trip would turn
-///   `"enabled": false` into `"enabled": "false"`. This class infers bool/integer/float/string
-///   from the flattened value (in that priority order) to preserve the original JSON type in
-///   the overwhelming common case.
-/// - An array is not replaced wholesale by an overlay — each element is a separate flattened
-///   key ("Origins:0", "Origins:1", ...), so an overlay array only overrides the indices it
-///   specifies; any trailing base-layer indices beyond that survive untouched. See
-///   JsonLayerMergerTests for a test that pins this exact behavior.
-/// - An originally-empty JSON object ({}) or array ([]) produces no flattened keys at all, so
-///   it round-trips as null rather than as an empty object/array.
+/// Merge rules — the ones Microsoft.Extensions.Configuration's own layering applies, which this
+/// engine used to delegate to, minus the side effects of flattening everything to strings, and
+/// with case-sensitive key matching:
+/// - Objects merge key by key, recursively. Keys match exactly -- JSON is case-sensitive, and so
+///   are most of the ecosystems whose config this tool merges. A matched key keeps its position;
+///   a new key is appended after the existing ones, in the patch's order. A patch key that matches
+///   an existing key <i>only by case</i> is an error, not a new key (see <see cref="CaseOnlyMismatch"/>).
+/// - Arrays merge by index: an overlay array only overrides the indices it specifies, and any
+///   trailing base items beyond that survive untouched. An object whose keys are all array
+///   indices (<c>{"1": ...}</c>) addresses individual items of an existing array, the
+///   IConfiguration idiom for overriding one element — and the shape
+///   <see cref="JsonElemMatchResolver.Rewrite"/> resolves <c>$elemMatch</c> patches to.
+/// - Anything else — a scalar, <c>null</c>, or a different kind of node than the one it lands on —
+///   replaces what was there, exactly as written in the patch.
+///
+/// Every value keeps the type and text it was written with: <c>"007"</c> stays a string,
+/// <c>1.50</c> stays <c>1.50</c>, <c>null</c>/<c>{}</c>/<c>[]</c> survive. The old
+/// flatten-to-strings-and-guess-the-type round trip turned <c>"007"</c> into <c>7</c>, sorted every
+/// key alphabetically, and dropped empty containers. Comments and trailing commas are accepted on
+/// input, as IConfiguration accepts them; comments are not carried into the output. The output uses
+/// the base file's line endings and ends with a newline exactly when the base does
+/// (<see cref="TextLayout"/>).
 ///
 /// A patch containing <c>$elemMatch</c>-shaped array-of-objects overlays
-/// (docs/FIELD_AUTHORING_DESIGN.md; <see cref="JsonElemMatchResolver"/>) needs a pre-processing
-/// pass -- resolving each patch to a real position by inspecting the actual document -- before
-/// its content can be handed to Microsoft.Extensions.Configuration at all, since that library
-/// has no concept of matching an array element by a field's value, only by index. That
-/// resolution is progressive across the whole chain: each patch resolves its own `$elemMatch`
-/// entries against the *accumulated* merge of every prior patch in the chain, not against the
-/// base alone (mirroring how <c>XmlLayerMerger</c> applies each transform to the
-/// already-previously-transformed document, in order). <see cref="LegacyMerge"/> is the
-/// original, untouched two-slot implementation, kept verbatim as the fast path for the
-/// overwhelming common case (no patch in the chain uses <c>$elemMatch</c> at all) -- every
-/// existing merge behavior keeps running through the exact code that was already tested,
-/// unchanged.
+/// (docs/FIELD_AUTHORING_DESIGN.md) is first resolved by <see cref="JsonElemMatchResolver.Rewrite"/>
+/// against the document as merged so far — the base plus every earlier patch, never the base
+/// alone — the same progressive order in which <c>XmlLayerMerger</c> applies each transform.
 /// </summary>
 public static class JsonLayerMerger
 {
+    private static readonly JsonDocumentOptions ReadOptions = new()
+    {
+        CommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true,
+    };
+
     public static string Merge(string basePath, IReadOnlyList<string> patchPathsInOrder)
     {
-        var trees = patchPathsInOrder.Select(ReadIfExists).ToList();
-        var anyNeedsRewrite = trees.Any(t => t is not null && JsonElemMatchResolver.ContainsElemMatch(t));
-
-        if (!anyNeedsRewrite)
-            return LegacyMerge(basePath, patchPathsInOrder);
-
-        var accumulated = JsonNode.Parse(File.ReadAllText(basePath));
-        var layers = new List<LayerInput>();
-
-        for (var i = 0; i < patchPathsInOrder.Count; i++)
-        {
-            var tree = trees[i];
-            var needsRewrite = tree is not null && JsonElemMatchResolver.ContainsElemMatch(tree);
-
-            var layer = needsRewrite
-                ? LayerInput.FromNode(JsonElemMatchResolver.Rewrite(tree, accumulated))
-                : LayerInput.FromPath(patchPathsInOrder[i]);
-            layers.Add(layer);
-
-            // Only worth recomputing the accumulated state when a later patch might actually
-            // need to resolve $elemMatch entries against it -- otherwise every remaining layer
-            // in this chain merges normally on the final pass below with no pre-pass needed.
-            if (i < patchPathsInOrder.Count - 1 && trees.Skip(i + 1).Any(t => t is not null && JsonElemMatchResolver.ContainsElemMatch(t)))
-                accumulated = JsonNode.Parse(BuildMerge(basePath, layers));
-        }
-
-        return BuildMerge(basePath, layers);
-    }
-
-    private static JsonNode? ReadIfExists(string? path) =>
-        path is not null && File.Exists(path) ? JsonNode.Parse(File.ReadAllText(path)) : null;
-
-    private readonly record struct LayerInput(string? Path, JsonNode? RewrittenNode)
-    {
-        public static LayerInput FromPath(string? path) => new(path, null);
-        public static LayerInput FromNode(JsonNode? node) => new(null, node);
-    }
-
-    private static string BuildMerge(string basePath, IReadOnlyList<LayerInput> layers)
-    {
-        var builder = new ConfigurationBuilder().AddJsonFile(basePath, optional: false);
-        foreach (var layer in layers)
-            AddLayer(builder, layer);
-
-        var configuration = builder.Build();
-
-        var root = new JsonObject();
-        foreach (var child in configuration.GetChildren())
-            root[child.Key] = BuildNode(child);
-
-        return root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
-    }
-
-    private static void AddLayer(IConfigurationBuilder builder, LayerInput layer)
-    {
-        if (layer.RewrittenNode is not null)
-            builder.AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes(layer.RewrittenNode.ToJsonString())));
-        else if (layer.Path is not null)
-            builder.AddJsonFile(layer.Path, optional: true);
-    }
-
-    /// <summary>The original implementation, kept verbatim as the fast path used whenever no
-    /// patch in the chain contains <c>$elemMatch</c> anywhere -- see the class remarks.</summary>
-    private static string LegacyMerge(string basePath, IReadOnlyList<string> patchPathsInOrder)
-    {
-        var builder = new ConfigurationBuilder().AddJsonFile(basePath, optional: false);
+        var baseText = File.ReadAllText(basePath);
+        var layout = TextLayout.Of(baseText);
+        var document = Parse(baseText);
 
         foreach (var patchPath in patchPathsInOrder)
-            builder.AddJsonFile(patchPath, optional: true);
-
-        var configuration = builder.Build();
-
-        var root = new JsonObject();
-        foreach (var child in configuration.GetChildren())
-            root[child.Key] = BuildNode(child);
-
-        return root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
-    }
-
-    private static JsonNode? BuildNode(IConfigurationSection section)
-    {
-        var children = section.GetChildren().ToList();
-
-        if (children.Count == 0)
-            return ToJsonValue(section.Value);
-
-        var isArray = children
-            .Select((child, index) => child.Key == index.ToString(CultureInfo.InvariantCulture))
-            .All(matches => matches);
-
-        if (isArray)
         {
-            var array = new JsonArray();
-            foreach (var child in children)
-                array.Add(BuildNode(child));
-            return array;
+            // A missing patch file is skipped, not an error -- the same tolerance AddJsonFile's
+            // optional: true gave it (a *declared* patch that's missing is already caught earlier,
+            // by LayerChain.ResolveResource).
+            if (!File.Exists(patchPath))
+                continue;
+
+            var patch = Parse(File.ReadAllText(patchPath));
+            if (JsonElemMatchResolver.ContainsElemMatch(patch))
+                patch = JsonElemMatchResolver.Rewrite(patch, document);
+
+            document = MergeNode(document, patch, patchPath, "");
         }
 
-        var obj = new JsonObject();
-        foreach (var child in children)
-            obj[child.Key] = BuildNode(child);
-        return obj;
+        return layout.Apply(document?.ToJsonString(JsonWriteOptions.Indented) ?? "null");
     }
 
-    /// <summary>Internal, not private: reused by <see cref="JsonFieldAuthor"/> so a value <c>set</c> writes gets the exact same bool/integer/float/string type inference a merge would give it.</summary>
-    internal static JsonNode? ToJsonValue(string? value)
+    private static JsonNode? Parse(string text) =>
+        JsonNode.Parse(text, documentOptions: ReadOptions);
+
+    /// <returns>
+    /// The node that now belongs at <paramref name="target"/>'s position: <paramref name="target"/>
+    /// itself, merged into in place, or a copy of <paramref name="patch"/> that replaces it.
+    /// </returns>
+    private static JsonNode? MergeNode(JsonNode? target, JsonNode? patch, string patchPath, string path)
     {
-        if (value is null)
-            return null;
+        switch (target, patch)
+        {
+            case (JsonObject targetObject, JsonObject patchObject):
+                MergeObject(targetObject, patchObject, patchPath, path);
+                return targetObject;
+            case (JsonArray targetArray, JsonArray patchArray):
+                for (var i = 0; i < patchArray.Count; i++)
+                    MergeArrayItem(targetArray, i, patchArray[i], patchPath, path);
+                return targetArray;
+            case (JsonArray targetArray, JsonObject patchObject) when TryGetIndexKeys(patchObject, out var indexed):
+                foreach (var (index, value) in indexed)
+                {
+                    if (index > targetArray.Count)
+                        throw new InvalidOperationException(
+                            $"A patch addresses item {index} of an array that has only {targetArray.Count} item(s) -- " +
+                            $"an index-keyed patch can update an existing item or append the next one ({targetArray.Count}), " +
+                            "not leave a gap.");
+                    MergeArrayItem(targetArray, index, value, patchPath, path);
+                }
+                return targetArray;
+            default:
+                return patch?.DeepClone();
+        }
+    }
 
-        if (bool.TryParse(value, out var boolValue))
-            return JsonValue.Create(boolValue);
+    private static void MergeObject(JsonObject target, JsonObject patch, string patchPath, string path)
+    {
+        foreach (var (key, patchValue) in patch)
+        {
+            var keyPath = path.Length == 0 ? key : $"{path}:{key}";
+            if (!target.ContainsKey(key))
+            {
+                var caseVariant = target.Select(kvp => kvp.Key)
+                    .FirstOrDefault(existing => string.Equals(existing, key, StringComparison.OrdinalIgnoreCase));
+                if (caseVariant is not null)
+                    throw CaseOnlyMismatch(patchPath, keyPath, path.Length == 0 ? caseVariant : $"{path}:{caseVariant}", caseVariant);
 
-        if (long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var longValue))
-            return JsonValue.Create(longValue);
+                target[key] = patchValue?.DeepClone();
+                continue;
+            }
 
-        if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var doubleValue))
-            return JsonValue.Create(doubleValue);
+            var current = target[key];
+            var merged = MergeNode(current, patchValue, patchPath, keyPath);
+            if (!ReferenceEquals(merged, current))
+                target[key] = merged;
+        }
+    }
 
-        return JsonValue.Create(value);
+    private static void MergeArrayItem(JsonArray target, int index, JsonNode? patchValue, string patchPath, string path)
+    {
+        if (index == target.Count)
+        {
+            target.Add(patchValue?.DeepClone());
+            return;
+        }
+
+        var current = target[index];
+        var merged = MergeNode(current, patchValue, patchPath, $"{path}:{index}");
+        if (!ReferenceEquals(merged, current))
+            target[index] = merged;
+    }
+
+    /// <summary>
+    /// A patch key that differs from an existing key only by case. Writing it as a second key
+    /// would almost never be what was meant -- and for a .NET consumer it's a deploy-time time
+    /// bomb, since <c>Microsoft.Extensions.Configuration</c> reads keys case-insensitively and
+    /// refuses to load a file with two such keys. Silently overriding the existing key instead (the
+    /// old behavior) is wrong for every case-sensitive consumer. So: stop, and say which spelling
+    /// exists. docs/TREE_MERGE_DESIGN.md's "Key matching is case-sensitive".
+    /// </summary>
+    private static InvalidOperationException CaseOnlyMismatch(string patchPath, string keyPath, string existingPath, string existingKey) =>
+        new($"'{patchPath}' sets \"{keyPath}\", but the existing key is \"{existingPath}\" -- they differ only by case. " +
+            "Keys are case-sensitive, so this would add a second key instead of overriding the existing one " +
+            $"(and .NET's configuration loader rejects keys that differ only by case).\nTry: spell it \"{existingKey}\" in the patch.");
+
+    /// <summary>True when every key is a canonical array index ("0", "12" -- not "01" or "-1"); the pairs come back in ascending index order.</summary>
+    private static bool TryGetIndexKeys(JsonObject patch, out List<(int Index, JsonNode? Value)> indexed)
+    {
+        indexed = [];
+        foreach (var (key, value) in patch)
+        {
+            if (!int.TryParse(key, NumberStyles.None, CultureInfo.InvariantCulture, out var index) ||
+                index.ToString(CultureInfo.InvariantCulture) != key)
+                return false;
+            indexed.Add((index, value));
+        }
+
+        indexed.Sort((a, b) => a.Index.CompareTo(b.Index));
+        return indexed.Count > 0;
     }
 }

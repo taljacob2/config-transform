@@ -1,0 +1,14 @@
+endpoints:
+  routes:
+  - name: primary
+    region: east
+    active: true
+  - name: secondary
+    region: east
+    active: true
+  - name: tertiary
+    active: false
+    region: east
+tags:
+- gamma
+- beta

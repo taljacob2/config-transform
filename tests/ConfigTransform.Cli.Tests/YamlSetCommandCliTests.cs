@@ -51,7 +51,7 @@ public class YamlSetCommandCliTests
 
         var patchPath = Path.Combine(workspace.RootPath, ".configtransform", "Clients", "Globex", "Production", "patch-Project-settings.yaml");
         Assert.True(File.Exists(patchPath));
-        Assert.Contains("ApiUrl: https://globex.example.com", File.ReadAllText(patchPath));
+        Assert.Contains("ApiUrl: \"https://globex.example.com\"", File.ReadAllText(patchPath));
 
         Assert.Contains("dev.example.com", stdout.ToString());
         Assert.Contains("globex.example.com", stdout.ToString());
@@ -120,26 +120,37 @@ public class YamlSetCommandCliTests
         }, stdout, stderr, FormatEngines.All, workspace.RootPath);
 
         Assert.Equal(0, exitCode);
-        Assert.Contains("ApiUrl: https://everyone.example.com", File.ReadAllText(basePath));
+        Assert.Contains("ApiUrl: \"https://everyone.example.com\"", File.ReadAllText(basePath));
     }
 
     [Fact]
-    public void Set_targeting_an_array_of_objects_is_refused_as_not_yet_supported()
+    public void Set_matches_an_item_in_an_array_of_objects_and_the_merge_applies_it()
     {
         using var workspace = new TempCliWorkspace();
-        CreateBaseYamlFile(workspace);
-        var stdout = new StringWriter();
+        var basePath = CreateBaseYamlFile(workspace);
+        File.WriteAllText(basePath, "Rules:\n  - role: Admin\n    enabled: false\n  - role: Viewer\n    enabled: false\n");
         var stderr = new StringWriter();
 
-        var exitCode = CliRunner.Run(new[]
+        var setExit = CliRunner.Run(new[]
         {
             "set", "--resource", ResourcePath,
             "--client", "Globex", "--environment", "Production",
-            "--match", "key=Rules", "--match", "role=Admin", "--set", "enabled=true"
-        }, stdout, stderr, FormatEngines.All, workspace.RootPath);
+            "--match", "key=Rules", "--match", "role=Viewer", "--set", "enabled=true"
+        }, new StringWriter(), stderr, FormatEngines.All, workspace.RootPath);
 
-        Assert.Equal(1, exitCode);
-        Assert.Contains("not yet supported", stderr.ToString());
+        Assert.Equal(0, setExit);
+        Assert.Empty(stderr.ToString());
+        var patchPath = Path.Combine(workspace.RootPath, ".configtransform", "Clients", "Globex", "Production", "patch-Project-settings.yaml");
+        Assert.Contains("$elemMatch:", File.ReadAllText(patchPath));
+
+        var stdout = new StringWriter();
+        var resolveExit = CliRunner.Run(new[]
+        {
+            "--resource", ResourcePath, "--client", "Globex", "--environment", "Production", "--dry-run"
+        }, stdout, new StringWriter(), FormatEngines.All, workspace.RootPath);
+
+        Assert.Equal(0, resolveExit);
+        Assert.Contains("  - role: Admin\n    enabled: false\n  - role: Viewer\n    enabled: true\n", stdout.ToString().Replace("\r\n", "\n"));
     }
 
     [Fact]

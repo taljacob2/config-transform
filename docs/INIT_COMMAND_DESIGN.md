@@ -246,6 +246,82 @@ existing Client-A/Production layer, via `InitTemplate.BuildHostsPlan`, reusing e
 after `--template`: a value that isn't itself a recognized flag (or the `help` verb) is consumed
 as the variant name; anything else defaults to `"default"`.
 
+### The `secrets` variant (`init --template secrets`)
+
+**Status: implemented (2026-10-02).** Designed with the repo owner first; built as designed.
+
+A runnable example of secrets (`docs/SECRETS_DESIGN.md`): `{{CFSECRET_NAME}}` placeholders filled
+from `*.secret.env` files, a client-level override of an environment-level secret, and one
+whole-file secret via `replace`. Secrets come with rules a user otherwise learns by hitting them —
+the `CFSECRET_` prefix, the `.secret.env` suffix, living inside `.configtransform/`, quoting in YAML
+— and a tree that runs on the first command teaches them faster than the docs.
+
+**Opt-in, never in the default template.** Three reasons (decision log, "Secrets in a template"):
+
+- A template that writes `*.secret.env` files into a fresh repo writes **plaintext** secret files.
+  `init` doesn't set up git-crypt and shouldn't, so the default demo would teach "copy this file,
+  put the real password where the fake one was, commit" — straight into plaintext history.
+- `init` can't safely add the git-crypt rule for the user: a `filter=git-crypt` line in
+  `.gitattributes` on a machine without git-crypt makes `git add` fail for every matching file.
+  Encryption stays a deliberate setup step, so **this variant never writes `.gitattributes`**.
+- The default template exists to show layering. Secrets would add files and rules that someone
+  trying layering for the first time doesn't need.
+
+**What it writes**, on top of the default tree (which itself stays byte-for-byte the same — the
+`default` variant's output never changes because a `secrets` variant exists):
+
+| File | Content |
+|---|---|
+| *(base)* `configtransform-template.json` | unchanged from the default template — no placeholder, so resolving the base alone needs no secret |
+| `.configtransform/Environments/<Env>/patch-configtransform-template.json` | the default `message`, plus `"apiKey": "{{CFSECRET_DEMO_API_KEY}}"` |
+| `.configtransform/Environments/<Env>/demo.secret.env` | `CFSECRET_DEMO_API_KEY=not-a-real-secret-<env>` (`production`, `test`), listed under that layer's `secrets` |
+| `.configtransform/Clients/Client-A/Production/demo.secret.env` | `CFSECRET_DEMO_API_KEY=not-a-real-secret-client-a-production`, listed under that layer's `secrets` — a client-level override; every other client inherits its environment's value |
+| *(base)* `configtransform-template-credentials.json` | `{}` — the committed placeholder for a whole-file secret |
+| `.configtransform/Clients/Client-A/Production/credentials.secret.json` | `{ "note": "not a real credential -- an example whole-file secret" }`, listed as that layer's `replace` for `configtransform-template-credentials.json` |
+
+- **The placeholder sits in the Environment patches, not the base file**, so every
+  client × environment combination resolves on a real `-o` run, and resolving the base alone needs
+  no secret. Values name their own layer — the same idea as the default template's `message` — so
+  the secrets report and `--reveal-secrets` show which layer supplied each value.
+- **Every value is obviously fake** (`not-a-real-secret-…`, `not a real credential`).
+- **A notice is printed after writing** (and with `--dry-run`, after the file list):
+  ```
+  Note: the *.secret.* files this template wrote are plaintext. Before putting a real secret in
+  one, set up git-crypt for them (docs/CONFIG_MANAGEMENT.md §7 in config-transform):
+    git-crypt init
+    echo ".configtransform/**/*.secret.* filter=git-crypt diff=git-crypt" >> .gitattributes
+  ```
+
+**Try it** — straight after `init --template secrets`:
+
+```bash
+# The report shows CFSECRET_DEMO_API_KEY resolved from Client-A/Production's own file; the value isn't printed
+configtransform -c Client-A -e Production -r configtransform-template.json --dry-run
+# ...and with the value
+configtransform -c Client-A -e Production -r configtransform-template.json --dry-run --reveal-secrets
+# Client-B inherits the Production environment's value
+configtransform -c Client-B -e Production -r configtransform-template.json --dry-run
+# The whole-file secret: a one-line note unless --reveal-secrets
+configtransform -c Client-A -e Production -r configtransform-template-credentials.json --dry-run
+# Every secrets file in a chain
+configtransform --list -c Client-A -e Production
+```
+
+**Errors and idempotency** follow the default template's rules, applied to both root files the
+variant owns: if `configtransform-template.json` or `configtransform-template-credentials.json`
+already exists with content other than this template's own, `init` refuses to overwrite it. Every
+file under `.configtransform/` is template-owned and written fresh, so running `--template secrets`
+over a tree the default template created turns it into the secrets variant.
+
+**One variant per run.** `--template` takes a single variant; combining `hosts` and `secrets` isn't
+supported (see "Open items").
+
+**Tests to write with it:** the `default` variant's output is byte-for-byte unchanged; the
+`secrets` variant's tree is immediately runnable — a real `-o` run succeeds for every
+client × environment combination, with every placeholder resolved and the replace file copied
+byte for byte; the notice is printed; no `.gitattributes` is written; and an existing
+`configtransform-template-credentials.json` with other content is refused.
+
 ### Related fix to `SetTargetResolver`
 
 `SetTargetResolver.cs`'s existing patch-filename rule (used by `set` today, already shipped) is
@@ -384,12 +460,17 @@ rather than a one-shot, destructive bootstrap.
 | Environment layer lists every selected resource, even with no `patch` | Yes, always | Leave resources unlisted until a real override exists via `set` | `LayerChain.ResolveAllResources`'s no-`--resource` union only sees resources actually present in some layer's `resources[]`; skipping this would make a freshly `init`'d tree resolve to nothing until `set` ran once per resource, defeating the point of scaffolding. |
 | Flag identity for environments/clients | Reuse `--environment/-e`/`--client/-c`, repeatable in `init` mode | New `--environments`/`--clients` plural flags | Keeps the flag vocabulary from growing for a mode-scoped arity difference — the same pattern `--match`/`--set` already use (repeatable, no separate plural sibling) rather than a new naming convention. |
 | Idempotent re-runs | Merge into existing manifests (mirrors `SetTargetResolver.EnsureResourceListed`) | Refuse if `.configtransform/` already has content, or always overwrite | Onboarding a second client, or a newly-added resource, later is a normal case, not an error — same convention `set` already established. |
-| `--template` shape | A bare switch, no value | A named flag (`--template <name>`), a fully configurable template system (custom env/client names, custom resource content) | There is exactly one template, meant to stay the basic/default starter even if a second one is ever added — a bare switch says that plainly. A named flag optimizes for a future that may never arrive at the cost of a slightly worse everyday command (`init --template hello-world` vs. `init --template`) for the one template that actually exists. Configurable templates would just be quiet mode with extra steps — no separate feature earns its complexity yet. See "Open items" for the accepted cost if a second template does show up later. |
+| `--template` shape (superseded: value-taking since the `hosts` variant, `docs/HOST_LAYER_DESIGN.md` decision log #7; see "Template mode") | A bare switch, no value | A named flag (`--template <name>`), a fully configurable template system (custom env/client names, custom resource content) | There is exactly one template, meant to stay the basic/default starter even if a second one is ever added — a bare switch says that plainly. A named flag optimizes for a future that may never arrive at the cost of a slightly worse everyday command (`init --template hello-world` vs. `init --template`) for the one template that actually exists. Configurable templates would just be quiet mode with extra steps — no separate feature earns its complexity yet. See "Open items" for the accepted cost if a second template does show up later. |
 | `hello-world` template's `message` value | A distinct value per layer, naming that layer (`"...from Client-A Production config"`, etc.) | The same `"Hello, world!"` string repeated at every layer | A template exists to be run against immediately — a repeated string would create a tree that merges but never visibly *changes*, hiding the one thing `init --template` is supposed to demonstrate. A distinct message per layer makes `--diff`/`--dry-run` show the override chain working on the very first command. |
 | Patch filename: trailing extension only appended if not already present | Yes, and retrofitted onto `SetTargetResolver`'s existing rule too, not just for `init` | Keep `SetTargetResolver`'s unconditional `patch-{path}.{ext}` rule, let `init`'s template produce an inconsistent, cleaner-looking name of its own | A resource whose own extension already matches the patch extension (every plain `.json` resource, which is the common case) gets a stuttering `name.json.json` under the unconditional rule — real, already live in `set` today, not template-specific. Fixing it in one place keeps `init` and `set` agreeing on one naming convention; fixing it only in `init`'s template would leave two different, competing conventions in the same tool. Safe to change: only affects filenames chosen for patches that don't exist yet (`SetTargetResolver` always reuses an already-recorded `patch` path verbatim). |
+| Secrets in a template | An opt-in `--template secrets` variant; never in the default template, and `init` never writes `.gitattributes` | Secrets in the default template; writing the git-crypt rule to `.gitattributes` automatically; git-ignoring the demo `*.secret.*` files | The default template would write plaintext secret files into every fresh repo that tries it, teaching a pattern that ends in plaintext history once a real value replaces a fake one. Writing the git-crypt rule breaks `git add` on a machine without git-crypt. Git-ignoring the files would make the demo unrunnable from a fresh clone and hide the very files it exists to show. An opt-in variant with obviously fake values and a printed git-crypt notice teaches the feature without the trap. |
 | Proceeding before the "few solution repos" gate's trigger condition is literally met | Yes, as an explicit, named owner override | Wait for a second/third pilot repo first | Same kind of exception `FIELD_AUTHORING_DESIGN.md` already made for `set` against this same gate — every default here is a mechanical convention already proven elsewhere in this tool (manifest JSON shape, path resolution, idempotency), not a guess at workflow patterns the way a TUI/GUI's design would be. The accepted risk (a default proving wrong against a second real repo) is bounded and explicitly named, not ignored. |
 
 ## Open items for implementation
+
+- **Combining template variants** (e.g. `hosts` and `secrets` in one tree) — `--template` takes one
+  variant today. Worth a list-valued `--template hosts,secrets` only if someone actually wants
+  both; until then, run one variant and add the other's pieces by hand.
 
 - **Progressive flag pre-fill** (a given `--environment`/`--client` flag skips just that prompt
   in interactive mode rather than forcing full quiet mode) — a real usability improvement, cut

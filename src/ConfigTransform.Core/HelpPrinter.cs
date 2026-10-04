@@ -11,20 +11,20 @@ public static class HelpPrinter
 {
     public static void Print(TextWriter stdout, FormatEngineRegistry engines)
     {
-        stdout.WriteLine($$"""
+        stdout.WriteLine($$$"""
             configtransform — resolve, preview, and write per-client/per-environment config overrides
 
             Layers self-describe what they touch via .configtransform/**/configtransform.json
             (extends + resources[] — docs/SELF_DESCRIBING_OVERLAYS_DESIGN.md). Every path below is
             repo-root-relative; run from the repo root, same as CI. Supported resource formats right
-            now: {{engines.SupportedExtensions}}.
+            now: {{{engines.SupportedExtensions}}}.
 
             USAGE
-              configtransform [--resource <path>] [--client <C>] [--environment <E>] [--host <H>] [--dry-run | --diff | --diff-layers | --output <path>]
+              configtransform [--resource <path>] [--client <C>] [--environment <E>] [--host <H>] [--dry-run | --diff | --diff-layers | --output <path>] [--color auto|always|never] [--reveal-secrets]
               configtransform --list [--client <C> --environment <E> [--host <H>] | --resource <path>]
               configtransform set --resource <path> [--client <C> --environment <E> [--host <H>]] --match <k>=<v> [--match ...] --set <k>=<v> [--set ...]
               configtransform init [--environment <E> ...] [--client <C> ...] [--host <H> ...] [--resource <path> ...] [--yes] [--dry-run]
-              configtransform init --template [hosts] [--dry-run]
+              configtransform init --template [hosts|secrets] [--dry-run]
               configtransform | help | --help | -h            this page (also shown for no arguments at all)
 
             COMMON COMMANDS
@@ -50,6 +50,8 @@ public static class HelpPrinter
               easy:  configtransform -r BillingApi.Core/appsettings.json -c Acme -e Production --diff
               tldr:  configtransform -c Acme -e Production --diff
                      (whole layer's diff, mixed XML/JSON, one call)
+                     colour is on only on a terminal by default; --color always forces it (e.g.
+                     in CI logs), --color never turns it off
 
             --diff-layers — like --diff, but one diff per layer that actually changes the resource
               easy:  configtransform -r BillingApi.Core/appsettings.json -c Acme -e Production --diff-layers
@@ -68,11 +70,22 @@ public static class HelpPrinter
               tldr:  configtransform --list -r OrderProcessor.Framework/App.config
                      (reverse lookup: every configtransform.json anywhere that patches this file)
 
+            secrets — {{CFSECRET_NAME}} placeholders, filled from *.secret.env files a layer lists under "secrets"
+              easy:  configtransform -r Web/AdminPortal.Web/Web.config -c Acme -e Production --dry-run
+                     (placeholders stay as written; the report above the output says whether each one
+                     resolves, and from which file -- never the value)
+              tldr:  configtransform -c Acme -e Production --dry-run --reveal-secrets
+                     (real values in the preview -- for a key holder, never in a CI log; a real run with
+                     -o always substitutes, and writes nothing if any secret is missing or locked)
+                     a resource's "replace" swaps in a whole *.secret.* file (Firebase JSON, a
+                     certificate) byte for byte instead
+
             set — author an overlay field without hand-writing XDT or nested JSON
               easy:  configtransform set -r OrderProcessor.Framework/App.config -c Acme -e Production --match ApiUrl --set https://acme.example.com
               tldr:  configtransform set -r BillingApi.Core/appsettings.json -c Acme -e Production --match key=Rules --match role=Admin --match env=Production --set enabled=true
-                     (JSON array-of-objects: matches or creates the item identified by role+env,
-                     via $elemMatch — no array position is ever written; upserts if nothing matches)
+                     (an array of objects, JSON or YAML: matches or creates the item identified by
+                     role+env, via $elemMatch — no array position is ever written; upserts if nothing
+                     matches)
 
             init — scaffold .configtransform/Environments/ and .configtransform/Clients/ trees
               easy:  configtransform init --template
@@ -82,6 +95,8 @@ public static class HelpPrinter
                      (quiet/CI-safe: scans the repo for more .config/.xml/.json candidates too,
                      unless --resource is given; with no flags at all in a real terminal, asks
                      interactively instead)
+                     configtransform init --template secrets adds a runnable secrets example (fake
+                     values; prints how to set up git-crypt before using real ones)
                      configtransform init --template hosts adds one worked Hosts/Host-1/ layer
                      under Client-A/Production to the same starter tree
 

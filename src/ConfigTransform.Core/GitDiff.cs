@@ -21,15 +21,20 @@ public static class GitDiff
     // with one of these four literal strings is always git's own meta line, never file content.
     private static readonly string[] MetaLinePrefixes = ["diff --git ", "index ", "--- ", "+++ "];
 
-    // Strips ANSI SGR color codes (from --color=always) so a meta line can be recognized under
+    // Strips ANSI SGR color codes (from --color=always, when the caller asked for colour) so a meta line can be recognized under
     // its coloring without altering the line itself -- git wraps each of the four meta lines
     // (and every other line) in \x1b[...m...\x1b[m, prefix and all. Internal (not private) so
     // LayerDiffAttribution can classify a Render'd line's leading marker (' '/'-'/'+'/'@') the
     // same way, without a second copy of the same pattern.
     internal static readonly Regex AnsiEscapeSequence = new(@"\x1b\[[0-9;]*m", RegexOptions.Compiled);
 
+    /// <param name="color">
+    /// Whether to keep git's ANSI colouring — resolved from <c>--color</c> by the caller
+    /// (<see cref="ColorMode"/>). Passed to git explicitly either way (<c>--color=always</c>/
+    /// <c>--color=never</c>), so a user's own <c>color.ui</c> git config never leaks in.
+    /// </param>
     /// <returns>The diff output (empty when the two contents are identical).</returns>
-    public static string Render(string leftContent, string rightContent)
+    public static string Render(string leftContent, string rightContent, bool color = false)
     {
         var leftPath = Path.GetTempFileName();
         var rightPath = Path.GetTempFileName();
@@ -47,7 +52,7 @@ public static class GitDiff
             };
             startInfo.ArgumentList.Add("diff");
             startInfo.ArgumentList.Add("--no-index");
-            startInfo.ArgumentList.Add("--color=always");
+            startInfo.ArgumentList.Add(color ? "--color=always" : "--color=never");
             startInfo.ArgumentList.Add("--");
             startInfo.ArgumentList.Add(leftPath);
             startInfo.ArgumentList.Add(rightPath);

@@ -160,7 +160,8 @@ once when `set` writes the file: `JsonLayerMerger.Merge` gained a pre-processing
 (`JsonElemMatchResolver`, new) that rewrites `$elemMatch` patches into a real position before
 handing a layer to `Microsoft.Extensions.Configuration`, and falls back to the original,
 unmodified merge code path whenever neither overlay layer uses `$elemMatch` at all — every
-previously-shipped merge behavior is unchanged. See `docs/FIELD_AUTHORING_DESIGN.md`'s "JSON /
+previously-shipped merge behavior is unchanged. (Both code paths have since been replaced by a
+single tree merge — see "Output-fidelity pass" below and `docs/TREE_MERGE_DESIGN.md`.) See `docs/FIELD_AUTHORING_DESIGN.md`'s "JSON /
 YAML" section and decision log for the full mechanism and the alternatives it ruled out
 (index/position addressing, a bare-object-only overlay shape), and `docs/USAGE.md`'s `set`
 section for worked examples. 41 new tests: `JsonElemMatchResolverTests` (new, 17), fixture-backed
@@ -489,7 +490,9 @@ with `ConfigTransform.Json`, per this repo's per-format independent-library conv
 semantics (array-override-by-index, empty-container-round-trips-as-absent) are inherited from
 `IConfiguration`'s own flattening, identically to JSON. One real, verified limitation: YAML is
 case-sensitive but `IConfiguration` isn't, so sibling keys differing only in case throw a
-duplicate-key error at parse time — documented, not treated as a bug. `set` (`YamlFieldAuthor`)
+duplicate-key error at parse time — documented, not treated as a bug. (Superseded by the tree
+merge of `docs/TREE_MERGE_DESIGN.md`, which no longer uses `IConfiguration` or NetEscapades:
+case-variant sibling keys are allowed, and empty containers survive.) `set` (`YamlFieldAuthor`)
 covers the plain-field path only — updating an existing key or creating a new one, the same
 `:`-separated nested-path model as JSON's own plain-field case. **Matching an item inside a YAML
 array of objects is not implemented** — refused with a clear "not yet supported" message, the
@@ -636,28 +639,121 @@ layer XML chain (not the unit suite, which used a fake merge delegate that never
 path): the algorithm must read the real, absolute patch paths from
 `ResolvedResource.PatchPathsInOrder`, not `ChainStep.PatchPath` (the repo-relative path `--list`
 displays) — fixed before merging, see the design doc's status line for the full note.
-`config-transform-pilot`'s own multi-host scenario is a natural place to exercise this against
-something more real than a synthetic fixture, a follow-up alongside its other pending re-pins.
+`config-transform-pilot` has since been re-pinned to `0.22.0-alpha` (`config-transform-pilot#10`),
+which also covers the `0.20.0-alpha`/`0.21.0-alpha` re-pins mentioned above, and its
+`build-transformed.yml` now runs `--diff-layers` against `Web/AdminPortal.Web/Web.config`, a real
+multi-layer chain.
+
+**Output-fidelity pass (2026-10-01, released as `0.23.0-alpha`).** A read-through of the tool against
+`config-transform-pilot` found four ways the tool's output garbled or misrepresented its results.
+The fourth turned out to be real value corruption, not just presentation (see item 4). A fifth
+item, case-sensitive key matching, followed from the repo owner's decision on the fourth. Fixed in
+this order, each as its own commit on `main`:
+1. **Console output encoding — fixed.** On a Windows console code page like 437,
+   stdout/stderr were encoded in that code page, so a redirect lost the chain report's `↓` (became
+   `0x19`) and any non-ASCII config value in `--dry-run` output (became `?`). `Utf8Console`
+   (`ConfigTransform.Cli`) now always emits UTF-8; see `docs/CONFIG_MANAGEMENT.md` §6.
+2. **JSON escaping — fixed.** System.Text.Json's default encoder wrote `"שלום café"`
+   as `"\u05E9\u05DC\u05D5\u05DD caf\u00E9"`, and `< > & ' +` as escapes too (a password `a+b`
+   became `a\u002Bb`), in `--output` files and `configtransform.json` layer files as well.
+   Every JSON write site now uses `JavaScriptEncoder.UnsafeRelaxedJsonEscaping`; see
+   `docs/CONFIG_MANAGEMENT.md` §5.3.
+3. **Diff colour — fixed.** `GitDiff.Render` always passed `--color=always`, so
+   redirected `--diff`/`--diff-layers` output carried ANSI escapes. Repo owner's decision: a
+   `--color auto|always|never` flag (default `auto`: terminal only, `NO_COLOR` respected), the
+   git/ls convention. `--diff-layers` also now puts a blank line before a layer's second and later
+   hunks. **Pilot follow-up when re-pinning:** `config-transform-pilot`'s `build-transformed.yml`
+   `--diff-layers` step loses colour in the Actions log under the new default; add
+   `--color always` there if it's wanted.
+4. **JSON/YAML tree merge — fixed.** Flattening through `IConfiguration` sorted keys
+   alphabetically and re-quoted YAML, but on closer inspection also corrupted values: `"007"`
+   became `7`, `"1.10"` became `1.1`, large integers lost precision, `null` became `""`, `{}`/`[]`
+   were dropped, a patch's key spelling replaced the base's, and a JSON patch containing comments
+   crashed the merge. (Correction to the first write-up of this item: `--diff` did *not* show the
+   reordering, because it renders the unpatched side through the same merge — which is exactly why
+   none of this was ever visible in a diff.) Repo owner's decision: fix it, not just document it.
+   `JsonLayerMerger`/`YamlLayerMerger` now merge each patch into the base document's own tree,
+   keeping `IConfiguration`'s merge rules but none of its flattening;
+   `Microsoft.Extensions.Configuration` and `NetEscapades.Configuration.Yaml` are no longer
+   dependencies. See `docs/TREE_MERGE_DESIGN.md`.
+5. **Case-sensitive key matching — done.** Repo owner's decision, as a follow-up to
+   item 4: JSON/YAML keys now match exactly across layers, and a patch key that matches an
+   existing key only by case is an error naming the real spelling (it would otherwise deploy a
+   file .NET refuses to load). `set` checks its key path the same way, and now merges new overlay
+   content before writing it, so a rejected write leaves nothing on disk. `config-transform-pilot`
+   was checked first: no overlay there relies on case-insensitive matching, and all 45 resolved
+   files are byte-identical before and after. See `docs/TREE_MERGE_DESIGN.md`'s "Key matching is
+   case-sensitive".
+
+`config-transform-pilot` is re-pinned to `0.23.0-alpha` (its `--diff-layers` CI step now passes
+`--color always`) and verified against a real `build-transformed.yml` dispatch, run #32 — see that
+repo's `FINDINGS.md`. That run's log exposed one more fidelity gap, fixed and released as
+`0.23.1-alpha`: merged JSON had no final newline, and JSON/YAML used the platform's newline instead of
+the base file's — `set` rewrote committed files that way too. Output and `set`'s rewrites now
+mirror the base/existing file (`TextLayout`; `docs/TREE_MERGE_DESIGN.md`). The pilot is re-pinned
+to `0.23.1-alpha` and verified via run #33: the JSON log group now closes on its own line.
+
+**Secrets (2026-10-01, `docs/SECRETS_DESIGN.md`) — done.** Designed with the repo owner, then
+implemented in three stages: value secrets (`{{CFSECRET_NAME}}` placeholders filled from encrypted
+`*.secret.env` files a layer lists under `secrets`, `--reveal-secrets`, a secrets status report,
+all-or-nothing real runs, a strict layer loader), whole-file secrets via a resource's `replace`
+(byte for byte, any format), and docs recommending secrets-only git-crypt
+(`.configtransform/**/*.secret.*`). Released as `0.24.0-alpha`. Implementation and review added
+ten decisions to the design's log (#13–#22), including two places where an error message would have
+printed part of a secret, and an unquoted YAML placeholder that would have deployed silently
+mangled. `config-transform-pilot` is migrated onto it — every connection string and queue URL is a
+secret, one Firebase file is a whole-file secret, and only `*.secret.*` is encrypted — and verified
+via real CI dispatches (runs #34–#36) with no secret value in any log.
+
+**Implicit typing in `set` and secret substitution (2026-10-02).** A question about YAML's "Norway
+problem" (YAML 1.1 reading an unquoted `NO` as `false`) led to checking every place the tool
+*writes* a value. The merge was already safe (it carries an author's text over exactly). `set`
+was not: anything that parsed as a number was written as one (`02134` → `2134`, `1.10` → `1.1`,
+in JSON and YAML), YAML `set` wrote strings unquoted (`NO`, `yes`, `null` misread), and YAML `set`
+re-serialized the whole target file. Secret substitution could produce an unquoted `NO` too. Fixed:
+a value is a number/boolean only if it reads back exactly as typed, YAML strings the tool writes
+are always double-quoted, and YAML `set` edits only the value it sets. Repo owner's call: quote
+everything the tool writes, never re-quote what an author wrote. Released as `0.24.1-alpha`;
+`config-transform-pilot` is re-pinned to it (no output change there) and verified via run #37. See
+`docs/FIELD_AUTHORING_DESIGN.md`'s "Value typing".
+
+**`init --template secrets` (2026-10-02) — done, released as `0.25.0-alpha`.** An opt-in starter-tree variant that
+demonstrates secrets end to end: a `{{CFSECRET_DEMO_API_KEY}}` placeholder in each Environment
+patch, environment-level `demo.secret.env` files with a Client-A/Production override, and one
+whole-file `replace`. Every value is fake; a notice says how to set up git-crypt, and `init` never
+writes `.gitattributes`. The `default` and `hosts` variants are byte-for-byte unchanged (checked
+against a build of the previous `main`). Designed first: `docs/INIT_COMMAND_DESIGN.md`'s "The
+`secrets` variant".
+
+**YAML array-of-objects matching (2026-10-02) — done, released as `0.26.0-alpha`.** The last `set` gap: YAML now
+matches or creates an item in an array of objects through the same `$elemMatch` overlay shape as
+JSON, resolved at merge time against the document as merged so far (`YamlElemMatchResolver`,
+ported from `JsonElemMatchResolver`). One deliberate difference, recorded in the design before
+any code: conditions compare by text, not type, since an unquoted YAML scalar's type depends on
+the reader. Fixture-backed (`DotNetCore/ElemMatch`, `GenericYaml/ElemMatch`, each with golden
+expected output); the pilot's output is unchanged, and `config-transform-pilot` is re-pinned to
+`0.26.0-alpha` and verified via run #38. See `docs/FIELD_AUTHORING_DESIGN.md`'s "YAML
+array-of-objects matching".
+
+**Secrets tree in the report and `--list` (2026-10-02) — done, released as `0.27.0-alpha`.** From a
+real user's review of the pilot's output: the report's one-line-per-secret summary showed only
+the winning file, so an override was invisible, and `--list` showed no secrets per resource at
+all (its header listed the whole chain's secrets files under the target layer, as if it declared
+them). Each secret now gets its own tree after the chain — `used in:` (where the placeholder is
+written), then every layer and the environment variable as `patched in:` / `not patched in` steps
+— in both the report and `--list`. The chain's first step is also relabelled `resource` (was
+`base`). `--list --reveal-secrets`, silently accepted before, is now an error. Checked against the
+pilot's real tree: three secrets, each shown once with its file and layer, and no value in the
+output. `config-transform-pilot` is re-pinned to `0.27.0-alpha` and verified via run #39. See `docs/SECRETS_DESIGN.md`'s "What each mode does" and decisions #24–#27.
 
 ## Next up
 
-One item below is now actionable purely within this repo (see the first bullet); every other
-remaining item still either needs a solution repo that doesn't exist yet, or a decision only the
-repo owner can make. Not a "next slice" in the same sense as the ones before this section; pick
+No planned feature work remains within this repo itself: every item below either needs a solution
+repo that doesn't exist yet, needs a decision only the repo owner can make, or is optional cleanup
+(the `MANIFEST_SCHEMA.md` rename). Not a "next slice" in the same sense as the ones before this section; pick
 from below (or something new) when ready, rather than assuming the next item in this list is the
 default next step.
 
-- **Finish `set`** — XML's "update an existing element" case (including matching an existing
-  item among repeated siblings, and now `Insert` for a genuinely brand-new element — all closed,
-  see "Current state" above), JSON's single-key-path case and array-of-objects matching
-  (`$elemMatch`), `.env`'s single case, and YAML's single-key-path case all shipped; one gap
-  remains, actionable now without a solution repo or an owner decision:
-  1. **YAML's array-of-objects matching** — deliberately deferred out of YAML's first `set`
-     version, mirroring how JSON's own `$elemMatch` landed in a later PR than JSON's first `set`.
-     `JsonElemMatchResolver`'s `DeepEquals`/`DeepClone`/index-preserving-rewrite logic is tightly
-     coupled to `System.Text.Json.Nodes` types; porting it to YAML's `Dictionary<string, object>`/
-     `List<object>` object graph is real, separable work, not a design blocker. See
-     `docs/FIELD_AUTHORING_DESIGN.md`'s "JSON / YAML" section and "Open items".
 - **`docs/MANIFEST_SCHEMA.md`'s filename vs. its content** — now describes the
   `configtransform.json` schema in full (the self-describing-overlays implementation above), but
   kept its old filename to avoid a large cross-reference rename across `docs/`. Worth revisiting
@@ -706,8 +802,8 @@ default next step.
      repeated siblings) and `Insert` (the client-only-field case named above, via
      `--match parent=`/`tag=`) are both implemented for `ConfigTransform.Xml`, and JSON's `set`
      covers update, create, and array-of-objects matching (`$elemMatch`) — see "Current state"
-     above for all three. Only YAML's own array-of-objects matching remains — see
-     `docs/FIELD_AUTHORING_DESIGN.md` and this section's first "Next up" bullet.
+     above for all three. YAML's own array-of-objects matching is built too (2026-10-02), so
+     every format's `set` now covers update, create and array-of-objects matching.
   2. Same validation gap that deferred `init`, more so: designing a UI's workflows now would be
      guessing at real usage patterns from one synthetic pilot, not real per-repo variation.
      `--diff`/`--dry-run` already cover "see the merged result easily" without either UI.

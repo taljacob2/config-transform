@@ -1,6 +1,6 @@
 using Xunit;
 
-namespace ConfigTransform.Env.Tests;
+namespace ConfigTransform.Core.Tests;
 
 /// <summary>
 /// Direct tests of the `.env` grammar itself (see EnvFile.cs's own remarks for the full rule
@@ -73,6 +73,13 @@ public class EnvFileTests
     {
         var pairs = EnvFile.Parse("FOO=1\nBAR=2\nFOO=3");
         Assert.Equal([new("FOO", "3"), new("BAR", "2")], pairs);
+    }
+
+    [Fact]
+    public void ParseAssignments_keeps_every_assignment_including_duplicates_in_order()
+    {
+        var assignments = EnvFile.ParseAssignments("FOO=1\nBAR=2\nFOO=3");
+        Assert.Equal([new("FOO", "1"), new("BAR", "2"), new("FOO", "3")], assignments);
     }
 
     [Fact]

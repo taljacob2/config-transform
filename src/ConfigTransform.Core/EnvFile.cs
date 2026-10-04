@@ -1,19 +1,21 @@
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace ConfigTransform.Env;
+namespace ConfigTransform.Core;
 
 /// <summary>
-/// The `.env` grammar this tool parses and writes, shared by <see cref="EnvLayerMerger"/> and
-/// <see cref="EnvFieldAuthor"/> (mirrors why <c>JsonLayerMerger.ToJsonValue</c> is <c>internal</c>
-/// rather than private -- one place decides the format's rules, not two). There is no formal
+/// The `.env` grammar this tool parses and writes, shared by the `.env` format engine
+/// (<c>EnvLayerMerger</c>/<c>EnvFieldAuthor</c> in ConfigTransform.Env) and by secrets files
+/// (<see cref="SecretResolver"/>, docs/SECRETS_DESIGN.md) -- one place decides the format's rules,
+/// so a `*.secret.env` file can never be read differently from a `.env` resource. Lives in Core for
+/// that reason: ConfigTransform.Env depends on Core, never the other way around. There is no formal
 /// `.env` spec; real tooling disagrees on edge cases, so these rules are picked deliberately --
 /// see docs/CONFIG_MANAGEMENT.md's `.env` section and docs/FIELD_AUTHORING_DESIGN.md's decision
 /// log for the reasoning behind each one:
 ///
 /// - Blank lines and whole-line `#` comments are dropped on parse and never reappear on
-///   serialize -- this matches JSON's own existing behavior (`Microsoft.Extensions.
-///   Configuration`'s JSON provider already drops comments/formatting on rebuild), not a new gap.
+///   serialize -- this matches the JSON and YAML engines, which also drop comments on output
+///   (docs/TREE_MERGE_DESIGN.md), not a new gap.
 /// - An optional leading `export ` is stripped before parsing the key (Bash-sourceable files are
 ///   a common real `.env` convention, e.g. `direnv`/Docker `env_file`).
 /// - A key must match the real POSIX env-var-name grammar (`[A-Za-z_][A-Za-z0-9_]*`) -- a `.env`
@@ -47,6 +49,25 @@ public static class EnvFile
         var order = new List<string>();
         var values = new Dictionary<string, string>();
 
+        foreach (var (key, value) in ParseAssignments(content))
+        {
+            if (!values.ContainsKey(key))
+                order.Add(key);
+            values[key] = value;
+        }
+
+        return order.Select(key => new KeyValuePair<string, string>(key, values[key])).ToList();
+    }
+
+    /// <returns>
+    /// Every assignment in file order, duplicates included -- for a caller that must treat a
+    /// repeated key as a mistake rather than apply shell semantics (<see cref="SecretResolver"/>:
+    /// a key defined twice in one secrets file is an error, docs/SECRETS_DESIGN.md).
+    /// </returns>
+    public static List<KeyValuePair<string, string>> ParseAssignments(string content)
+    {
+        var assignments = new List<KeyValuePair<string, string>>();
+
         foreach (var rawLine in content.Split('\n'))
         {
             var line = rawLine.TrimEnd('\r').Trim();
@@ -63,13 +84,10 @@ public static class EnvFile
 
             var key = withoutExport[..eq].Trim();
             ValidateKey(key);
-
-            if (!values.ContainsKey(key))
-                order.Add(key);
-            values[key] = Unquote(withoutExport[(eq + 1)..].Trim());
+            assignments.Add(new KeyValuePair<string, string>(key, Unquote(withoutExport[(eq + 1)..].Trim())));
         }
 
-        return order.Select(key => new KeyValuePair<string, string>(key, values[key])).ToList();
+        return assignments;
     }
 
     public static string Serialize(IEnumerable<KeyValuePair<string, string>> pairs)

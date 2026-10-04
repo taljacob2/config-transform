@@ -3,3 +3,4 @@ endpoints:
     url: https://clienta.example.com/api
 flags:
   betaEnabled: true
+  newFlag: false

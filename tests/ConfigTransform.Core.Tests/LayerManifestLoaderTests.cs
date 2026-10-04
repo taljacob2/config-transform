@@ -68,4 +68,95 @@ public class LayerManifestLoaderTests
         Assert.Contains("git-crypt", ex.Message);
         Assert.Contains("git-crypt unlock", ex.Message);
     }
+
+    [Fact]
+    public void Loads_the_secrets_list()
+    {
+        using var dir = new TempDirectory();
+        var path = Path.Combine(dir.Path, "configtransform.json");
+        File.WriteAllText(path, """
+            { "secrets": [ ".configtransform/Environments/Production/db.secret.env" ], "resources": [] }
+            """);
+
+        var manifest = LayerManifestLoader.Load(path);
+
+        Assert.Equal([".configtransform/Environments/Production/db.secret.env"], manifest.Secrets);
+    }
+
+    [Theory]
+    [InlineData(".configtransform/Environments/Production/db.env")]
+    [InlineData(".configtransform/Environments/Production/db.secrets.env")]
+    [InlineData(".configtransform/Environments/Production/db.SECRET.env")]
+    public void A_secrets_file_not_ending_in_dot_secret_dot_env_is_rejected(string entry)
+    {
+        // The suffix is the only thing tying the file to the *.secret.* git-crypt rule.
+        using var dir = new TempDirectory();
+        var path = Path.Combine(dir.Path, "configtransform.json");
+        File.WriteAllText(path, $$"""{ "secrets": [ "{{entry}}" ], "resources": [] }""");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => LayerManifestLoader.Load(path));
+
+        Assert.Contains(".secret.env", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("app/db.secret.env")]
+    [InlineData(".configtransform/../app/db.secret.env")]
+    [InlineData("db.secret.env")]
+    public void A_secrets_file_outside_dot_configtransform_is_rejected(string entry)
+    {
+        // The git-crypt rule only covers .configtransform/ -- anywhere else, the file is plaintext.
+        using var dir = new TempDirectory();
+        var path = Path.Combine(dir.Path, "configtransform.json");
+        File.WriteAllText(path, $$"""{ "secrets": [ "{{entry}}" ], "resources": [] }""");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => LayerManifestLoader.Load(path));
+
+        Assert.Contains("isn't inside .configtransform/", ex.Message);
+    }
+
+    [Fact]
+    public void Loads_a_replace_entry()
+    {
+        using var dir = new TempDirectory();
+        var path = Path.Combine(dir.Path, "configtransform.json");
+        File.WriteAllText(path, """
+            { "resources": [ { "path": "app/firebase.json", "replace": ".configtransform/Clients/Acme/Production/firebase.secret.json" } ] }
+            """);
+
+        var manifest = LayerManifestLoader.Load(path);
+
+        Assert.Equal(".configtransform/Clients/Acme/Production/firebase.secret.json", manifest.Resources[0].Replace);
+        Assert.Null(manifest.Resources[0].Patch);
+    }
+
+    [Theory]
+    [InlineData("""{ "path": "app/f.json", "patch": ".configtransform/E/p.json", "replace": ".configtransform/E/f.secret.json" }""", "both a patch and a replace")]
+    [InlineData("""{ "path": "app/f.json", "replace": ".configtransform/E/firebase.json" }""", "doesn't contain '.secret.'")]
+    [InlineData("""{ "path": "app/f.json", "replace": "app/firebase.secret.json" }""", "isn't inside .configtransform/")]
+    public void An_invalid_replace_entry_is_rejected(string resource, string expectedMessage)
+    {
+        using var dir = new TempDirectory();
+        var path = Path.Combine(dir.Path, "configtransform.json");
+        File.WriteAllText(path, $$"""{ "resources": [ {{resource}} ] }""");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => LayerManifestLoader.Load(path));
+
+        Assert.Contains(expectedMessage, ex.Message);
+    }
+
+    [Fact]
+    public void An_unknown_field_is_rejected_instead_of_silently_ignored()
+    {
+        // An older tool used to skip fields it didn't know -- deploying unresolved placeholders
+        // when a layer used a newer field like "secrets".
+        using var dir = new TempDirectory();
+        var path = Path.Combine(dir.Path, "configtransform.json");
+        File.WriteAllText(path, """{ "resources": [], "secretz": [] }""");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => LayerManifestLoader.Load(path));
+
+        Assert.Contains("secretz", ex.Message);
+        Assert.Contains("dotnet-tools.json", ex.Message);
+    }
 }

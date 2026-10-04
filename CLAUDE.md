@@ -61,10 +61,11 @@ here is accidental rather than deliberate.
 - **Format-generic by design.** `ConfigTransform.Xml` (via `Microsoft.Web.Xdt`) treats
   App.config, Web.config, NLog.config, or any other XML file identically — there is no
   App.config-specific logic anywhere in it. `ConfigTransform.Json` is the same for JSON via
-  `Microsoft.Extensions.Configuration`, `ConfigTransform.Env` the same for flat `KEY=VALUE`
-  `.env` files with no NuGet dependency at all, and `ConfigTransform.Yaml` the same for YAML via
-  `NetEscapades.Configuration.Yaml`/`YamlDotNet` (same architecture as JSON, no code shared with
-  it — see Repo structure below). This is proven, not just claimed: the `GenericXml`,
+  `System.Text.Json.Nodes`, `ConfigTransform.Env` the same for flat `KEY=VALUE` `.env` files with
+  no NuGet dependency at all, and `ConfigTransform.Yaml` the same for YAML via `YamlDotNet` (same
+  merge rules as JSON, no code shared with it — see Repo structure below). JSON and YAML merge
+  each patch into the base document's own tree, keeping key order and every value exactly as
+  written (`docs/TREE_MERGE_DESIGN.md`) — don't reintroduce a flatten-to-strings step. This is proven, not just claimed: the `GenericXml`,
   `GenericJson`, `GenericEnv`, and `GenericYaml` test fixtures use arbitrary, made-up
   schemas/key-names specifically to catch any accidental special-casing. Don't add logic that
   assumes a specific filename or schema.
@@ -104,7 +105,8 @@ here is accidental rather than deliberate.
   Registers all four format engines above into Core's dispatcher; this is genuinely all it does.
 - `tests/*/Fixtures/` — real-shaped fixture files per scenario: `DotNetFramework`,
   `IisWebConfig`, `GenericXml` (XML); `DotNetCore`, `GenericJson` (JSON); `GenericEnv` (`.env`);
-  `DotNetCore`, `GenericYaml` (YAML). New merge-behavior test cases belong here as fixtures,
+  `DotNetCore`, `GenericYaml` (YAML); plus a `Secrets` fixture in each of the four, for
+  placeholder substitution. New merge-behavior test cases belong here as fixtures,
   exercised by data-driven tests — not as inline strings duplicated per test method. Full test
   matrix: `docs/CONFIGTRANSFORM_TOOL_DESIGN.md` §3.
 - `docs/` — see [`docs/INDEX.md`](docs/INDEX.md) for the full map.
@@ -192,8 +194,8 @@ lines now. All three are versioned as `0.13.0-alpha` (CHANGELOG moved out of `[U
 tagging this time, per `docs/RELEASING.md` step 1 — the `0.12.0-alpha` empty-release-notes drift
 above is exactly the mistake this avoids), tagged, pushed, and published clean — real, complete
 GitHub Release notes this time, no manual patching needed — and `config-transform-pilot` is
-re-pinned to `0.13.0-alpha`, verified against real CI. A fifth real-user report has since landed,
-not yet tagged: omitting `--resource` against a nonexistent `--environment`/`--client` (a typo,
+re-pinned to `0.13.0-alpha`, verified against real CI. A fifth real-user report has since landed
+(shipped in `0.14.0-alpha`): omitting `--resource` against a nonexistent `--environment`/`--client` (a typo,
 most likely) printed the generic `(no resources with a registered format handler at this layer)`
 — worded as if the layer existed but its resources' formats were unsupported. `RunEveryResource`
 now tells that case apart from a layer that genuinely exists but declares no resources: when the
@@ -214,19 +216,14 @@ published, and `config-transform-pilot` is re-pinned to it with a new `.env`-bas
 `NotificationWorker` pilot project added and verified via real CI. A fourth format has since
 landed: YAML support (`ConfigTransform.Yaml`, registered as a fourth `FormatEngine` with zero
 orchestration changes needed — the dispatcher generalizing to a fourth engine, not just three) —
-reuses JSON's flatten-and-merge *architecture* (`Microsoft.Extensions.Configuration`) via
-`NetEscapades.Configuration.Yaml`'s `AddYamlFile` (read) and `YamlDotNet`'s `ISerializer` (write,
-needed directly since NetEscapades only reads), sharing no code with `ConfigTransform.Json` per
-this repo's per-format independent-library convention. Merge semantics (array-override-by-index,
-empty-container-round-trips-as-absent) are inherited from `IConfiguration`'s own flattening,
-identically to JSON; one real, documented limitation is that YAML is case-sensitive but
-`IConfiguration` isn't, so sibling keys differing only in case throw at parse time. `set` covers
+originally reused JSON's flatten-and-merge *architecture* (`Microsoft.Extensions.Configuration`,
+via `NetEscapades.Configuration.Yaml`) — since replaced, for both formats, by a tree merge that
+keeps order, types and quoting (see the output-fidelity note at the end of this section), sharing
+no code with `ConfigTransform.Json` per this repo's per-format independent-library convention. `set` covers
 the plain-field path only (update/create a key, same `:`-separated model as JSON's own
-plain-field case) — matching an item inside a YAML array of objects is **not** implemented,
-refused with a "not yet supported" message, the same posture XML's own unimplemented
-array-of-objects matching already takes; porting `JsonElemMatchResolver` to YAML is real,
-separable work, deliberately deferred (mirrors how JSON's own `$elemMatch` landed after JSON's
-first `set`). See `docs/CONFIG_MANAGEMENT.md` §5.6 for the full merge semantics and dependency
+plain-field case) in its first version; matching an item inside a YAML array of objects came
+later, a port of JSON's `$elemMatch` (`YamlElemMatchResolver`, conditions compared by text rather
+than type — see the end of this section). See `docs/CONFIG_MANAGEMENT.md` §5.6 for the full merge semantics and dependency
 reasoning. Merged as `taljacob2/config-transform#29` and versioned as `0.16.0-alpha`
 (`docs/CHANGELOG.md` section moved out of `[Unreleased]` in the same change, per
 `docs/RELEASING.md` step 1); re-pinning `config-transform-pilot` and adding a YAML-based pilot
@@ -291,5 +288,34 @@ engine). One real bug surfaced only by a manual smoke test against a real multi-
 the unit suite: the algorithm must read `ResolvedResource.PatchPathsInOrder` (the real, absolute
 patch paths), not `ChainStep.PatchPath` (the repo-relative path `--list` displays) — fixed before
 merging. Versioned as `0.22.0-alpha`. See `docs/ROADMAP.md`'s "Next up" for what's actionable now
-versus what needs either a solution repo that doesn't exist yet or an owner decision — YAML's own
-array-of-objects matching is the remaining `set` gap.
+versus what needs either a solution repo that doesn't exist yet or an owner decision. An output-fidelity pass has since landed as
+`0.23.0-alpha` (see `docs/ROADMAP.md`'s "Output-fidelity pass"): console output is now always UTF-8 (`Utf8Console`,
+in `ConfigTransform.Cli`) and JSON output keeps non-ASCII and `< > & ' +` literal instead of
+`\uXXXX` escapes (`JsonWriteOptions`), and diff colour follows a new `--color auto|always|never`
+flag (default `auto`: terminal only, so redirects get plain text). JSON and YAML now merge each
+patch into the base document's own tree instead of flattening through `IConfiguration`
+(`docs/TREE_MERGE_DESIGN.md`): key order, spelling, value types and text, `null`/`{}`/`[]`, and
+YAML quoting all survive — the old merge turned `"007"` into `7` and sorted every key, invisibly to
+`--diff`. Keys now match case-sensitively across layers, and a patch key matching an existing one
+only by case is an error (it would otherwise deploy a file .NET refuses to load).
+`config-transform-pilot` is re-pinned to `0.23.0-alpha` and verified via a real CI dispatch.
+Then `0.23.1-alpha`: JSON/YAML output (and every file `set` rewrites) keeps the base or
+existing file's line endings and final newline (`TextLayout` in Core), as XML always did;
+`config-transform-pilot` is re-pinned to it and verified via a real CI dispatch. Secrets
+(`docs/SECRETS_DESIGN.md`) are implemented — all three stages — and released as `0.24.0-alpha`: `{{CFSECRET_NAME}}` placeholders filled from encrypted `*.secret.env` files a layer lists
+under `secrets` (`SecretResolver`/`SecretsStep` in Core, one `*SecretSubstitution` per engine),
+`--reveal-secrets`, a strict layer loader, and whole-file secrets via a resource's `replace`
+(`ReplaceStep` in Core — byte copy, no engine). The git-crypt docs now recommend secrets-only
+encryption (`.configtransform/**/*.secret.*`), and `config-transform-pilot` is migrated onto it
+(verified via real CI dispatches). A follow-up, `0.24.1-alpha`, fixed implicit typing in what the tool
+writes (the YAML "Norway problem"): `set` types a value as a number/boolean only if it reads back exactly
+as typed, and every YAML string the tool writes — via `set` or secret substitution — is
+double-quoted; the merge never re-quotes what an author wrote. `init --template secrets` (an
+opt-in, runnable secrets example — `docs/INIT_COMMAND_DESIGN.md`) is released as `0.25.0-alpha`.
+YAML `set` now matches or creates an item in an array of objects via `$elemMatch`
+(`YamlElemMatchResolver`), closing the last `set` gap across all four formats; released as `0.26.0-alpha`, with
+`config-transform-pilot` re-pinned to it. `0.27.0-alpha` gives each secret its own tree in the
+resolution report and `--list` — where its placeholder is used, then every layer and the
+environment variable as `patched in:` / `not patched in` — and relabels the chain's first step
+`resource` (was `base`); `config-transform-pilot` is re-pinned to it. Never let a secret value
+reach stdout, stderr or an exception message — two such leaks were found and fixed in stage 1.

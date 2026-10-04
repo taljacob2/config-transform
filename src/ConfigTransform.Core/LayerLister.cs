@@ -10,7 +10,8 @@ namespace ConfigTransform.Core;
 /// </summary>
 public static class LayerLister
 {
-    public static void ListLayer(string root, string targetLayerPath, TextWriter stdout)
+    public static void ListLayer(
+        string root, string targetLayerPath, TextWriter stdout, FormatEngineRegistry engines, Func<string, string?> environment)
     {
         var fullPath = Path.GetFullPath(targetLayerPath, root);
         if (!File.Exists(fullPath))
@@ -23,6 +24,18 @@ public static class LayerLister
         if (target.Manifest.Extends is not null)
             stdout.WriteLine($"  extends: {target.Manifest.Extends}");
 
+        // Only the target layer's own `secrets` field, the way `extends:` is only its own -- every
+        // layer's secrets files show up in the secrets tree below, at the layer that lists them.
+        if (target.Manifest.Secrets is { Count: > 0 } ownSecrets)
+        {
+            stdout.WriteLine("  secrets:");
+            foreach (var secretsFile in ownSecrets)
+                stdout.WriteLine($"    {secretsFile}");
+        }
+
+        // Replaced resources are byte copies and resources no engine handles are skipped, so
+        // neither ever has a placeholder substituted -- their text is left out of the secrets tree.
+        var substituted = new List<ResolvedResource>();
         foreach (var resourcePath in LayerChain.ResolveAllResources(chain))
         {
             stdout.WriteLine();
@@ -30,6 +43,18 @@ public static class LayerLister
 
             var resolved = LayerChain.ResolveResource(root, chain, resourcePath);
             LayerChain.PrintChain(stdout, resourcePath, resolved);
+
+            if (resolved.ReplacePath is null && engines.Find(resourcePath) is not null)
+                substituted.Add(resolved);
+        }
+
+        // One tree per secret, once for the whole layer however many resources use it
+        // (docs/SECRETS_DESIGN.md). Names and files only, never a value.
+        var uses = SecretsStep.FindUses(root, substituted);
+        if (uses.Count > 0)
+        {
+            stdout.WriteLine();
+            SecretsStep.PrintTree(stdout, uses, SecretResolver.Build(root, chain, environment), indent: "  ");
         }
     }
 
@@ -47,7 +72,8 @@ public static class LayerLister
         foreach (var entry in found)
         {
             var extendsNote = entry.Extends is null ? "" : $", extends {entry.Extends}";
-            stdout.WriteLine($"  {entry.LayerPath}  ({entry.Patch}{extendsNote})");
+            var what = entry.Replace is not null ? $"replaced by {entry.Replace}" : entry.Patch;
+            stdout.WriteLine($"  {entry.LayerPath}  ({what}{extendsNote})");
         }
     }
 }

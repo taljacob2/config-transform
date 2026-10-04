@@ -1,0 +1,18 @@
+Logging:
+  LogLevel:
+    Default: Warning
+ApiUrl: https://clienta.example.com
+RetryCount: 5
+Features:
+  EnableBeta: true
+AllowedOrigins:
+  - https://prod.example.com
+  - https://b.example.com
+AllowedHosts: "*"
+BuildTag: "0042"
+Threshold: 0.50
+ProxyUrl: null
+Plugins: {}
+BlockedIps: []
+Schedule: '*/5 * * * *'
+SiteTitle: "Client A"

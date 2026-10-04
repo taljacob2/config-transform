@@ -6,6 +6,203 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+## [0.27.0-alpha] - 2026-10-02
+
+### Changed
+
+- **Each secret gets its own tree in the resolution report**, after the resource's chain and read
+  the same way: its state (`resolved` / `MISSING` / `unknown`), `used in:` (each file of the chain
+  that writes its placeholder), then every layer and finally the environment variable, each
+  `patched in: <file>` or `not patched in`. The old one line per secret showed only the winning
+  file, so an override was invisible. A locked git-crypt file shows at its own layer
+  (`unknown: <file> is locked`), and the environment-variable step is shown even when unset, so a
+  misspelled CI variable is visible — one set but empty says it counts as unset. Names, files and
+  variable names only, never a value. From a real user's review of the pilot's output; see
+  `docs/SECRETS_DESIGN.md`'s "What each mode does" and decisions #24–#27.
+- **`--list` ends with the same tree**, once per secret any of the layer's resources uses, found by
+  scanning their base files and patches. Replaced resources and resources no engine handles are
+  left out (neither is ever substituted).
+- **The chain's first step is labelled `resource`**, not `base`, in both the report and `--list`.
+
+### Fixed
+
+- **`--list`'s header listed every secrets file in the chain under the target layer**, as if the
+  target declared them. It now lists only the target layer's own `secrets`; the rest appear in
+  the secrets tree, at the layer that lists them.
+- **`--list --reveal-secrets` was silently accepted** and did nothing; it's now an error with a
+  `Try:` hint, since `--list` never shows a value.
+
+## [0.26.0-alpha] - 2026-10-02
+
+### Added
+
+- **YAML `set` matches or creates an item in an array of objects** — the last `set` gap. The same
+  command and `$elemMatch` overlay shape as JSON (`--match key=Rules --match role=Admin --set
+  enabled=true` writes a patch, never an array position), resolved at merge time against the
+  document as merged so far, with the same upsert, ambiguity and same-item rules
+  (`YamlElemMatchResolver`, ported from `JsonElemMatchResolver`). One deliberate difference:
+  conditions compare by text, not type — an unquoted YAML scalar's type depends on the reader, so
+  `enabled=true` matches both `enabled: true` and `enabled: "true"`. Values `set` writes follow
+  YAML's value-typing rule. See `docs/FIELD_AUTHORING_DESIGN.md`'s "YAML array-of-objects matching".
+
+## [0.25.0-alpha] - 2026-10-02
+
+### Added
+
+- **`init --template secrets`**: an opt-in starter-tree variant that demonstrates secrets
+  (`docs/SECRETS_DESIGN.md`) and runs on the first command — a `{{CFSECRET_DEMO_API_KEY}}`
+  placeholder in each Environment patch, environment-level `demo.secret.env` files with a
+  Client-A/Production override, and one whole-file secret via `replace`
+  (`configtransform-template-credentials.json`). Every value is obviously fake. Because the
+  `*.secret.*` files are plaintext until git-crypt covers them, `init` prints how to set that up —
+  and never writes `.gitattributes` itself, since a git-crypt rule on a machine without git-crypt
+  breaks `git add`. Never part of the default template. The `default` and `hosts` variants are
+  unchanged byte for byte. See `docs/INIT_COMMAND_DESIGN.md`'s "The `secrets` variant".
+
+## [0.24.1-alpha] - 2026-10-02
+
+### Fixed
+
+- **`set` no longer reformats numbers it was given as text, and YAML `set` always quotes strings.**
+  Prompted by a question about YAML's "Norway problem" (YAML 1.1 reading an unquoted `NO` as
+  boolean false); checking every write path found three real issues. `set` (JSON and YAML) treated
+  anything that *parses* as a number as one, so `--set 02134` wrote `2134`, `007` wrote `7`,
+  `1.10` wrote `1.1` and `1e3` wrote `1000`; now a value is a number or boolean only when it reads
+  back exactly as typed (`5432`, `1.5`, `true`), and anything else stays a string. YAML `set`
+  wrote strings unquoted, so `--set NO`/`yes`/`on` became booleans to YAML 1.1 readers and
+  `--set null`/`~` a real null; strings are now always double-quoted. And YAML `set` re-serialized
+  the whole target file, losing its quoting style; it now edits only the value it sets, leaving
+  every other line exactly as it was. Secret substitution had the same gap: a plain YAML scalar it
+  changed could come out as an unquoted `NO`; such scalars are now written double-quoted. The merge
+  itself is unchanged — it carries over exactly what an author wrote. See
+  `docs/FIELD_AUTHORING_DESIGN.md`'s "Value typing".
+
+## [0.24.0-alpha] - 2026-10-01
+
+### Added
+
+- **Secrets, stage 1: `{{CFSECRET_NAME}}` placeholders** (`docs/SECRETS_DESIGN.md`). Config files and
+  patches can hold placeholders whose values live in encrypted `*.secret.env` files a layer lists
+  under a new `secrets` field, so git-crypt only needs to cover `.configtransform/**/*.secret.*` and
+  every other overlay stays readable and reviewable. Values follow the layer chain (later layers
+  override), an environment variable with the secret's exact name overrides every file (for CI),
+  and each format engine substitutes inside values with its own escaping. Previews keep
+  placeholders and report each secret as `resolved` (with its source), `MISSING` or `unknown`
+  (git-crypt locked); a new `--reveal-secrets` flag shows real values. A real run writes nothing if
+  any secret is unresolved. `--list` shows the chain's secrets files. Secrets files must end in
+  `.secret.env` and live inside `.configtransform/`, so the git-crypt rule always covers them, and
+  a name defined twice (in one file, or in two files of one layer) is an error.
+- **Secrets, stage 2: whole-file secrets via a resource's `replace`** (`docs/SECRETS_DESIGN.md`). A
+  resource entry can name an encrypted `*.secret.*` file inside `.configtransform/` that replaces
+  the resource byte for byte — a Firebase service-account JSON, a certificate — with no merging or
+  parsing, so any format works, binary included and with no format engine needed. A later layer's
+  `replace` overrides an earlier one and supersedes earlier patches; a patch at or after the
+  replacing layer is an error, and `set` refuses to patch a replaced resource. Previews print a
+  one-line note unless `--reveal-secrets`; a still-encrypted replace file stops a real run before
+  anything is written.
+
+### Changed
+
+- **A `configtransform.json` field the tool doesn't recognize is now an error.** Before, unknown
+  fields were silently skipped — so an older tool reading a layer that uses `secrets` would deploy
+  unresolved placeholders without a word. From now on a too-old tool fails loudly. A layer with a
+  stray or misspelled field will now fail to load; the error names the field.
+- `EnvFile` (the `.env` grammar) moved from `ConfigTransform.Env` to `ConfigTransform.Core`, so
+  `*.secret.env` files and `.env` resources are parsed by the same code. No behavior change.
+
+## [0.23.1-alpha] - 2026-10-01
+
+### Fixed
+
+- **JSON and YAML output now keeps the base file's line endings and final newline.** Found in
+  `config-transform-pilot`'s CI log: merged JSON had no final newline, so the log's `cat` step glued
+  the next line onto its closing `}`. Both engines also used the platform's newline, so on Windows
+  every JSON/YAML output was CRLF even for an LF source. Worse, `set` rewrote committed files the
+  same way: a base-file `set` on JSON stripped the file's final newline and, on Windows, flipped
+  its line endings. Output now uses the base file's line endings and ends with a newline exactly
+  when the base does, as XML output always has (`TextLayout` in Core). Every file `set` rewrites
+  keeps its own conventions; a file `set`/`init` creates (overlay or `configtransform.json`) gets
+  LF and a final newline. The golden expected-output tests now compare byte for byte.
+
+## [0.23.0-alpha] - 2026-10-01
+
+### Added
+
+- **`--color auto|always|never`** (also `--color=<mode>`), for ANSI colour in every diff the tool
+  prints: `--diff`, `--diff-layers`, and `set`'s automatic diff after a write. Accepted in every
+  mode. `GitDiff.Render` always passed `--color=always` before this, so a redirect or pipe
+  (`--diff > change.diff`) captured raw escape codes. See `docs/USAGE.md`.
+
+### Changed
+
+- **JSON/YAML keys now match case-sensitively across layers, and a patch key that matches an
+  existing key only by case is an error.** Repo owner's decision, following the tree merge below
+  (`docs/TREE_MERGE_DESIGN.md`'s "Key matching is case-sensitive"). Before, a patch's `apiUrl`
+  silently overrode the base's `ApiUrl`. That was wrong for case-sensitive consumers (a Python or
+  Node app sees two different keys), and plain case-sensitivity would instead deploy a file with
+  both keys, which .NET's configuration loader refuses to load. The merge now stops with an error
+  naming the patch file, the key path and the existing spelling. `set` checks its `--match key=`
+  path the same way before writing (`Try: --match key=Logging:LogLevel:Default`), and now merges
+  the new overlay content *before* writing it, so a write the merge would reject leaves nothing on
+  disk. **An existing overlay whose key casing differs from its base now fails to resolve** — fix
+  the spelling the error names.
+- **JSON and YAML now merge each patch into the base document's own tree, keeping the source's
+  key order, key spelling, and every value exactly as written** (`docs/TREE_MERGE_DESIGN.md`).
+  Both engines used to flatten the base and patches through `Microsoft.Extensions.Configuration`
+  and rebuild a document from string keys. That sorted keys alphabetically, re-quoted YAML, and
+  corrupted values: `"007"` became `7`, `"1.10"` became `1.1`, `"true"` became `true`, a 20-digit
+  integer lost precision, `null` became `""`, `{}`/`[]` were dropped, a patch's key spelling
+  replaced the base's, and a patch scalar landing on a base object was silently dropped. `--diff`
+  hid all of it, since it renders the unpatched side through the same merge. Kept on purpose:
+  `IConfiguration`'s merge rules (key-by-key, arrays by index, the `{"1": ...}` index-keyed idiom)
+  and `$elemMatch` resolution; key matching became case-sensitive (entry above). Also changed: a later
+  layer now replaces a value of a different kind outright (the old merge always kept the object);
+  keys differing only by case within one file are allowed (YAML used to throw); an index-keyed
+  patch that would leave a gap in an array is an error; a multi-document YAML file is refused;
+  YAML output reuses the base file's indentation and sequence style. Comments are still not carried
+  into the output. **Deployed JSON/YAML files can change** wherever they relied on the old
+  reordering or type-guessing — compare before rolling out. `Microsoft.Extensions.Configuration`,
+  `Microsoft.Extensions.Configuration.Json` and `NetEscapades.Configuration.Yaml` are no longer
+  dependencies. New golden expected-output fixtures (`Fixtures/*/Expected/`) pin the full output.
+- **Diff output is no longer coloured by default when stdout isn't a terminal.** The default,
+  `--color auto`, colours only on a terminal with the `NO_COLOR` environment variable unset. A CI
+  log that renders ANSI (GitHub Actions does, even though a job's stdout isn't a terminal) now
+  gets plain text unless the step passes `--color always`. `GitDiff.Render` now passes
+  `--color=never` explicitly when colour is off, so a user's own `color.ui = always` git config
+  can't force it back on.
+
+### Fixed
+
+- **A JSON patch file containing `//` or `/* */` comments no longer crashes the merge.** Comments
+  and trailing commas were accepted in a base file but not in a patch (the `$elemMatch` pre-scan
+  parsed patches strictly). Fixed by the tree merge above, which reads every file the same way.
+- **`--diff-layers` spaces a layer's second and later hunks with a blank line**, the same as
+  between two layers' sections. Before, a layer's second `[<layer>]` tag followed the previous
+  hunk's last line with no gap. See `docs/DIFF_LAYERS_DESIGN.md` decision log #5.
+
+- **JSON output keeps non-ASCII and `< > & ' +` as written, instead of `\uXXXX` escapes.**
+  Found during the same read-through as the console fix below. System.Text.Json's default encoder
+  wrote a password `a+b` as `a\u002Bb` and a Hebrew value as a run of `\u05XX` escapes. This
+  affected `--output` deploy files too, not just console output. It was always valid JSON, but
+  unreadable in a deployed file or a `--diff`. Every JSON write site now uses
+  `JavaScriptEncoder.UnsafeRelaxedJsonEscaping`: `JsonLayerMerger` (both the plain and `$elemMatch`
+  paths), `JsonFieldAuthor` (`set`), `JsonElemMatchResolver`'s ambiguous-match error message, and
+  `LayerManifestSerializer` (`configtransform.json` files written by `set`/`init`, where a client
+  named `Acme & Co` used to come out as `Acme \u0026 Co`). New values in the `DotNetCore`,
+  `GenericJson` and `ElemMatch` fixtures cover it. See `docs/CONFIG_MANAGEMENT.md` §5.3, including the
+  one quirk left over from System.Text.Json itself (emoji are always written as escaped surrogate pairs).
+- **Console output is always UTF-8, so redirected output no longer loses characters on
+  Windows.** Found while running the tool against `config-transform-pilot` from Git Bash: on a
+  console code page like 437 (the Windows default for cmd.exe and Git Bash), .NET encoded
+  stdout/stderr in that code page. The resolution report's `↓` came out as the invisible control
+  byte `0x19`, and a non-ASCII config value printed by `--dry-run` (e.g. Hebrew) became `?`, which
+  is real data loss for `--dry-run > file`. `--output` files were never affected. The new
+  `Utf8Console` (`ConfigTransform.Cli`) writes redirected output as UTF-8 with no BOM. On a real
+  console it switches the code page to UTF-8 for the run and restores the original on exit. See
+  `docs/CONFIG_MANAGEMENT.md` §6. Regression test `Utf8ConsoleTests` runs the real CLI as a child
+  process with redirected stdout; an in-process `CliRunner.Run` test with a `StringWriter` can't
+  reach this code.
+
 ## [0.22.0-alpha] - 2026-09-10
 
 ### Added

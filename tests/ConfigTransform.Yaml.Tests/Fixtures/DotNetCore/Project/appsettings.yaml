@@ -9,3 +9,9 @@ AllowedOrigins:
   - https://a.example.com
   - https://b.example.com
 AllowedHosts: "*"
+BuildTag: "0042"
+Threshold: 0.50
+ProxyUrl: null
+Plugins: {}
+BlockedIps: []
+Schedule: '*/5 * * * *'

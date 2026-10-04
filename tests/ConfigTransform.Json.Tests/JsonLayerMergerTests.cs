@@ -27,8 +27,8 @@ public class JsonLayerMergerTests
     [Fact]
     public void Preserves_json_types_rather_than_flattening_everything_to_strings()
     {
-        // IConfiguration stores every leaf as a plain string internally; a naive round-trip
-        // would turn `"RetryCount": 5` into `"RetryCount": "5"`. This pins that it doesn't.
+        // Values keep the type they were written with -- a string-flattening merge would turn
+        // `"RetryCount": 5` into `"RetryCount": "5"`. This pins that it doesn't.
         var resolved = Resolve("ClientA", "Production");
         var merged = JsonLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
@@ -45,10 +45,10 @@ public class JsonLayerMergerTests
     public void An_overlay_array_overrides_by_index_not_wholesale()
     {
         // The environment overlay's AllowedOrigins has one element; the base has two. This
-        // documents the real, easy-to-get-wrong behavior: Microsoft.Extensions.Configuration
-        // flattens arrays to indexed keys ("AllowedOrigins:0", "AllowedOrigins:1", ...), so an
-        // overlay array only overrides the indices it specifies -- it does not replace the
-        // base array wholesale. Index 1 survives from the base layer untouched.
+        // documents the real, easy-to-get-wrong behavior, kept from Microsoft.Extensions.
+        // Configuration's own layering: an overlay array only overrides the indices it specifies
+        // -- it does not replace the base array wholesale. Index 1 survives from the base layer
+        // untouched.
         var resolved = Resolve("ClientA", "Production");
         var merged = JsonLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
 
@@ -59,6 +59,20 @@ public class JsonLayerMergerTests
         Assert.Equal(2, origins.GetArrayLength());
         Assert.Equal("https://prod.example.com", origins[0].GetString()); // overridden by the environment layer
         Assert.Equal("https://b.example.com", origins[1].GetString());    // untouched, survives from the base layer
+    }
+
+    [Fact]
+    public void Writes_non_ascii_and_html_sensitive_characters_literally_not_as_escapes()
+    {
+        // System.Text.Json's default encoder writes `+` as \u002B, `&` as \u0026 and every
+        // non-ASCII character as an escape -- valid JSON, but unreadable in a deployed file or a
+        // --diff. See JsonWriteOptions.
+        var resolved = Resolve("ClientA", "Production");
+        var merged = JsonLayerMerger.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
+
+        Assert.Contains("\"Main\": \"Server=devdb;User=app;Password=a+b'c&d<e>\"", merged); // untouched base value
+        Assert.Contains("\"SiteTitle\": \"שלום café\"", merged); // client layer
+        Assert.DoesNotContain(@"\u", merged);
     }
 
     [Fact]

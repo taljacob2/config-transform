@@ -178,6 +178,10 @@ public class LayerDiffAttributionTests
         // Two separate hunks in the same layer's own diff -- each gets its own header, neither
         // one has a prior owner (both trace back to base).
         Assert.Equal(2, CountOccurrences(layer1Diff, "[Environments/Production/configtransform.json]"));
+        // ...and the second one is set off by a blank line, the same spacing CliRunner puts
+        // between two layers' sections -- but the first one isn't (nothing above it to separate).
+        Assert.StartsWith("[Environments/Production/configtransform.json]", layer1Diff);
+        Assert.Contains("\n\n[Environments/Production/configtransform.json]", layer1Diff);
 
         var layer2Diff = sections[1].Diff;
         Assert.Contains(

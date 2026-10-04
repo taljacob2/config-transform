@@ -1,98 +1,326 @@
 using System.Globalization;
-using Microsoft.Extensions.Configuration;
-using YamlDotNet.Serialization;
+using ConfigTransform.Core;
+using YamlDotNet.Core;
+using YamlDotNet.Core.Events;
+using YamlDotNet.RepresentationModel;
 
 namespace ConfigTransform.Yaml;
 
 /// <summary>
-/// Applies an arbitrary-length chain of YAML overlays, in order, to a YAML config file using
-/// Microsoft.Extensions.Configuration's own ConfigurationBuilder as the merge engine (base then
-/// each patch in turn via AddYamlFile, from NetEscapades.Configuration.Yaml -- there's no YAML
-/// support in the BCL), then flattens the resulting configuration back out to a single YAML
-/// document. Same architecture as <c>ConfigTransform.Json</c>'s <c>JsonLayerMerger</c> (same data
-/// model: maps/lists/scalars) but not shared code with it -- each format engine in this repo is
-/// an independent library (see CLAUDE.md's "Repo structure"). Format-generic by design: no
-/// appsettings.yaml-specific logic here (see CLAUDE.md).
+/// Applies an arbitrary-length chain of YAML overlays, in order, to a YAML config file by merging
+/// each one into the base document's own node tree (docs/TREE_MERGE_DESIGN.md), via YamlDotNet's
+/// representation model. Same merge rules as <c>ConfigTransform.Json</c>'s <c>JsonLayerMerger</c>
+/// (same data model: maps/sequences/scalars), but not shared code with it -- each format engine
+/// in this repo is an independent library (see CLAUDE.md's "Repo structure"). Format-generic by
+/// design: no appsettings.yaml-specific logic here (see CLAUDE.md).
 ///
-/// Verified empirically (not assumed) against a real NetEscapades.Configuration.Yaml parse before
-/// writing this: <c>IConfiguration.GetChildren()</c> flattens a YAML sequence to indexed keys
-/// ("Numbers:0", "Numbers:1", ...) and a nested map to ':'-separated keys, identically to the
-/// JSON provider -- so every quirk already documented for <c>JsonLayerMerger</c> applies here
-/// unchanged, for the same underlying reason (both are just <c>IConfiguration</c> flattening):
-/// - Every leaf value is stored as a plain string internally. This class infers bool/integer/
-///   float/string from the flattened value (in that priority order) to preserve the original
-///   YAML scalar's type in the overwhelming common case -- ported from, not shared with,
-///   <c>JsonLayerMerger.ToJsonValue</c>.
-/// - An array is not replaced wholesale by an overlay -- each element is a separate flattened
-///   key, so an overlay array only overrides the indices it specifies; any trailing base-layer
-///   indices beyond that survive untouched.
-/// - An originally-empty YAML map (<c>{}</c>) or sequence (<c>[]</c>) produces no flattened keys
-///   at all, so it round-trips as absent, not as an empty container.
-/// - YAML is case-sensitive but <c>IConfiguration</c> is not: two sibling keys differing only in
-///   case throw a duplicate-key exception at parse time (a real NetEscapades limitation, not a
-///   bug in this class) -- see CONFIG_MANAGEMENT.md §5.6.
+/// Merge rules -- the ones Microsoft.Extensions.Configuration's own layering applies, which this
+/// engine used to delegate to, minus the side effects of flattening everything to strings, and
+/// with case-sensitive key matching:
+/// - Maps merge key by key, recursively. Keys match exactly -- YAML is case-sensitive. A matched
+///   key keeps its position; a new key is appended after the existing ones, in the patch's order.
+///   A patch key that matches an existing key <i>only by case</i> is an error, not a new key (same
+///   reasoning as <c>JsonLayerMerger</c>; docs/TREE_MERGE_DESIGN.md).
+/// - Sequences merge by index: an overlay sequence only overrides the indices it specifies, and
+///   any trailing base items beyond that survive untouched. A map whose keys are all sequence
+///   indices (<c>"1": ...</c>) addresses individual items of an existing sequence.
+/// - Anything else -- a scalar, a null, or a different kind of node than the one it lands on --
+///   replaces what was there, exactly as written in the patch.
 ///
-/// Output is written via YamlDotNet's high-level <see cref="Serializer"/> against a plain
-/// <c>Dictionary&lt;string, object&gt;</c>/<c>List&lt;object&gt;</c> object graph (not YamlDotNet's
-/// lower-level node-tree API) -- the serializer already makes sensible quoting/block-vs-flow-style
-/// decisions for a plain graph, so there's no tag/emitter-state management needed here.
+/// Scalars are never interpreted, only carried over: <c>"007"</c> keeps its quotes, <c>007</c>
+/// stays plain, <c>'*/15 * * * *'</c> stays single-quoted, a <c>|</c> block stays a block, and
+/// <c>{}</c>/<c>[]</c>/<c>null</c>/<c>~</c> survive. The old IConfiguration round trip sorted keys
+/// alphabetically, re-quoted values, and dropped empty containers. What still isn't preserved:
+/// comments (YamlDotNet's representation model doesn't keep them), anchors/aliases (expanded into
+/// copies, as before), and per-level indentation widths (one width is detected from the base file
+/// and used throughout -- see <see cref="DetectLayout"/>). One YAML document per file only. The
+/// output uses the base file's line endings and ends with a newline exactly when the base does
+/// (<see cref="TextLayout"/>).
 /// </summary>
 public static class YamlLayerMerger
 {
-    private static readonly ISerializer Serializer = new SerializerBuilder().Build();
-
     public static string Merge(string basePath, IReadOnlyList<string> patchPathsInOrder)
     {
-        var builder = new ConfigurationBuilder().AddYamlFile(basePath, optional: false);
+        var baseText = File.ReadAllText(basePath);
+        var textLayout = TextLayout.Of(baseText);
+        var parsedBase = Load(baseText, basePath);
+        var layout = DetectLayout(parsedBase);
+        // Merged into in place, so work on a private copy -- see Clone.
+        var document = parsedBase is null ? null : Clone(parsedBase);
 
         foreach (var patchPath in patchPathsInOrder)
-            builder.AddYamlFile(patchPath, optional: true);
+        {
+            // A missing patch file is skipped, not an error -- the same tolerance AddYamlFile's
+            // optional: true gave it (a *declared* patch that's missing is already caught earlier,
+            // by LayerChain.ResolveResource).
+            if (!File.Exists(patchPath))
+                continue;
 
-        var configuration = builder.Build();
+            var patch = Load(File.ReadAllText(patchPath), patchPath);
+            if (patch is null)
+                continue;
 
-        var root = new Dictionary<string, object?>();
-        foreach (var child in configuration.GetChildren())
-            root[child.Key] = BuildNode(child);
+            // $elemMatch patches resolve against the document as merged so far -- never the base
+            // alone (docs/FIELD_AUTHORING_DESIGN.md, "YAML array-of-objects matching").
+            if (YamlElemMatchResolver.ContainsElemMatch(patch))
+                patch = YamlElemMatchResolver.Rewrite(patch, document);
 
-        return Serializer.Serialize(root);
+            document = MergeNode(document, patch, patchPath, "");
+        }
+
+        return textLayout.Apply(Save(document, layout));
     }
 
-    private static object? BuildNode(IConfigurationSection section)
+    /// <returns>The file's single document's root, or null for an empty file. Never mutated by the merge (see <see cref="MergeNode"/>).</returns>
+    internal static YamlNode? Load(string text, string path)
     {
-        var children = section.GetChildren().ToList();
+        var stream = new YamlStream();
+        stream.Load(new StringReader(text));
 
-        if (children.Count == 0)
-            return ToYamlValue(section.Value);
+        var root = stream.Documents.Count switch
+        {
+            0 => null,
+            1 => stream.Documents[0].RootNode,
+            _ => throw new InvalidOperationException(
+                $"'{path}' contains {stream.Documents.Count} YAML documents (separated by '---'); a config file must contain exactly one."),
+        };
 
-        var isArray = children
-            .Select((child, index) => child.Key == index.ToString(CultureInfo.InvariantCulture))
-            .All(matches => matches);
-
-        if (isArray)
-            return children.Select(BuildNode).ToList();
-
-        var obj = new Dictionary<string, object?>();
-        foreach (var child in children)
-            obj[child.Key] = BuildNode(child);
-        return obj;
+        if (root is not null)
+            RejectUnquotedSecretPlaceholders(root, path);
+        return root;
     }
 
-    /// <summary>Internal, not private: reused by <see cref="YamlFieldAuthor"/> so a value <c>set</c>
-    /// writes gets the exact same bool/integer/float/string type inference a merge would give it.</summary>
-    internal static object? ToYamlValue(string? value)
+    /// <summary>
+    /// In YAML, an unquoted value that starts with <c>{</c> is a flow mapping, so an unquoted
+    /// <c>{{CFSECRET_X}}</c> (docs/SECRETS_DESIGN.md) parses as a map nested in a map's key —
+    /// not text. Once parsed, the <c>{{CFSECRET_</c> text no longer exists anywhere, so neither the
+    /// secrets report nor the real run's leftover-placeholder check could see it, and the mangled map
+    /// would be deployed silently. Caught here, while reading any YAML file, instead.
+    /// </summary>
+    private static void RejectUnquotedSecretPlaceholders(YamlNode node, string path)
     {
-        if (value is null)
+        switch (node)
+        {
+            case YamlMappingNode map:
+                foreach (var (key, value) in map.Children)
+                {
+                    if (key is YamlMappingNode keyMap &&
+                        keyMap.Children.Keys.OfType<YamlScalarNode>().FirstOrDefault(k =>
+                            k.Value is { } text && text.StartsWith(SecretPlaceholders.Prefix, StringComparison.Ordinal)) is { } name)
+                        throw new InvalidOperationException(
+                            $"'{path}' has an unquoted {{{{{name.Value}}}}} (line {key.Start.Line}). In YAML, a value starting with " +
+                            "'{' is a map, not text, so a placeholder there must be quoted.\n" +
+                            $"Try: \"{{{{{name.Value}}}}}\"");
+                    RejectUnquotedSecretPlaceholders(key, path);
+                    RejectUnquotedSecretPlaceholders(value, path);
+                }
+                break;
+            case YamlSequenceNode sequence:
+                foreach (var item in sequence.Children)
+                    RejectUnquotedSecretPlaceholders(item, path);
+                break;
+        }
+    }
+
+    internal static string Save(YamlNode? document, (int Indent, bool IndentSequences) layout)
+    {
+        if (document is null)
+            return "{}" + Environment.NewLine;
+
+        var writer = new StringWriter();
+        var settings = new EmitterSettings(
+            bestIndent: layout.Indent, bestWidth: int.MaxValue, isCanonical: false, maxSimpleKeyLength: 1024,
+            indentSequences: layout.IndentSequences);
+        new YamlStream(new YamlDocument(document)).Save(new Emitter(writer, settings), assignAnchors: false);
+
+        // YamlStream always ends a document with an explicit "..." end marker; a config file doesn't have one.
+        var output = writer.ToString();
+        var marker = "..." + writer.NewLine;
+        return output.EndsWith(marker, StringComparison.Ordinal) ? output[..^marker.Length] : output;
+    }
+
+    /// <returns>
+    /// The node that now belongs at <paramref name="target"/>'s position: <paramref name="target"/>
+    /// itself, merged into in place, or a copy of <paramref name="patch"/> that replaces it.
+    /// <paramref name="patch"/> itself is never mutated or inserted -- only copies of its nodes.
+    /// </returns>
+    private static YamlNode MergeNode(YamlNode? target, YamlNode patch, string patchPath, string path)
+    {
+        switch (target, patch)
+        {
+            case (YamlMappingNode targetMap, YamlMappingNode patchMap):
+                MergeMap(targetMap, patchMap, patchPath, path);
+                return targetMap;
+            case (YamlSequenceNode targetSequence, YamlSequenceNode patchSequence):
+                for (var i = 0; i < patchSequence.Children.Count; i++)
+                    MergeSequenceItem(targetSequence, i, patchSequence.Children[i], patchPath, path);
+                return targetSequence;
+            case (YamlSequenceNode targetSequence, YamlMappingNode patchMap) when IsIndexMap(patchMap, out var indexed):
+                foreach (var (index, value) in indexed)
+                {
+                    if (index > targetSequence.Children.Count)
+                        throw new InvalidOperationException(
+                            $"A patch addresses item {index} of a sequence that has only {targetSequence.Children.Count} item(s) -- " +
+                            $"an index-keyed patch can update an existing item or append the next one ({targetSequence.Children.Count}), " +
+                            "not leave a gap.");
+                    MergeSequenceItem(targetSequence, index, value, patchPath, path);
+                }
+                return targetSequence;
+            default:
+                return Clone(patch);
+        }
+    }
+
+    private static void MergeMap(YamlMappingNode target, YamlMappingNode patch, string patchPath, string path)
+    {
+        foreach (var (patchKey, patchValue) in patch.Children)
+        {
+            var keyPath = path.Length == 0 ? patchKey.ToString() : $"{path}:{patchKey}";
+            var existingKey = target.Children.Keys.FirstOrDefault(k => k.Equals(patchKey));
+            if (existingKey is null)
+            {
+                if (FindCaseVariant(target, patchKey) is { } caseVariant)
+                    throw CaseOnlyMismatch(patchPath, keyPath, path.Length == 0 ? caseVariant : $"{path}:{caseVariant}", caseVariant);
+
+                target.Children.Add(Clone(patchKey), Clone(patchValue));
+                continue;
+            }
+
+            var current = target.Children[existingKey];
+            var merged = MergeNode(current, patchValue, patchPath, keyPath);
+            if (!ReferenceEquals(merged, current))
+                target.Children[existingKey] = merged;
+        }
+    }
+
+    private static void MergeSequenceItem(YamlSequenceNode target, int index, YamlNode patchValue, string patchPath, string path)
+    {
+        if (index == target.Children.Count)
+        {
+            target.Children.Add(Clone(patchValue));
+            return;
+        }
+
+        var current = target.Children[index];
+        var merged = MergeNode(current, patchValue, patchPath, $"{path}:{index}");
+        if (!ReferenceEquals(merged, current))
+            target.Children[index] = merged;
+    }
+
+    /// <summary>An existing scalar key equal to <paramref name="key"/> ignoring case, when there's no exact match -- see <see cref="CaseOnlyMismatch"/>.</summary>
+    private static string? FindCaseVariant(YamlMappingNode target, YamlNode key)
+    {
+        if (key is not YamlScalarNode { Value: { } keyText })
             return null;
 
-        if (bool.TryParse(value, out var boolValue))
-            return boolValue;
+        return target.Children.Keys
+            .OfType<YamlScalarNode>()
+            .Select(k => k.Value)
+            .FirstOrDefault(existing => string.Equals(existing, keyText, StringComparison.OrdinalIgnoreCase));
+    }
 
-        if (long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var longValue))
-            return longValue;
+    /// <summary>
+    /// A patch key that differs from an existing key only by case: stop rather than add a second
+    /// key -- same reasoning as <c>JsonLayerMerger</c>'s own (a .NET consumer reading this through
+    /// <c>Microsoft.Extensions.Configuration</c> would refuse to load it), ported not shared.
+    /// </summary>
+    private static InvalidOperationException CaseOnlyMismatch(string patchPath, string keyPath, string existingPath, string existingKey) =>
+        new($"'{patchPath}' sets \"{keyPath}\", but the existing key is \"{existingPath}\" -- they differ only by case. " +
+            "Keys are case-sensitive, so this would add a second key instead of overriding the existing one " +
+            $"(and .NET's configuration loader rejects keys that differ only by case).\nTry: spell it \"{existingKey}\" in the patch.");
 
-        if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var doubleValue))
-            return doubleValue;
+    /// <summary>True when every key is a canonical sequence index ("0", "12" -- not "01" or "-1"); the pairs come back in ascending index order.</summary>
+    private static bool IsIndexMap(YamlMappingNode map, out List<(int Index, YamlNode Value)> indexed)
+    {
+        indexed = [];
+        foreach (var (key, value) in map.Children)
+        {
+            if (key is not YamlScalarNode { Value: { } text } ||
+                !int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var index) ||
+                index.ToString(CultureInfo.InvariantCulture) != text)
+                return false;
+            indexed.Add((index, value));
+        }
 
-        return value;
+        indexed.Sort((a, b) => a.Index.CompareTo(b.Index));
+        return indexed.Count > 0;
+    }
+
+    /// <summary>
+    /// A deep copy keeping each node's style and tag but not its anchor -- so merging into the
+    /// base never mutates a node shared through an alias, or a patch's own tree. Aliases come out
+    /// as independent copies, which is how the old IConfiguration-based merge wrote them too.
+    /// </summary>
+    internal static YamlNode Clone(YamlNode node)
+    {
+        switch (node)
+        {
+            case YamlScalarNode scalar:
+                return new YamlScalarNode(scalar.Value) { Style = scalar.Style, Tag = scalar.Tag };
+            case YamlSequenceNode sequence:
+            {
+                var copy = new YamlSequenceNode { Style = sequence.Style, Tag = sequence.Tag };
+                foreach (var child in sequence.Children)
+                    copy.Children.Add(Clone(child));
+                return copy;
+            }
+            case YamlMappingNode map:
+            {
+                var copy = new YamlMappingNode { Style = map.Style, Tag = map.Tag };
+                foreach (var (key, value) in map.Children)
+                    copy.Children.Add(Clone(key), Clone(value));
+                return copy;
+            }
+            default:
+                throw new InvalidOperationException($"Unsupported YAML node type '{node.NodeType}'.");
+        }
+    }
+
+    /// <summary>
+    /// The base file's indentation width and whether its block sequences are indented under their
+    /// key (<c>key:\n  - a</c>) or flush with it (<c>key:\n- a</c>), read from the source positions
+    /// YamlDotNet records on each node -- so the merged file is laid out like the file it came
+    /// from. Defaults to 2 / flush (YamlDotNet's own) when the base has nothing nested to read from.
+    /// Needs the base exactly as parsed: <see cref="Clone"/> doesn't carry source positions over.
+    /// </summary>
+    internal static (int Indent, bool IndentSequences) DetectLayout(YamlNode? root)
+    {
+        int? indent = null;
+        bool? indentSequences = null;
+
+        void Visit(YamlNode node)
+        {
+            if (node is not YamlMappingNode { Style: not MappingStyle.Flow } map)
+            {
+                if (node is YamlSequenceNode sequence)
+                    foreach (var child in sequence.Children)
+                        Visit(child);
+                return;
+            }
+
+            foreach (var (key, value) in map.Children)
+            {
+                if (indent is not null && indentSequences is not null)
+                    return;
+
+                if (value is YamlMappingNode { Style: not MappingStyle.Flow } childMap && childMap.Children.Count > 0)
+                {
+                    var childKey = childMap.Children.Keys.First();
+                    if (childKey.Start.Line > key.Start.Line && childKey.Start.Column > key.Start.Column)
+                        indent ??= (int)(childKey.Start.Column - key.Start.Column);
+                }
+                else if (value is YamlSequenceNode { Style: not SequenceStyle.Flow } childSequence && childSequence.Children.Count > 0)
+                {
+                    indentSequences ??= childSequence.Start.Column > key.Start.Column;
+                }
+
+                Visit(value);
+            }
+        }
+
+        if (root is not null)
+            Visit(root);
+
+        return (indent is > 0 ? indent.Value : 2, indentSequences ?? false);
     }
 }
