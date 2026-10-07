@@ -744,7 +744,16 @@ written), then every layer and the environment variable as `patched in:` / `not 
 — in both the report and `--list`. The chain's first step is also relabelled `resource` (was
 `base`). `--list --reveal-secrets`, silently accepted before, is now an error. Checked against the
 pilot's real tree: three secrets, each shown once with its file and layer, and no value in the
-output. `config-transform-pilot` is re-pinned to `0.27.0-alpha` and verified via run #39. See `docs/SECRETS_DESIGN.md`'s "What each mode does" and decisions #24–#27.
+output. `config-transform-pilot` is re-pinned to `0.27.0-alpha` and verified via run #39. See
+`docs/SECRETS_DESIGN.md`'s "What each mode does" and decisions #24–#27.
+
+**Azure Key Vault as a secrets source (2026-10-07) — designed, implementation next.** git-crypt's
+one key lets its holder read every client's secrets; a layer listing `keyvault://<vault>` under
+`secrets` gets per-vault RBAC (one vault per repo × environment × client) with the same
+precedence and report as files. Signs in through `az` locally and OIDC (`azure/login`) on GitHub
+runners; never interactively itself. **Release is gated** on a design partner running
+`docs/KEYVAULT_VERIFICATION.md` (to be written with the implementation) against a real vault —
+this repo's sessions have no Azure access. See `docs/KEYVAULT_SECRETS_DESIGN.md`.
 
 ## Next up
 

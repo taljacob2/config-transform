@@ -481,8 +481,10 @@ From a real user's review of the pilot's output (`0.27.0-alpha`):
   case; v1 has no escape syntax and treats it as a placeholder.
 - **`replace` for non-secret whole files** (e.g. a client's logo). `CONFIG_MANAGEMENT.md` §1.1 puts
   branding assets out of scope; v1 requires `*.secret.*` names for `replace`.
-- **External secret stores** (Azure Key Vault, AWS Secrets Manager) as another source, behind the
-  same resolution step. Not planned; environment variables already let CI fetch from one.
+- **External secret stores** as another source, behind the same resolution step. Azure Key Vault
+  is designed — `docs/KEYVAULT_SECRETS_DESIGN.md` (a layer lists `keyvault://<vault>` under
+  `secrets`; per-vault RBAC instead of one git-crypt key for everything). Others (AWS Secrets
+  Manager, HashiCorp Vault) would use the same seam.
 - **`set` writing secrets** into `*.secret.env` files.
 - ~~**A runnable example**~~ — closed: `init --template secrets` (`docs/INIT_COMMAND_DESIGN.md`'s
   "The `secrets` variant").
