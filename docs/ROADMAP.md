@@ -748,9 +748,10 @@ output. `config-transform-pilot` is re-pinned to `0.27.0-alpha` and verified via
 `docs/SECRETS_DESIGN.md`'s "What each mode does" and decisions #24–#27.
 
 **Azure Key Vault as a secrets source (2026-10-07) — designed, implementation next.** git-crypt's
-one key lets its holder read every client's secrets; a layer listing `keyvault://<vault>` under
-`secrets` gets per-vault RBAC (one vault per repo × environment × client) with the same
-precedence and report as files. Signs in through `az` locally and OIDC (`azure/login`) on GitHub
+one key lets its holder read every client's secrets. A layer's `secrets` can list a whole vault,
+specific secrets in it (optionally under an explicit placeholder name), or a secret holding `.env`
+text, and a resource's `replace` can name a vault secret (a Firebase service account) — per-vault
+RBAC (one vault per repo × environment × client) with the same precedence and report as files. Signs in through `az` locally and OIDC (`azure/login`) on GitHub
 runners; never interactively itself. **Release is gated** on a design partner running
 `docs/KEYVAULT_VERIFICATION.md` (to be written with the implementation) against a real vault —
 this repo's sessions have no Azure access. See `docs/KEYVAULT_SECRETS_DESIGN.md`.
