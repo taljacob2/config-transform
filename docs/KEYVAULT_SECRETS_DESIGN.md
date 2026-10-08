@@ -283,6 +283,11 @@ jobs:
   private endpoints or an IP allow-list. Keep the vault's public endpoint enabled with RBAC as the
   gate, or use self-hosted or private-networking runners.
 - **An identity takes at most 20 federated credentials** — plenty for one Environment each.
+- **If `azure/login` fails with "No subscriptions found"**, the identity only has roles on the
+  vaults themselves; add `allow-no-subscriptions: true` to the `azure/login` step. Key Vault access
+  needs no subscription.
+- **Resolve soon after `azure/login`.** Its sign-in lasts about an hour; a resolve step right after
+  it is well inside that.
 
 ## Recommended Azure layout
 
