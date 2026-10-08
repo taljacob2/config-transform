@@ -1,9 +1,10 @@
 # Azure Key Vault as a secrets source — design
 
-**Status: implemented on `main`, not released.** The release waits until a design partner with a
-real Azure Key Vault has run `docs/KEYVAULT_VERIFICATION.md` and confirmed every state below —
-this repo's own sessions have no Azure access, so everything that talks to Azure is covered by
-unit tests against a fake vault and by that guide, not yet by a real vault. Two things were
+**Status: released as `0.28.0-alpha`, not yet checked against a real vault.** It was released
+ahead of that check, at the repo owner's request, so a design partner with real Azure Key Vaults
+can install it and run `docs/KEYVAULT_VERIFICATION.md`; anything that finds goes into a follow-up
+release. This repo's own sessions have no Azure access, so everything that talks to Azure is
+covered by unit tests against a fake vault and by that guide. Two things were
 checked for real without one: a vault name that doesn't exist (`can't be reached`, through the
 real Azure SDK) and every sign-in step failing on a machine without `az` (see "Signing in").
 
@@ -407,8 +408,9 @@ subscription
 12. **A source that can't be read is `unknown`**, matching a locked file — including a vault that
     doesn't exist, since that can't be told apart from having no network. **A named secret that
     doesn't exist is an error**, since the vault answered.
-13. **The release waits for a real-vault check** by a design partner, since no session of this
-    repo can reach Azure.
+13. **The real-vault check is done by a design partner**, since no session of this repo can reach
+    Azure. The design first had the release wait for it; the repo owner chose to release
+    `0.28.0-alpha` before it instead, so the partner can install the tool rather than build it.
 
 From implementation:
 

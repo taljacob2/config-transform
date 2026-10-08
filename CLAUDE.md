@@ -321,9 +321,10 @@ YAML `set` now matches or creates an item in an array of objects via `$elemMatch
 `config-transform-pilot` re-pinned to it. `0.27.0-alpha` gives each secret its own tree in the
 resolution report and `--list` — where its placeholder is used, then every layer and the
 environment variable as `patched in:` / `not patched in` — and relabels the chain's first step
-`resource` (was `base`); `config-transform-pilot` is re-pinned to it. Azure Key Vault as a secrets source is implemented on
-`main` but not released: a layer's `secrets` can list `keyvault://<vault>[/<secret>]` sources (or
-`{ "from", "as" }`), and a `replace` can name a vault secret. Its release waits for a design partner
-to run `docs/KEYVAULT_VERIFICATION.md`, since no session here can reach Azure. Secret names are now
+`resource` (was `base`); `config-transform-pilot` is re-pinned to it. Azure Key Vault as a secrets source is released as
+`0.28.0-alpha`: a layer's `secrets` can list `keyvault://<vault>[/<secret>]` sources (or
+`{ "from", "as" }`), and a `replace` can name a vault secret. It shipped before being checked
+against a real vault (the repo owner's call); a design partner is running
+`docs/KEYVAULT_VERIFICATION.md`, since no session here can reach Azure. Secret names are now
 enforced upper snake case. Never let a secret value
 reach stdout, stderr or an exception message — two such leaks were found and fixed in stage 1.

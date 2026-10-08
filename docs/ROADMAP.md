@@ -747,7 +747,7 @@ pilot's real tree: three secrets, each shown once with its file and layer, and n
 output. `config-transform-pilot` is re-pinned to `0.27.0-alpha` and verified via run #39. See
 `docs/SECRETS_DESIGN.md`'s "What each mode does" and decisions #24–#27.
 
-**Azure Key Vault as a secrets source (2026-10-07; implemented 2026-10-08) — on `main`, not released.** git-crypt's
+**Azure Key Vault as a secrets source (2026-10-07; implemented 2026-10-08) — released as `0.28.0-alpha`, awaiting a real-vault check.** git-crypt's
 one key lets its holder read every client's secrets. A layer's `secrets` can list a whole vault,
 specific secrets in it (optionally under an explicit placeholder name), or a secret holding `.env`
 text, and a resource's `replace` can name a vault secret (a Firebase service account) — per-vault
@@ -757,10 +757,12 @@ project behind a Core `IKeyVault` seam, tested against a fake vault; checked for
 vault: an unknown vault name through the real SDK, and every sign-in step failing without `az` —
 which found that a managed-identity step took ~25 s to fail outside Azure, so it was dropped
 (`az login --identity` covers agents in Azure). Secret names are now enforced upper snake case,
-since the sources disagree about case. **Next: a design partner runs
-`docs/KEYVAULT_VERIFICATION.md` against real vaults; then version and release it**
-(`docs/RELEASING.md`) and update the CHANGELOG's `[Unreleased]` section with anything they find.
-This repo's sessions have no Azure access. See `docs/KEYVAULT_SECRETS_DESIGN.md`.
+since the sources disagree about case. Released as `0.28.0-alpha` before the real-vault check, at
+the repo owner's request, so the design partner can install it. **Next: the design partner runs
+`docs/KEYVAULT_VERIFICATION.md` against real vaults; fix anything it finds in a follow-up
+release.** `config-transform-pilot` isn't re-pinned yet (it uses no Key Vault; the casing rule is
+the only change that could affect it, and all its names are upper case). This repo's sessions have
+no Azure access. See `docs/KEYVAULT_SECRETS_DESIGN.md`.
 
 ## Next up
 

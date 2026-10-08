@@ -6,8 +6,11 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
-Not released yet: waits for a design partner to run `docs/KEYVAULT_VERIFICATION.md` against real
-Azure Key Vaults.
+## [0.28.0-alpha] - 2026-10-08
+
+Released before the Key Vault support has been checked against a real vault, at the repo owner's
+request, so a design partner can install it. `docs/KEYVAULT_VERIFICATION.md` is that check; anything
+it finds goes into a follow-up release.
 
 ### Added
 
