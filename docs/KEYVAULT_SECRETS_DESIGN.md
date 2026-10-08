@@ -1,8 +1,11 @@
 # Azure Key Vault as a secrets source — design
 
-**Status: designed, not implemented.** Implementation is next; the release waits until a design
-partner with a real Azure Key Vault has run `docs/KEYVAULT_VERIFICATION.md` (written with the
-implementation) and confirmed every state below. This repo's own sessions have no Azure access.
+**Status: implemented on `main`, not released.** The release waits until a design partner with a
+real Azure Key Vault has run `docs/KEYVAULT_VERIFICATION.md` and confirmed every state below —
+this repo's own sessions have no Azure access, so everything that talks to Azure is covered by
+unit tests against a fake vault and by that guide, not yet by a real vault. Two things were
+checked for real without one: a vault name that doesn't exist (`can't be reached`, through the
+real Azure SDK) and every sign-in step failing on a machine without `az` (see "Signing in").
 
 Extends `docs/SECRETS_DESIGN.md`: a layer's `secrets` can list Azure Key Vault sources next to (or
 instead of) `*.secret.env` files, and a resource's `replace` can name a vault secret instead of a
@@ -91,13 +94,18 @@ vault secret's name is the placeholder's name with each `_` written as `-`:
   never `-` (a shell can't `export A-B=…`). One secret's name has to work in all of those — that's
   what lets a CI environment variable override a vault value, or a vault override a file.
 - **Case follows Key Vault**, which matches names case-insensitively, so the tool adds no case
-  rule of its own.
+  rule for vault names. Placeholders themselves are upper snake case, enforced
+  (`docs/SECRETS_DESIGN.md` decision #28) — the sources disagree about case, and Key Vault ignoring
+  it is one reason why.
 - **The prefix is the opt-in.** Vaults often hold secrets for other applications too; without it,
   an unrelated `DB-PASSWORD` in a client's vault could silently override an Environment layer's
   `CFSECRET_DB_PASSWORD`. Same idea as every `*.secret.env` key having to start with `CFSECRET_`.
+  It holds by construction: a placeholder's name starts with `CFSECRET_`, so the vault secret it
+  looks up starts with `CFSECRET-`, and no other secret can ever match.
 - **`.env` text and `as` use exact names** — no rename at all.
 - **Disabled, expired or not-yet-valid secrets don't count.** They're shown in the tree, so "why
-  isn't my secret used?" has an answer: `not patched in (disabled in keyvault://kv-ra-prod-ca)`.
+  isn't my secret used?" has an answer:
+  `not patched in (keyvault://kv-ra-prod-ca/CFSECRET-SMTP-PASSWORD is disabled)`.
 
 ## Whole files (`replace`)
 
@@ -160,7 +168,7 @@ name is `unknown` unless a later layer settles it, and a real run writes nothing
 | A single-value source defines the name | `patched in: keyvault://kv-ra-prod-ca/CFSECRET-ADMIN-DB-CONNECTION` |
 | `.env` text defines the name | `patched in: keyvault://kv-ra-prod-ca/notifications-secrets` |
 | Source read, name not in it | `not patched in` |
-| Name there but disabled / expired / not yet valid | `not patched in (disabled in keyvault://kv-ra-prod-ca)` (or `expired`, `not yet valid`) |
+| Name there but disabled / expired / not yet valid | `not patched in (keyvault://kv-ra-prod-ca/CFSECRET-ADMIN-DB-CONNECTION is disabled)` (or `is expired`, `is not yet valid`) |
 | No Azure sign-in available | `unknown: keyvault://kv-ra-prod-ca can't be read (not signed in to Azure -- run az login)` |
 | No permission (403) | `unknown: keyvault://kv-ra-prod-ca can't be read (403 ForbiddenByRbac: no access)` |
 | Vault firewall blocks the caller | `unknown: keyvault://kv-ra-prod-ca can't be read (403 ForbiddenByFirewall: blocked by the vault's network rules)` |
@@ -195,11 +203,15 @@ order and using the first that works:
 
 1. **The Azure CLI's sign-in (`az login`).** On a developer machine, `az login` does the browser
    SSO, MFA and conditional access, and keeps its tokens between runs in the OS's protected
-   store. In GitHub Actions, `azure/login` leaves `az` signed in for the job.
+   store. In GitHub Actions, `azure/login` leaves `az` signed in for the job. A self-hosted runner
+   or build agent running in Azure signs in with its managed identity the same way:
+   `az login --identity`, or `azure/login` with `auth-type: IDENTITY`.
 2. **A service principal or workload identity from environment variables** (`AZURE_TENANT_ID`,
    `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET` or `AZURE_FEDERATED_TOKEN_FILE`), for CI systems
    that set those.
-3. **A managed identity**, for self-hosted runners and build agents running in Azure.
+
+One token per run is shared by every vault (the `az` step starts a process each time it's asked),
+and a failed sign-in is reported once, not once per vault.
 
 Why not more:
 
@@ -211,6 +223,11 @@ Why not more:
   Azure PowerShell, …), so "which identity did this use?" becomes guesswork, and Microsoft
   recommends a specific chain for anything beyond local development. The three above are the
   ones a person can reason about.
+- **No managed-identity step of its own.** It was the third step in the first draft. Measured on
+  a machine outside Azure, it takes about 25 seconds to give up — the operating system's connect
+  timeout to Azure's metadata address, which no SDK timeout or retry setting shortened — so every
+  "not signed in" took 25 seconds instead of under one. `az login --identity` covers agents in
+  Azure without the probe.
 - **One tenant: the one you're signed in to.** A vault in another tenant is reported as such
   (see the table) rather than the tool quietly requesting a token for that tenant. Otherwise a
   layer file naming a vault in some other tenant would make the tool ask for tokens there.
@@ -335,8 +352,9 @@ subscription
   contacted); values read only for real runs and `--reveal-secrets`; `replace` from a vault; the
   report lines above.
 - **The Azure project:** mapping each Azure exception (status, error code, credential failures) to
-  its report reason; certificate base64 decoding; that no SDK exception message ever reaches
-  output. No test touches the network.
+  its report reason, including that no SDK exception message ever reaches output; a secret's state
+  from its properties; the run-wide token cache. No test touches the network. (Certificate base64
+  decoding is in Core's `ReplaceStep`, covered by the CLI tests.)
 - **A real vault:** `docs/KEYVAULT_VERIFICATION.md`, run by a design partner from a fresh clone —
   build from source, create a throwaway vault with `az`, and compare each command's output with
   the expected tree for every form and every row of the table above, including a 403 (by removing
@@ -386,6 +404,24 @@ subscription
     doesn't exist is an error**, since the vault answered.
 13. **The release waits for a real-vault check** by a design partner, since no session of this
     repo can reach Azure.
+
+From implementation:
+
+14. **No managed-identity sign-in step** — measured at about 25 seconds to fail outside Azure; see
+    "Signing in". `az login --identity` replaces it.
+15. **"One tenant" is Azure.Identity's tenant-discovery switch turned off**
+    (`Azure.Identity.DisableTenantDiscovery`), so the token is always for the signed-in tenant; a
+    vault elsewhere answers 401, and the tenant its challenge names goes into the message. To be
+    confirmed against a real vault (`docs/KEYVAULT_VERIFICATION.md`).
+16. **An unreadable named secret makes only its own name `unknown`.** A locked file or an
+    unreadable vault could hold any name, so they make every name in their layer uncertain; a
+    named secret can only ever hold one.
+17. **A duplicate name between a vault source and another source in the same layer is reported
+    when a placeholder uses it** — the vault isn't read before that. Two files still fail as soon
+    as they're read, as before.
+18. **A metadata-only read of one secret lists its versions** (the newest is the current one)
+    rather than reading the secret, so a preview needs no permission to read values — and works
+    with a role assigned on that one secret. To be confirmed against a real vault.
 
 ## Open items
 

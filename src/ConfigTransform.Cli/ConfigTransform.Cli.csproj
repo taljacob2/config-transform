@@ -14,6 +14,7 @@
     <ProjectReference Include="..\ConfigTransform.Json\ConfigTransform.Json.csproj" />
     <ProjectReference Include="..\ConfigTransform.Env\ConfigTransform.Env.csproj" />
     <ProjectReference Include="..\ConfigTransform.Yaml\ConfigTransform.Yaml.csproj" />
+    <ProjectReference Include="..\ConfigTransform.Secrets.AzureKeyVault\ConfigTransform.Secrets.AzureKeyVault.csproj" />
   </ItemGroup>
 
 </Project>

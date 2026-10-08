@@ -119,7 +119,7 @@ public static class InitTemplate
                 files.Add(new InitFile(clientPatchFullPath, clientPatchRelative, Message($"{client} {environment} config")));
 
                 var resources = new List<ResourceEntry> { new(ResourcePath, clientPatchRelative) };
-                IReadOnlyList<string>? clientSecrets = null;
+                IReadOnlyList<SecretsEntry>? clientSecrets = null;
 
                 if (secrets && client == DemoClient && environment == DemoEnvironment)
                 {
@@ -141,7 +141,7 @@ public static class InitTemplate
     }
 
     /// <summary>Adds this layer's <c>demo.secret.env</c> to <paramref name="files"/> and returns the layer's <c>secrets</c> list.</summary>
-    private static IReadOnlyList<string> AddSecretsFile(string root, List<InitFile> files, string layerFullPath, string value)
+    private static IReadOnlyList<SecretsEntry> AddSecretsFile(string root, List<InitFile> files, string layerFullPath, string value)
     {
         var secretsFullPath = Path.Combine(Path.GetDirectoryName(layerFullPath)!, SecretsFileName);
         var secretsRelative = LayerChain.ToRepoRelative(root, secretsFullPath);

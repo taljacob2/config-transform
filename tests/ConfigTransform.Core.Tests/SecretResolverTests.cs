@@ -21,10 +21,11 @@ public class SecretResolverTests
         using var dir = new TempDirectory();
         var chain = Chain(dir, ("Environments/Production", [("db.secret.env", "CFSECRET_DB=from-env-layer")]));
 
-        var status = SecretResolver.Build(dir.Path, chain, NoEnvironment).Lookup("CFSECRET_DB");
+        var secrets = SecretResolver.Build(dir.Path, chain, NoEnvironment);
+        var status = secrets.Lookup("CFSECRET_DB");
 
         Assert.Equal(SecretState.Resolved, status.State);
-        Assert.Equal("from-env-layer", status.Value);
+        Assert.Equal("from-env-layer", secrets.ValueOf("CFSECRET_DB"));
         Assert.Equal(".configtransform/Environments/Production/db.secret.env", status.Source);
     }
 
@@ -38,8 +39,8 @@ public class SecretResolverTests
 
         var secrets = SecretResolver.Build(dir.Path, chain, NoEnvironment);
 
-        Assert.Equal("client", secrets.Lookup("CFSECRET_DB").Value);
-        Assert.Equal("kept", secrets.Lookup("CFSECRET_ONLY_ENV").Value);
+        Assert.Equal("client", secrets.ValueOf("CFSECRET_DB"));
+        Assert.Equal("kept", secrets.ValueOf("CFSECRET_ONLY_ENV"));
     }
 
     [Fact]
@@ -48,10 +49,10 @@ public class SecretResolverTests
         using var dir = new TempDirectory();
         var chain = Chain(dir, ("Environments/Production", [("db.secret.env", "CFSECRET_DB=x")]));
 
-        var status = SecretResolver.Build(dir.Path, chain, NoEnvironment).Lookup("CFSECRET_OTHER");
+        var secrets = SecretResolver.Build(dir.Path, chain, NoEnvironment);
 
-        Assert.Equal(SecretState.Missing, status.State);
-        Assert.Null(status.Value);
+        Assert.Equal(SecretState.Missing, secrets.Lookup("CFSECRET_OTHER").State);
+        Assert.Null(secrets.ValueOf("CFSECRET_OTHER"));
     }
 
     [Fact]
@@ -65,9 +66,9 @@ public class SecretResolverTests
 
         var secrets = SecretResolver.Build(dir.Path, chain, name => environment.GetValueOrDefault(name));
 
-        Assert.Equal("from-env-var", secrets.Lookup("CFSECRET_DB").Value);
+        Assert.Equal("from-env-var", secrets.ValueOf("CFSECRET_DB"));
         Assert.Equal("environment variable", secrets.Lookup("CFSECRET_DB").Source);
-        Assert.Equal("file", secrets.Lookup("CFSECRET_API").Value);
+        Assert.Equal("file", secrets.ValueOf("CFSECRET_API"));
     }
 
     [Fact]
@@ -108,11 +109,26 @@ public class SecretResolverTests
                 ".configtransform/Clients/Acme/Production/Hosts/H1/configtransform.json",
             ],
             trace.Layers.Select(step => step.Layer));
-        Assert.Equal([".configtransform/Environments/Production/db.secret.env", null, null], trace.Layers.Select(step => step.File));
-        Assert.Empty(trace.Layers[0].LockedFiles);
-        Assert.Equal([".configtransform/Clients/Acme/Production/Hosts/H1/db.secret.env"], trace.Layers[2].LockedFiles);
+        Assert.Equal([".configtransform/Environments/Production/db.secret.env"], trace.Layers[0].PatchedIn);
+        Assert.Empty(trace.Layers[0].Unknown);
+        Assert.Empty(trace.Layers[1].PatchedIn);
+        Assert.Empty(trace.Layers[1].Unknown);
+        Assert.Equal([".configtransform/Clients/Acme/Production/Hosts/H1/db.secret.env is locked (run git-crypt unlock)"], trace.Layers[2].Unknown);
         Assert.Equal(SecretVariableState.Empty, trace.Variable);
         Assert.Equal(SecretVariableState.Unset, SecretResolver.Build(dir.Path, chain, NoEnvironment).Trace("CFSECRET_DB").Variable);
+    }
+
+    [Fact]
+    public void A_secrets_file_key_that_is_not_upper_snake_case_is_an_error_naming_the_fix()
+    {
+        using var dir = new TempDirectory();
+        var chain = Chain(dir, ("Environments/Production", [("db.secret.env", "CFSECRET_Db_Password=x")]));
+
+        var ex = Assert.Throws<InvalidOperationException>(() => SecretResolver.Build(dir.Path, chain, NoEnvironment));
+
+        Assert.Contains("defines \"CFSECRET_Db_Password\"", ex.Message);
+        Assert.Contains("upper snake case", ex.Message);
+        Assert.Contains("Try: rename it to CFSECRET_DB_PASSWORD.", ex.Message);
     }
 
     [Fact]

@@ -25,7 +25,7 @@ public static class CliRunner
     public static int Run(
         string[] args, TextWriter stdout, TextWriter stderr, FormatEngineRegistry engines,
         string? workingDirectory = null, TextReader? stdin = null, bool interactiveAllowed = false,
-        bool autoColor = false, Func<string, string?>? environmentVariables = null)
+        bool autoColor = false, Func<string, string?>? environmentVariables = null, IKeyVault? keyVault = null)
     {
         try
         {
@@ -63,21 +63,21 @@ public static class CliRunner
                     LayerLister.ListReverseLookup(root, options.Resource, stdout);
                 else
                     LayerLister.ListLayer(root, LayerPathResolver.Resolve(root, options.Client, options.Environment, options.Host)!, stdout,
-                        engines, environmentVariables ?? Environment.GetEnvironmentVariable);
+                        engines, environmentVariables ?? Environment.GetEnvironmentVariable, keyVault);
                 return 0;
             }
 
             var targetLayerPath = LayerPathResolver.Resolve(root, options.Client, options.Environment, options.Host);
             var chain = LayerChain.Build(root, targetLayerPath);
-            var secrets = SecretResolver.Build(root, chain, environmentVariables ?? Environment.GetEnvironmentVariable);
+            var secrets = SecretResolver.Build(root, chain, environmentVariables ?? Environment.GetEnvironmentVariable, keyVault);
 
             if (options.Resource is not null)
             {
-                RunOneResource(options, root, chain, secrets, engines, stdout, color);
+                RunOneResource(options, root, chain, secrets, engines, stdout, color, keyVault);
                 return 0;
             }
 
-            RunEveryResource(options, root, targetLayerPath, chain, secrets, engines, stdout, stderr, color);
+            RunEveryResource(options, root, targetLayerPath, chain, secrets, engines, stdout, stderr, color, keyVault);
             return 0;
         }
         catch (Exception ex)
@@ -89,7 +89,7 @@ public static class CliRunner
 
     private static void RunOneResource(
         CliOptions options, string root, IReadOnlyList<ResolvedLayer> chain, SecretSet secrets,
-        FormatEngineRegistry engines, TextWriter stdout, bool color)
+        FormatEngineRegistry engines, TextWriter stdout, bool color, IKeyVault? keyVault)
     {
         var resolved = LayerChain.ResolveResource(root, chain, options.Resource!);
 
@@ -97,7 +97,7 @@ public static class CliRunner
         // replaced .p12 or .pem works even though no engine handles its extension.
         if (resolved.ReplacePath is not null)
         {
-            RunReplacedResource(options, root, resolved, stdout, color);
+            RunReplacedResource(options, root, resolved, stdout, color, keyVault);
             return;
         }
 
@@ -150,18 +150,18 @@ public static class CliRunner
     }
 
     private static void RunReplacedResource(
-        CliOptions options, string root, ResolvedResource resolved, TextWriter stdout, bool color)
+        CliOptions options, string root, ResolvedResource resolved, TextWriter stdout, bool color, IKeyVault? keyVault)
     {
         PrintResolutionReport(stdout, options.Resource!, resolved);
 
         if (options.DryRun || options.Diff || options.DiffLayers)
         {
             stdout.WriteLine();
-            stdout.WriteLine(ReplaceStep.Preview(root, resolved, options.RevealSecrets, diff: !options.DryRun, color));
+            stdout.WriteLine(ReplaceStep.Preview(root, resolved, options.RevealSecrets, diff: !options.DryRun, color, keyVault));
             return;
         }
 
-        var bytes = ReplaceStep.ForRealRun(root, options.Resource!, resolved);
+        var bytes = ReplaceStep.ForRealRun(root, options.Resource!, resolved, keyVault);
         var outputPath = options.Output
             ?? throw new InvalidOperationException("--output was not set for a real run.");
         var outputDir = Path.GetDirectoryName(Path.GetFullPath(outputPath));
@@ -169,7 +169,7 @@ public static class CliRunner
             Directory.CreateDirectory(outputDir);
 
         File.WriteAllBytes(outputPath, bytes);
-        stdout.WriteLine($"Wrote '{outputPath}' (replaced by {LayerChain.ToRepoRelative(root, resolved.ReplacePath!)}).");
+        stdout.WriteLine($"Wrote '{outputPath}' (replaced by {LayerChain.DisplayReplace(root, resolved.ReplacePath!)}).");
     }
 
     /// <summary>Prints the "Resolving '&lt;path&gt;'" header, then the shared chain rendering — see <see cref="LayerChain.PrintChain"/>.</summary>
@@ -189,7 +189,7 @@ public static class CliRunner
     /// </summary>
     private static void RunEveryResource(
         CliOptions options, string root, string? targetLayerPath, IReadOnlyList<ResolvedLayer> chain, SecretSet secrets,
-        FormatEngineRegistry engines, TextWriter stdout, TextWriter stderr, bool color)
+        FormatEngineRegistry engines, TextWriter stdout, TextWriter stderr, bool color, IKeyVault? keyVault)
     {
         var allResources = LayerChain.ResolveAllResources(chain);
         // A resource replaced by a whole-file secret needs no format engine (docs/SECRETS_DESIGN.md).
@@ -255,7 +255,7 @@ public static class CliRunner
             {
                 var resolved = LayerChain.ResolveResource(root, chain, resourcePath);
                 if (resolved.ReplacePath is not null)
-                    return (ResourcePath: resourcePath, Text: (string?)null, Bytes: ReplaceStep.ForRealRun(root, resourcePath, resolved));
+                    return (ResourcePath: resourcePath, Text: (string?)null, Bytes: ReplaceStep.ForRealRun(root, resourcePath, resolved, keyVault));
 
                 var engine = engines.Require(resourcePath);
                 var merged = engine.Merge(resolved.BasePath, resolved.PatchPathsInOrder);
@@ -285,7 +285,7 @@ public static class CliRunner
             if (resolved.ReplacePath is not null)
             {
                 stdout.WriteLine($"=== {resourcePath} ===");
-                stdout.WriteLine(ReplaceStep.Preview(root, resolved, options.RevealSecrets, diff: !options.DryRun, color));
+                stdout.WriteLine(ReplaceStep.Preview(root, resolved, options.RevealSecrets, diff: !options.DryRun, color, keyVault));
                 stdout.WriteLine();
                 continue;
             }

@@ -298,9 +298,11 @@ placeholder, and the value lives in an encrypted `*.secret.env` file that a laye
 CFSECRET_ADMIN_DB_PASSWORD=Pa55+w&rd
 ```
 
-- **Names** are `CFSECRET_` + letters, digits and `_`, and the same full name is used everywhere: the
-  placeholder, the key in the `*.secret.env` file, and the environment-variable override. A
-  secrets-file key without the prefix is an error.
+- **Names** are upper snake case — `CFSECRET_` + capital letters, digits and `_` — and the same full
+  name is used everywhere: the placeholder, the key in the `*.secret.env` file, and the
+  environment-variable override. A secrets-file key without the prefix is an error, and so is a
+  name in any other case (`{{CFSECRET_Db}}` → `Try: {{CFSECRET_DB}}`), since the sources disagree
+  about case (environment variables match exactly on Linux, not on Windows; Key Vault ignores it).
 - **Secrets files** must end in `.secret.env` and live inside `.configtransform/`, so the
   `.configtransform/**/*.secret.*` git-crypt rule always covers them.
 - **Resolution** follows the layer chain: later layers override earlier ones, name by name. The
@@ -376,6 +378,35 @@ Resolving 'Web/AdminPortal.Web/Web.config'
         environment variable
           not patched in
 ```
+
+**Azure Key Vault** can supply values instead of (or alongside) git-crypt files, so access is
+granted per vault through Azure RBAC rather than by one git-crypt key for every client
+(`docs/KEYVAULT_SECRETS_DESIGN.md` has the design, the recommended vault layout, and the GitHub
+Actions setup):
+
+```json
+"secrets": [
+  "keyvault://kv-ra-prod-ca",
+  "keyvault://kv-ra-prod-ca/CFSECRET-SMTP-PASSWORD",
+  "keyvault://kv-ra-prod-ca/notifications-secrets",
+  { "from": "keyvault://kv-ra-prod-ca/legacy-api-key", "as": "CFSECRET_LEGACY_API_KEY" }
+]
+```
+
+- `keyvault://<vault>` — every secret in the vault named `CFSECRET-…`; `{{CFSECRET_SMTP_PASSWORD}}`
+  is the vault secret `CFSECRET-SMTP-PASSWORD` (Key Vault allows no `_`, and ignores case).
+- `keyvault://<vault>/<secret>` — one secret: a `CFSECRET-…` name is one value; any other name is
+  `.env` text holding several `CFSECRET_…=value` lines.
+- `{ "from": …, "as": … }` — one secret of any name, as the placeholder `as` names.
+- `"replace": "keyvault://<vault>/<secret>"` on a resource — the whole file, e.g.
+  `az keyvault secret set --vault-name kv-ra-prod-ca --name firebase-service-account --file firebase.json`.
+
+It signs in through `az login` (locally) or `azure/login` (GitHub Actions, OIDC) and never prompts.
+Previews read only names and metadata (except `.env` text, whose names are inside its value), the
+tree shows each value's exact secret (`patched in: keyvault://kv-ra-prod-ca/CFSECRET-SMTP-PASSWORD`),
+and a vault that can't be read is `unknown` with the reason (`not signed in to Azure -- run az
+login`, `403 ForbiddenByRbac: no access`, …). A run whose resources use no placeholder never
+contacts Azure.
 
 Pin a tool version that supports `secrets` before using it: from this version on, a
 `configtransform.json` field the tool doesn't recognize is an error, but older versions silently

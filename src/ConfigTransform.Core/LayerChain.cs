@@ -105,8 +105,12 @@ public static class LayerChain
             // secret file, which is exactly what replace exists to prevent.
             if (entry?.Replace is not null)
             {
-                var fullReplacePath = Path.GetFullPath(entry.Replace, root);
-                if (!File.Exists(fullReplacePath))
+                // A keyvault:// replace (docs/KEYVAULT_SECRETS_DESIGN.md) is read only when it's needed,
+                // by ReplaceStep; a file must exist now.
+                var fullReplacePath = KeyVaultReference.IsKeyVault(entry.Replace)
+                    ? KeyVaultReference.Parse(entry.Replace).ToString()
+                    : Path.GetFullPath(entry.Replace, root);
+                if (!KeyVaultReference.IsKeyVault(fullReplacePath) && !File.Exists(fullReplacePath))
                     throw new FileNotFoundException(
                         $"{label} declares replace '{entry.Replace}' for '{resourcePath}', but no file exists at '{fullReplacePath}'.");
 
@@ -115,7 +119,7 @@ public static class LayerChain
                         steps[i] = steps[i] with { Superseded = true };
 
                 report.Add($"{label}: '{resourcePath}' replaced by '{fullReplacePath}'");
-                steps.Add(new ChainStep(label, null, ToRepoRelative(root, fullReplacePath)));
+                steps.Add(new ChainStep(label, null, DisplayReplace(root, fullReplacePath)));
                 replacePath = fullReplacePath;
                 replacingLayer = label;
                 continue;
@@ -239,6 +243,10 @@ public static class LayerChain
 
     internal static bool PathsEqual(string root, string a, string b) =>
         string.Equals(Path.GetFullPath(a, root), Path.GetFullPath(b, root), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>A resolved replace for display: a file repo-relative, a <c>keyvault://</c> secret as is.</summary>
+    public static string DisplayReplace(string root, string replacePath) =>
+        KeyVaultReference.IsKeyVault(replacePath) ? replacePath : ToRepoRelative(root, replacePath);
 
     internal static string ToRepoRelative(string root, string fullPath) =>
         Path.GetRelativePath(root, fullPath).Replace(Path.DirectorySeparatorChar, '/');

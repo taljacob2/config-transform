@@ -6,6 +6,46 @@ manifest schema requires a major version bump, or staying in `0.x` where any cha
 
 ## [Unreleased]
 
+Not released yet: waits for a design partner to run `docs/KEYVAULT_VERIFICATION.md` against real
+Azure Key Vaults.
+
+### Added
+
+- **Azure Key Vault as a secrets source** (`docs/KEYVAULT_SECRETS_DESIGN.md`), so access to secret
+  values can be granted per vault (one per repo × environment × client) through Azure RBAC instead
+  of one git-crypt key for every client. A layer's `secrets` can list, next to `*.secret.env` files:
+  `"keyvault://<vault>"` (every `CFSECRET-…` secret in it), `"keyvault://<vault>/CFSECRET-…"` (one
+  secret, one value), `"keyvault://<vault>/<other-name>"` (one secret holding `.env` text), or
+  `{ "from": "keyvault://<vault>/<secret>", "as": "CFSECRET_…" }` (one secret under an explicit
+  placeholder name). A resource's `replace` can be `"keyvault://<vault>/<secret>"` — the whole
+  file, such as a Firebase service account; a certificate's secret is written as its real bytes.
+  Same layer precedence, environment-variable override, report tree and all-or-nothing real runs
+  as files; the tree names each value's exact secret
+  (`patched in: keyvault://kv-ra-prod-ca/CFSECRET-SMTP-PASSWORD`).
+  - Signs in through `az` (`az login`; `azure/login` with OIDC in GitHub Actions;
+    `az login --identity` in Azure), or `AZURE_*` service-principal/workload-identity environment
+    variables — never interactively, and only to the signed-in tenant.
+  - Previews and `--list` read names and metadata only (except `.env` text, whose names are inside
+    its value); values are read only for a real run or `--reveal-secrets`. A run whose resources use
+    no placeholder never contacts Azure.
+  - A vault that can't be read is `unknown`, with the reason: not signed in, `403 ForbiddenByRbac`,
+    blocked by the vault's firewall, another tenant, can't be reached. A disabled or expired secret
+    shows why it doesn't count. A named secret that doesn't exist is an error.
+  - Azure's own error messages are never printed (they can carry response bodies), and errors from
+    `.env` text never quote a line or a key.
+  - A new project, `ConfigTransform.Secrets.AzureKeyVault`, holds the only Azure dependencies
+    (`Azure.Security.KeyVault.Secrets`, `Azure.Identity`).
+
+### Changed
+
+- **Secret names must be upper snake case** (`docs/SECRETS_DESIGN.md` decision #28). A placeholder,
+  `*.secret.env` key or `as` name with a lower-case letter — including `{{cfsecret_…}}`, which used
+  to stay in the output as plain text — is an error naming the fix (`Try: {{CFSECRET_DB}}`). The
+  sources disagreed about case: an environment variable matches exactly on Linux but not on
+  Windows, and Key Vault ignores case.
+- **A real run's unresolved-secrets error** now suggests `az login` and vault access alongside
+  `git-crypt unlock`.
+
 ## [0.27.0-alpha] - 2026-10-02
 
 ### Changed

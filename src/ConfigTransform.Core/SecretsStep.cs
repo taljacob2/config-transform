@@ -20,11 +20,12 @@ public static class SecretsStep
         TextWriter stdout, string root, ResolvedResource resolved, string merged, SecretSet secrets,
         string indent = "    ", bool blankLineBefore = false)
     {
-        var names = SecretPlaceholders.Names(merged);
+        // The files first, so a placeholder that isn't upper snake case is reported in the file that writes it.
+        var usedIn = FindUses(root, [resolved]).ToDictionary(use => use.Name, use => use.UsedIn, StringComparer.Ordinal);
+        var names = SecretPlaceholders.Names(merged, LayerChain.ToRepoRelative(root, resolved.BasePath));
         if (names.Count == 0)
             return false;
 
-        var usedIn = FindUses(root, [resolved]).ToDictionary(use => use.Name, use => use.UsedIn, StringComparer.Ordinal);
         if (blankLineBefore)
             stdout.WriteLine();
         PrintTree(stdout, names.Select(name => new SecretUse(name, usedIn.GetValueOrDefault(name) ?? [])).ToList(), secrets, indent);
@@ -47,7 +48,7 @@ public static class SecretsStep
             foreach (var file in resolved.PatchPathsInOrder.Prepend(resolved.BasePath))
             {
                 var display = LayerChain.ToRepoRelative(root, file);
-                foreach (var name in SecretPlaceholders.Names(File.ReadAllText(file)))
+                foreach (var name in SecretPlaceholders.Names(File.ReadAllText(file), display))
                 {
                     if (!files.TryGetValue(name, out var usedIn))
                     {
@@ -95,12 +96,14 @@ public static class SecretsStep
             foreach (var step in trace.Layers)
             {
                 stdout.WriteLine($"{indent}    {step.Layer}");
-                if (step.File is not null)
-                    stdout.WriteLine($"{indent}      patched in: {step.File}");
-                foreach (var locked in step.LockedFiles)
-                    stdout.WriteLine($"{indent}      unknown: {locked} is locked (run git-crypt unlock)");
-                if (step.File is null && step.LockedFiles.Count == 0)
-                    stdout.WriteLine($"{indent}      not patched in");
+                foreach (var source in step.PatchedIn)
+                    stdout.WriteLine($"{indent}      patched in: {source}");
+                foreach (var unreadable in step.Unknown)
+                    stdout.WriteLine($"{indent}      unknown: {unreadable}");
+                if (step.PatchedIn.Count == 0 && step.Unknown.Count == 0)
+                    stdout.WriteLine(step.Notes.Count == 0
+                        ? $"{indent}      not patched in"
+                        : $"{indent}      not patched in ({string.Join("; ", step.Notes)})");
                 stdout.WriteLine($"{indent}      ↓");
             }
 
@@ -125,7 +128,7 @@ public static class SecretsStep
     /// </summary>
     public static string ForRealRun(FormatEngine engine, string resourcePath, string merged, SecretSet secrets)
     {
-        var unresolved = SecretPlaceholders.Names(merged)
+        var unresolved = SecretPlaceholders.Names(merged, resourcePath)
             .Select(secrets.Lookup)
             .Where(status => status.State != SecretState.Resolved)
             .ToList();
@@ -134,8 +137,9 @@ public static class SecretsStep
             throw new InvalidOperationException(
                 $"'{resourcePath}' uses secrets that can't be resolved, so nothing was written:\n" +
                 string.Join("\n", FormatStatuses(unresolved).Select(line => $"  {line}")) +
-                "\nTry: add the missing names to a *.secret.env file a layer in this chain lists under \"secrets\", " +
-                "run git-crypt unlock for locked files, or set the environment variable of the same name.");
+                "\nTry: add the missing names to a source a layer in this chain lists under \"secrets\" (a *.secret.env file " +
+                "or a Key Vault), make unreadable sources readable (git-crypt unlock, az login, or access to the vault), " +
+                "or set the environment variable of the same name.");
 
         var substituted = Substitute(engine, merged, secrets);
 
@@ -156,7 +160,7 @@ public static class SecretsStep
         var substitute = engine.SubstituteSecrets
             ?? throw new InvalidOperationException($"The {engine.DisplayName} format engine doesn't support secrets placeholders.");
 
-        return substitute(content, name => secrets.Lookup(name) is { State: SecretState.Resolved } status ? status.Value : null);
+        return substitute(content, secrets.ValueOf);
     }
 
     private static IEnumerable<string> FormatStatuses(IReadOnlyList<SecretStatus> statuses)

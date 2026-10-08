@@ -11,7 +11,8 @@ namespace ConfigTransform.Core;
 public static class LayerLister
 {
     public static void ListLayer(
-        string root, string targetLayerPath, TextWriter stdout, FormatEngineRegistry engines, Func<string, string?> environment)
+        string root, string targetLayerPath, TextWriter stdout, FormatEngineRegistry engines, Func<string, string?> environment,
+        IKeyVault? keyVault = null)
     {
         var fullPath = Path.GetFullPath(targetLayerPath, root);
         if (!File.Exists(fullPath))
@@ -54,7 +55,7 @@ public static class LayerLister
         if (uses.Count > 0)
         {
             stdout.WriteLine();
-            SecretsStep.PrintTree(stdout, uses, SecretResolver.Build(root, chain, environment), indent: "  ");
+            SecretsStep.PrintTree(stdout, uses, SecretResolver.Build(root, chain, environment, keyVault), indent: "  ");
         }
     }
 

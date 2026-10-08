@@ -333,6 +333,24 @@ public class SecretsCliTests
     }
 
     [Fact]
+    public void A_placeholder_that_is_not_upper_snake_case_fails_a_preview_and_a_real_run_naming_the_fix()
+    {
+        // Lower case would match a *.secret.env key and a Linux environment variable differently from
+        // Key Vault and Windows -- so it's an error in every mode, never a silent mismatch.
+        using var workspace = new Workspace(xmlExtra: "<extra value=\"{{CFSECRET_Db}}\" />");
+
+        var (previewExit, _, previewErr) = workspace.Run(null, "-r", "Project/App.config", "-e", "Production", "--dry-run");
+        var (realExit, _, realErr) = workspace.Run(null, "-r", "Project/App.config", "-e", "Production", "-o", workspace.Out("App.config"));
+
+        Assert.Equal(1, previewExit);
+        Assert.Contains("'Project/App.config' uses {{CFSECRET_Db}}", previewErr);
+        Assert.Contains("Try: {{CFSECRET_DB}}", previewErr);
+        Assert.Equal(1, realExit);
+        Assert.Contains("upper snake case", realErr);
+        Assert.False(File.Exists(workspace.Out("App.config")));
+    }
+
+    [Fact]
     public void A_placeholder_left_outside_a_value_fails_a_real_run()
     {
         // XML comments aren't substituted -- a placeholder there must not reach a deployed file.

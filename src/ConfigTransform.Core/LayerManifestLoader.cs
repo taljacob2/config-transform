@@ -63,8 +63,26 @@ public static class LayerManifestLoader
 
         manifest = manifest ?? throw new InvalidOperationException($"'{layerManifestPath}' deserialized to null.");
 
-        foreach (var secretsFile in manifest.Secrets ?? [])
+        foreach (var entry in manifest.Secrets ?? [])
         {
+            if (KeyVaultReference.IsKeyVault(entry.Source))
+            {
+                ValidateKeyVaultSecretsEntry(layerManifestPath, entry);
+                continue;
+            }
+
+            if (entry.As is not null)
+                throw new InvalidOperationException(
+                    $"'{layerManifestPath}' lists secrets entry '{entry}', but \"as\" only applies to a single Key Vault " +
+                    "secret -- a secrets file already names every secret it holds (docs/KEYVAULT_SECRETS_DESIGN.md).\n" +
+                    "Try: drop \"as\", or point \"from\" at keyvault://<vault>/<secret>.");
+            if (entry.Source.Contains("://", StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    $"'{layerManifestPath}' lists secrets entry '{entry.Source}'. A secrets entry is a *.secret.env file's path, " +
+                    $"or an Azure Key Vault source written {KeyVaultReference.Scheme}<vault>[/<secret>] -- never a URL " +
+                    "(docs/KEYVAULT_SECRETS_DESIGN.md).\nTry: e.g. keyvault://kv-ra-prod-ca.");
+
+            var secretsFile = entry.Source;
             if (!secretsFile.EndsWith(SecretFileSuffix, StringComparison.Ordinal))
                 throw new InvalidOperationException(
                     $"'{layerManifestPath}' lists secrets file '{secretsFile}', which doesn't end in '{SecretFileSuffix}'. " +
@@ -83,6 +101,19 @@ public static class LayerManifestLoader
                     $"'{layerManifestPath}' gives '{resource.Path}' both a patch and a replace. A replace is the whole " +
                     "file, so there's nothing for a patch to merge into -- merging onto a secret file is exactly what " +
                     "replace exists to prevent (docs/SECRETS_DESIGN.md).\nTry: keep one of them.");
+            // A vault secret never lands in the repo, so the *.secret.* naming and location rules --
+            // which exist to keep a file under the git-crypt rule -- don't apply to it.
+            if (KeyVaultReference.IsKeyVault(resource.Replace))
+            {
+                var reference = ParseKeyVault(layerManifestPath, resource.Replace);
+                if (reference.Secret is null)
+                    throw new InvalidOperationException(
+                        $"'{layerManifestPath}' replaces '{resource.Path}' with '{resource.Replace}', a whole vault. A replace " +
+                        "is one file, so it names one secret (docs/KEYVAULT_SECRETS_DESIGN.md).\n" +
+                        $"Try: {KeyVaultReference.Scheme}{reference.Vault}/<secret>.");
+                continue;
+            }
+
             if (!System.IO.Path.GetFileName(resource.Replace).Contains(SecretFileMarker, StringComparison.Ordinal))
                 throw new InvalidOperationException(
                     $"'{layerManifestPath}' replaces '{resource.Path}' with '{resource.Replace}', whose name doesn't contain " +
@@ -92,6 +123,41 @@ public static class LayerManifestLoader
         }
 
         return manifest;
+    }
+
+    /// <summary>
+    /// A Key Vault <c>secrets</c> entry (docs/KEYVAULT_SECRETS_DESIGN.md): a valid reference, and
+    /// <c>as</c> only on a single named secret, naming a real placeholder.
+    /// </summary>
+    private static void ValidateKeyVaultSecretsEntry(string layerManifestPath, SecretsEntry entry)
+    {
+        var reference = ParseKeyVault(layerManifestPath, entry.Source);
+        if (entry.As is null)
+            return;
+
+        if (reference.Secret is null)
+            throw new InvalidOperationException(
+                $"'{layerManifestPath}' lists secrets entry '{entry}', but \"as\" names one placeholder, and a whole vault " +
+                "supplies many (docs/KEYVAULT_SECRETS_DESIGN.md).\n" +
+                $"Try: \"from\": \"{KeyVaultReference.Scheme}{reference.Vault}/<secret>\".");
+        if (!SecretPlaceholders.IsName(entry.As))
+            throw new InvalidOperationException(
+                $"'{layerManifestPath}' lists secrets entry '{entry}', but \"as\" must be a placeholder name: " +
+                $"'{SecretPlaceholders.Prefix}' followed by capital letters, digits and '_'.\nTry: e.g. \"as\": \"{SecretPlaceholders.Prefix}LEGACY_API_KEY\".");
+    }
+
+    private static KeyVaultReference ParseKeyVault(string layerManifestPath, string text)
+    {
+        try
+        {
+            return KeyVaultReference.Parse(text);
+        }
+        catch (FormatException ex)
+        {
+            throw new InvalidOperationException(
+                $"'{layerManifestPath}': {ex.Message} (docs/KEYVAULT_SECRETS_DESIGN.md).\n" +
+                "Try: keyvault://<vault> for every CFSECRET-... secret in a vault, or keyvault://<vault>/<secret> for one secret.");
+        }
     }
 
     /// <summary>

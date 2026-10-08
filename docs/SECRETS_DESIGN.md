@@ -60,7 +60,18 @@ for a team that keeps secrets out of git entirely and provides them some other w
 
 A secret's name always starts with `CFSECRET_` ("configtransform secret"), the same way a React app's
 public variables start with `REACT_APP_` or Vite's with `VITE_`: a developer sees the prefix and
-knows what it is. Exactly: `{{` + `CFSECRET_` (uppercase) + one or more of `[A-Za-z0-9_]` + `}}`.
+knows what it is. Exactly: `{{` + `CFSECRET_` + one or more of `[A-Z0-9_]` + `}}` — the whole name
+in upper snake case.
+
+**Upper snake case is enforced, not just conventional** (since `0.28.0-alpha`; decision #28). The
+places a value can come from disagree about case: a `*.secret.env` key matches exactly, an
+environment variable matches exactly on Linux but not on Windows, and Key Vault
+(`docs/KEYVAULT_SECRETS_DESIGN.md`) ignores case. So `{{CFSECRET_Db_Password}}` could resolve on a
+developer's Windows machine and come out `MISSING` on a Linux CI runner. A placeholder in any other
+case — `{{CFSECRET_Db_Password}}`, and `{{cfsecret_db_password}}` too, which would otherwise not
+count as a placeholder at all and reach a deployed file as text — is an error in every mode, naming
+the fix (`Try: {{CFSECRET_DB_PASSWORD}}`); so is a `*.secret.env` key or an `as` name in any other
+case.
 
 **The full name, prefix included, is the one spelling used everywhere** — in the placeholder, as the
 key in a `*.secret.env` file, as the environment-variable override, and in CI wiring:
@@ -470,6 +481,13 @@ From a real user's review of the pilot's output (`0.27.0-alpha`):
     the target declared them (now only the target's own `secrets`), and `--reveal-secrets` was
     silently accepted (now an error).
 
+From the Azure Key Vault design review (`0.28.0-alpha`):
+
+28. **Secret names are upper snake case, enforced.** Before, any case after the prefix was a valid
+    placeholder, and whether it matched depended on the source and the OS (see "Placeholder
+    syntax"). Rejected: matching case-insensitively everywhere — a `*.secret.env` file could then
+    define two names that differ only by case, and which one won would depend on the source.
+
 ## Open items
 
 - **A keyless "check every combination" command** for CI — resolve every client/environment/host
@@ -482,9 +500,9 @@ From a real user's review of the pilot's output (`0.27.0-alpha`):
 - **`replace` for non-secret whole files** (e.g. a client's logo). `CONFIG_MANAGEMENT.md` §1.1 puts
   branding assets out of scope; v1 requires `*.secret.*` names for `replace`.
 - **External secret stores** as another source, behind the same resolution step. Azure Key Vault
-  is designed — `docs/KEYVAULT_SECRETS_DESIGN.md` (a layer lists `keyvault://<vault>` under
-  `secrets`; per-vault RBAC instead of one git-crypt key for everything). Others (AWS Secrets
-  Manager, HashiCorp Vault) would use the same seam.
+  is implemented — `docs/KEYVAULT_SECRETS_DESIGN.md` (a layer lists `keyvault://<vault>[/<secret>]`
+  under `secrets`, or a resource `replace`s from one; per-vault RBAC instead of one git-crypt key
+  for everything). Others (AWS Secrets Manager, HashiCorp Vault) would use the same seam.
 - **`set` writing secrets** into `*.secret.env` files.
 - ~~**A runnable example**~~ — closed: `init --template secrets` (`docs/INIT_COMMAND_DESIGN.md`'s
   "The `secrets` variant").

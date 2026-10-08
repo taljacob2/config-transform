@@ -70,7 +70,7 @@ public static class SetTargetResolver
 
         // A resource replaced by a whole-file secret at this layer or an earlier one has nothing for
         // a patch to merge into (docs/SECRETS_DESIGN.md). Refuse before writing anything.
-        var replacedBy = existingEntry?.Replace ?? (preceding.ReplacePath is { } p ? LayerChain.ToRepoRelative(root, p) : null);
+        var replacedBy = existingEntry?.Replace ?? (preceding.ReplacePath is { } p ? LayerChain.DisplayReplace(root, p) : null);
         if (replacedBy is not null)
             throw new InvalidOperationException(
                 $"'{canonicalResourcePath}' is replaced by the whole-file secret '{replacedBy}' in this chain, so 'set' " +

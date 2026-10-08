@@ -101,8 +101,12 @@ here is accidental rather than deliberate.
   `EnvLayerMerger`/`EnvFieldAuthor`, `YamlLayerMerger`/`YamlFieldAuthor`), not their own dotnet
   tools, and never sharing code with each other even where conceptually similar (YAML and JSON
   share an architecture, not an implementation).
+- `src/ConfigTransform.Secrets.AzureKeyVault/` — Azure Key Vault as a secrets source
+  (`docs/KEYVAULT_SECRETS_DESIGN.md`), behind Core's `IKeyVault` interface; the only project with
+  Azure dependencies.
 - `src/ConfigTransform.Cli/` — the actual CLI, packaged as the `configtransform` dotnet tool.
-  Registers all four format engines above into Core's dispatcher; this is genuinely all it does.
+  Registers all four format engines above, and the Key Vault source, into Core; this is genuinely
+  all it does.
 - `tests/*/Fixtures/` — real-shaped fixture files per scenario: `DotNetFramework`,
   `IisWebConfig`, `GenericXml` (XML); `DotNetCore`, `GenericJson` (JSON); `GenericEnv` (`.env`);
   `DotNetCore`, `GenericYaml` (YAML); plus a `Secrets` fixture in each of the four, for
@@ -317,5 +321,9 @@ YAML `set` now matches or creates an item in an array of objects via `$elemMatch
 `config-transform-pilot` re-pinned to it. `0.27.0-alpha` gives each secret its own tree in the
 resolution report and `--list` — where its placeholder is used, then every layer and the
 environment variable as `patched in:` / `not patched in` — and relabels the chain's first step
-`resource` (was `base`); `config-transform-pilot` is re-pinned to it. Never let a secret value
+`resource` (was `base`); `config-transform-pilot` is re-pinned to it. Azure Key Vault as a secrets source is implemented on
+`main` but not released: a layer's `secrets` can list `keyvault://<vault>[/<secret>]` sources (or
+`{ "from", "as" }`), and a `replace` can name a vault secret. Its release waits for a design partner
+to run `docs/KEYVAULT_VERIFICATION.md`, since no session here can reach Azure. Secret names are now
+enforced upper snake case. Never let a secret value
 reach stdout, stderr or an exception message — two such leaks were found and fixed in stage 1.

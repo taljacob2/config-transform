@@ -8,20 +8,42 @@ public class SecretPlaceholdersTests
     public void Names_finds_each_distinct_name_in_order_of_first_appearance()
     {
         var names = SecretPlaceholders.Names(
-            "a={{CFSECRET_B}} b={{CFSECRET_A_1}} c={{CFSECRET_B}}");
+            "a={{CFSECRET_B}} b={{CFSECRET_A_1}} c={{CFSECRET_B}}", "x.config");
 
         Assert.Equal(["CFSECRET_B", "CFSECRET_A_1"], names);
     }
 
     [Theory]
-    [InlineData("{{cfsecret_X}}")]   // the prefix is uppercase only
     [InlineData("{{CFSECRET_}}")]    // a name needs at least one character after the prefix
     [InlineData("{{CFSECRET_A-B}}")] // '-' isn't a name character
     [InlineData("{{ CFSECRET_X }}")] // no spaces inside
     [InlineData("{{name}}")]         // other template syntax is never ours
     public void Names_ignores_anything_that_is_not_a_well_formed_placeholder(string text)
     {
-        Assert.Empty(SecretPlaceholders.Names(text));
+        Assert.Empty(SecretPlaceholders.Names(text, "x.config"));
+    }
+
+    [Theory]
+    [InlineData("{{CFSECRET_Db_Password}}", "{{CFSECRET_DB_PASSWORD}}")]
+    [InlineData("{{cfsecret_db_password}}", "{{CFSECRET_DB_PASSWORD}}")] // a lower-case prefix too: never silently left as text
+    public void A_placeholder_that_is_not_upper_snake_case_is_an_error_naming_the_fix(string placeholder, string fix)
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => SecretPlaceholders.Names($"Password={placeholder}", "app/App.config"));
+
+        Assert.Contains($"'app/App.config' uses {placeholder}", ex.Message);
+        Assert.Contains("upper snake case", ex.Message);
+        Assert.Contains($"Try: {fix}", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("CFSECRET_DB_PASSWORD", true)]
+    [InlineData("CFSECRET_A1", true)]
+    [InlineData("CFSECRET_Db", false)]
+    [InlineData("DB_PASSWORD", false)]
+    [InlineData("CFSECRET_", false)]
+    public void IsName_accepts_only_upper_snake_case_with_the_prefix(string name, bool expected)
+    {
+        Assert.Equal(expected, SecretPlaceholders.IsName(name));
     }
 
     [Fact]
