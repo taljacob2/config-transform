@@ -760,8 +760,9 @@ which found that a managed-identity step took ~25 s to fail outside Azure, so it
 since the sources disagree about case. Released as `0.28.0-alpha` before the real-vault check, at
 the repo owner's request, so the design partner can install it. **Next: the design partner runs
 `docs/KEYVAULT_VERIFICATION.md` against real vaults; fix anything it finds in a follow-up
-release.** `config-transform-pilot` isn't re-pinned yet (it uses no Key Vault; the casing rule is
-the only change that could affect it, and all its names are upper case). This repo's sessions have
+release.** `config-transform-pilot` is re-pinned to `0.28.0-alpha` and verified via run #40 (it
+uses no Key Vault; its output is byte-identical to `0.27.0-alpha`, and all its names were already
+upper case). This repo's sessions have
 no Azure access. See `docs/KEYVAULT_SECRETS_DESIGN.md`.
 
 ## Next up

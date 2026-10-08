@@ -326,5 +326,5 @@ environment variable as `patched in:` / `not patched in` — and relabels the ch
 `{ "from", "as" }`), and a `replace` can name a vault secret. It shipped before being checked
 against a real vault (the repo owner's call); a design partner is running
 `docs/KEYVAULT_VERIFICATION.md`, since no session here can reach Azure. Secret names are now
-enforced upper snake case. Never let a secret value
+enforced upper snake case. `config-transform-pilot` is re-pinned to it (no Key Vault there). Never let a secret value
 reach stdout, stderr or an exception message — two such leaks were found and fixed in stage 1.
